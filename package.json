@@ -1,0 +1,45 @@
+{
+  "name": "mg-svg-studio",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 4179",
+    "cli": "node bin/mgsvg.mjs",
+    "build:cli": "esbuild src/cli/index.ts --bundle --platform=node --format=esm --target=node20 --outfile=bin/mgsvg.mjs --external:linkedom --external:@modelcontextprotocol/sdk --external:zod --banner:js='#!/usr/bin/env node'",
+    "mcp": "node bin/mgsvg.mjs mcp",
+    "mgsvg": "node bin/mgsvg.mjs",
+    "build:bestory": "node scripts/sync-bestory.mjs",
+    "deploy:unicloud": "node scripts/deploy-unicloud.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@tailwindcss/vite": "^4.3.4",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "gsap": "^3.15.0",
+    "leafer-ui": "^2.3.3",
+    "linkedom": "^0.18.15",
+    "lucide-react": "^1.68.0",
+    "radix-ui": "^1.8.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tailwind-merge": "^3.7.0",
+    "tailwindcss": "^4.3.4",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.2.1",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5"
+  },
+  "bin": {
+    "mgsvg": "./bin/mgsvg.mjs"
+  }
+}

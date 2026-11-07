@@ -1,0 +1,2020 @@
+{
+  "libraryVersion": 3,
+  "referenceCanvas": {
+    "width": 1920,
+    "height": 1080,
+    "note": "几何阈值为 px@1080p，实际按 scale = min(W,H)/1080 缩放"
+  },
+  "coveragePolicy": {
+    "rule": "每条写作规则都必须有可算指标（metric + gate）和落地实现；没有 metric 的规则不算规则",
+    "noMetric": "无 metric 的规则只能记 severity=human，进人审清单，不计入通过率",
+    "silent": "规则已实现但本次没有产出记录时记 UNMEASURED，不得算 PASS；报告必须逐条列出状态"
+  },
+  "statusVocabulary": [
+    "PASS",
+    "WARN",
+    "FAIL",
+    "UNMEASURED",
+    "NA",
+    "DIAGNOSTIC"
+  ],
+  "dimensions": {
+    "measure": "exact 定义即数值 / model 代理模型，仅序关系可信 / semantic 只能人判",
+    "threshold": "standard 可引用规范，改动需换引文 / convention 行业惯例，可辩护无强制力 / proposal 本项目提案，永不阻断",
+    "severity": "blocker 值得修 / warn 可讨论 / info 参考",
+    "impact": "high 高（做不成）/ medium 中（读不顺）/ low 低（不精致）；只决定排序与展示预算，不决定能不能拦",
+    "medium": "video / ui / print",
+    "status": "PASS/WARN/FAIL 是闸门结论；DIAGNOSTIC 是诊断输出，不参与判定"
+  },
+  "impactPolicy": {
+    "axis": "影响程度：高=做不成 / 中=读不顺 / 低=不精致；与闸门权限（能不能拦）、媒介（video/ui/print）相互独立",
+    "labels": {
+      "high": "高",
+      "medium": "中",
+      "low": "低"
+    },
+    "byPrinciple": {
+      "可读性": "high",
+      "可用性": "high",
+      "交付完整性": "high",
+      "对比": "high",
+      "亲密性": "medium",
+      "视觉层次": "medium",
+      "对齐": "medium",
+      "网格": "medium",
+      "格式塔·相似": "medium",
+      "格式塔·闭合": "medium",
+      "格式塔·连续": "medium",
+      "共同区域": "medium",
+      "负空间": "medium",
+      "重复与一致性": "medium",
+      "信息密度": "medium",
+      "运动与节奏": "medium",
+      "统一与多样": "low",
+      "平衡": "low",
+      "比例": "low",
+      "意义": "low"
+    },
+    "override": {
+      "SN-01": "low",
+      "OR-01": "low",
+      "PN-01": "low",
+      "NS-02": "low",
+      "TY-07": "medium",
+      "TY-08": "medium"
+    },
+    "fallback": "medium",
+    "order": [
+      "high",
+      "medium",
+      "low"
+    ],
+    "budget": {
+      "high": null,
+      "medium": 5,
+      "low": 0,
+      "elementsPerCard": 5,
+      "note": "高影响不折叠（一条问题都不该被藏）；中影响按规则聚合成一张卡，超过 5 类折成一行；低影响只给条数与规则 ID"
+    },
+    "note": "影响程度只做排序与展示预算，不改变 PASS/WARN/FAIL：高影响不等于能拦，低影响也不等于可忽略。完整记录仍在 findings[]，折叠只发生在 view 里"
+  },
+  "rules": [
+    {
+      "id": "QL-01",
+      "title": "文本溢出",
+      "severity": "blocker",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "overflow_px_1080",
+      "unit": "px@1080p",
+      "gate": {
+        "fail": {
+          "gt": 0.5
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "rendered_frame",
+        "boxes"
+      ],
+      "note": "文字 ink 框超出容器或画布；必须在渲染后测，font-size 属性不能推导文本宽度",
+      "measure": "exact",
+      "threshold": "convention",
+      "citation": "溢出为几何事实；0.5px 是抗锯齿容差，属工艺惯例",
+      "principle": "可读性",
+      "violation": "文字超出容器，边缘被切断，得跳读才能补全。",
+      "needsPreciseBoxes": true,
+      "needsExactWidth": true
+    },
+    {
+      "id": "QL-02",
+      "title": "文本遮挡",
+      "severity": "blocker",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "occlusion_ratio",
+      "unit": "ratio",
+      "gate": {
+        "fail": {
+          "gt": 0.03
+        },
+        "warn": {
+          "gt": 0.01
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "rendered_frame",
+        "boxes"
+      ],
+      "note": "文本被更高 z 且不透明（opacity>=0.5）的元素覆盖面积占比；bbox 相交只算 WARN，像素确认后才升 FAIL",
+      "measure": "exact",
+      "threshold": "proposal",
+      "citation": "3%/1% 为提案；且 bbox 相交需像素确认",
+      "principle": "可读性",
+      "violation": "文字被压住一片面积，笔画缺失，读起来要猜。",
+      "needsExactWidth": true
+    },
+    {
+      "id": "QL-03",
+      "title": "字号下限",
+      "severity": "blocker",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "font_size_ratio_short_side",
+      "unit": "ratio",
+      "gate": {
+        "fail": {
+          "lt": 0.022
+        },
+        "warn": {
+          "lt": 0.035
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "boxes"
+      ],
+      "gateUI": {
+        "metric": "font_size_px",
+        "gate": {
+          "fail": {
+            "lt": 12
+          },
+          "warn": {
+            "lt": 14
+          }
+        }
+      },
+      "note": "短边百分比（1080 短边 → pass 38px）是分辨率无关口径；声明 --display-width 时改用 gateUI 的 px 口径，按投放宽度折算：有效字号 = 声明字号 × 投放宽度 / 画布宽。同一张 1600 宽的图按 375 和 800 投放会得出不同结论，报告必须写清用了哪个宽度",
+      "measure": "exact",
+      "threshold": "convention",
+      "citation": "锚点来自 WCAG 大字 24px，换算成短边比例是惯例",
+      "principle": "可读性",
+      "violation": "正文字号在目标尺寸上掉到看不清，观众直接跳过。",
+      "needsPreciseBoxes": true
+    },
+    {
+      "id": "QL-04",
+      "title": "行高",
+      "severity": "blocker",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "line_height_ratio",
+      "unit": "ratio",
+      "gate": {
+        "fail": {
+          "lt": 1.4
+        },
+        "warn": {
+          "lt": 1.5
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "boxes"
+      ],
+      "gateDisplay": {
+        "metric": "line_height_ratio_display",
+        "gate": {
+          "fail": {
+            "lt": 1.02
+          },
+          "warn": {
+            "lt": 1.08
+          }
+        }
+      },
+      "note": "line-height / font-size。正文（< 1.8× 中位字号）按 1.4/1.5；展示级标题的行高随字号收缩，56/64=1.14 是正常排版，必须走 gateDisplay 的 1.02/1.08，否则会把大标题全判成过紧",
+      "measure": "exact",
+      "threshold": "convention",
+      "citation": "排版工艺：正文行高 1.4–1.8；展示级 1.02–1.2，无强制规范",
+      "principle": "可读性",
+      "violation": "中文行高过紧，上下贴在一起，扫读会串行。",
+      "needsPreciseBoxes": true
+    },
+    {
+      "id": "QL-07",
+      "title": "资源失效",
+      "severity": "blocker",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "resource_status",
+      "unit": "enum",
+      "gate": {
+        "fail": {
+          "in": [
+            404,
+            "empty",
+            "decode_error"
+          ]
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "asset_scan"
+      ],
+      "note": "href 404、空文件、解码失败；字体缺失单独记 UNMEASURED 而不是 PASS",
+      "measure": "exact",
+      "threshold": "standard",
+      "citation": "定义性：资源不可解码即不存在；无阈值可争",
+      "principle": "交付完整性",
+      "violation": "资源 404 或空文件，这一块在成片里是空白。"
+    },
+    {
+      "id": "VS-01",
+      "title": "出画 / 安全区",
+      "severity": "blocker",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "out_of_canvas_ratio",
+      "unit": "ratio",
+      "gate": {
+        "fail": {
+          "gt": 0
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "boxes"
+      ],
+      "secondary": {
+        "metric": "out_of_safe_ratio",
+        "gate": {
+          "warn": {
+            "gt": 0
+          }
+        }
+      },
+      "note": "被画布裁切 → FAIL；出安全区（默认各边 5% 轴长，平台已知则用平台值）→ WARN。合并原 QL-06 ｜ 出画判定带 0.5px@1080p 抗锯齿容差：贴边 bbox 的浮点残差不得判 FAIL（曾因此误报 5 条）。文字宽度为估计值时，出画判定只给 WARN",
+      "measure": "exact",
+      "threshold": "standard",
+      "citation": "画布外内容不可见（定义性）；安全区 5% 本身是提案，只判 WARN",
+      "principle": "交付完整性",
+      "violation": "元素被画布裁掉一部分，平台端还会再裁一次。",
+      "needsPreciseBoxes": true
+    },
+    {
+      "id": "CT-02",
+      "title": "文本对比度",
+      "severity": "blocker",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "wcag_contrast",
+      "unit": "ratio",
+      "gate": {
+        "fail": {
+          "lt": 4.0
+        },
+        "warn": {
+          "lt": 4.5
+        }
+      },
+      "minSamples": 1,
+      "gateLarge": {
+        "fail": {
+          "lt": 2.5
+        },
+        "warn": {
+          "lt": 3.0
+        }
+      },
+      "requires": [
+        "rendered_frame",
+        "boxes"
+      ],
+      "note": "WCAG 2.2 §1.4.3；大字定义：ui 用 CSS px>=24（声明 --display-width 时按投放宽度折算），位图/印刷用『相对正文 >=1.8x 中位数』。必须在成片上测，属性色不能代表屏幕色。取样先腐蚀 1px 去掉抗锯齿边缘，再取远尾中位色；否则细字会被边缘像素拉成中间灰，13.4:1 报成 3.2:1",
+      "measure": "exact",
+      "threshold": "standard",
+      "citation": "WCAG 2.2 §1.4.3 AA：4.5:1，大字 3:1",
+      "principle": "对比",
+      "violation": "文字与底色太接近，小字在压缩后基本消失。"
+    },
+    {
+      "id": "DE-01",
+      "title": "死元素",
+      "severity": "blocker",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "visible_frame_count",
+      "unit": "frames",
+      "gate": {
+        "fail": {
+          "lte": 0
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "boxes"
+      ],
+      "note": "声明存在但全程不可见/面积 0/完全不透明 0。注意入场前不可见是合法的，判的是全程",
+      "measure": "exact",
+      "threshold": "standard",
+      "citation": "定义性：全程零可见 = 零信息",
+      "principle": "意义",
+      "violation": "元素声明了却全程不可见，占位不出内容。"
+    },
+    {
+      "id": "TM-01",
+      "title": "阅读速度",
+      "severity": "blocker",
+      "medium": [
+        "ui"
+      ],
+      "metric": "cps",
+      "unit": "chars/s",
+      "gate": {
+        "fail": {
+          "gt": 9
+        },
+        "warn": {
+          "gt": 7
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "timeline",
+        "text_segments"
+      ],
+      "gateLatin": {
+        "fail": {
+          "gt": 20
+        },
+        "warn": {
+          "gt": 17
+        }
+      },
+      "note": "中文 5-7 字/秒舒适、9 为上限；西文 17-20。有旁白时取 max(阅读, 旁白) 后再判，允许 +1 容差 ｜ 当前 scope=static，本条停用",
+      "measure": "exact",
+      "threshold": "convention",
+      "citation": "字幕实践 5–9 字/秒；无强制标准，个体差异大",
+      "principle": "可读性",
+      "violation": "字数超出停留时长，观众读不完就被切走。",
+      "outOfScope": "video"
+    },
+    {
+      "id": "TM-04",
+      "title": "物理起点",
+      "severity": "blocker",
+      "medium": [
+        "ui"
+      ],
+      "metric": "start_scale",
+      "unit": "ratio",
+      "gate": {
+        "fail": {
+          "lte": 0.02
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "timeline"
+      ],
+      "note": "禁止从 scale(0) 起；建议 0.9-0.97 + opacity。transform-origin 须在锚点（按钮/卡片边缘）",
+      "measure": "exact",
+      "threshold": "convention",
+      "citation": "动效工艺：禁 scale(0) 是通行做法",
+      "principle": "运动与节奏",
+      "violation": "从 scale(0) 起，物体凭空出现，物理上不成立。"
+    },
+    {
+      "id": "TM-10",
+      "title": "空白帧",
+      "severity": "blocker",
+      "medium": [
+        "ui"
+      ],
+      "metric": "blank_frame_ratio",
+      "unit": "ratio",
+      "gate": {
+        "fail": {
+          "gt": 0.1
+        },
+        "warn": {
+          "gt": 0.05
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "frames_sampled"
+      ],
+      "note": "空白 = 墨量 < 0.5% 且无文本；有意留白只允许出现在转场与停顿，需在报告里给理由 ｜ 当前 scope=static，本条停用",
+      "measure": "exact",
+      "threshold": "proposal",
+      "citation": "10%/5% 为提案；判的是『无内容』不是『留白』",
+      "principle": "交付完整性",
+      "violation": "大面积没有内容的帧，观众在看空屏。",
+      "outOfScope": "video"
+    },
+    {
+      "id": "FT-01",
+      "title": "触控目标",
+      "severity": "blocker",
+      "medium": [
+        "ui"
+      ],
+      "metric": "target_size_px",
+      "unit": "px",
+      "gate": {
+        "fail": {
+          "lt": 44
+        },
+        "warn": {
+          "lt": 48
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "interaction_map"
+      ],
+      "note": "iOS HIG 44x44pt、Material 48x48dp。视频媒介不适用，medium 过滤后自动 NA",
+      "measure": "exact",
+      "threshold": "standard",
+      "citation": "Apple HIG 44×44pt；Material 48×48dp",
+      "principle": "可用性",
+      "violation": "点击区太小，手指按不准，误触率上升。"
+    },
+    {
+      "id": "PE-01",
+      "title": "危险操作防护",
+      "severity": "blocker",
+      "medium": [
+        "ui"
+      ],
+      "metric": "guard_present",
+      "unit": "bool",
+      "gate": {
+        "fail": {
+          "eq": false
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "interaction_map"
+      ],
+      "note": "删除/覆盖/付费等不可逆操作需二次确认或默认禁用",
+      "measure": "exact",
+      "threshold": "convention",
+      "citation": "防错是通行启发式，非规范条文",
+      "principle": "可用性",
+      "violation": "危险操作没有确认或默认禁用，误触即不可逆。"
+    },
+    {
+      "id": "SV-01",
+      "title": "状态反馈",
+      "severity": "blocker",
+      "medium": [
+        "ui"
+      ],
+      "metric": "feedback_latency_ms",
+      "unit": "ms",
+      "gate": {
+        "fail": {
+          "gt": 100
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "interaction_map"
+      ],
+      "note": "100ms 内出现反馈元素；超过 1s 需 loading 态。慢接口不算违规，无反馈才算",
+      "measure": "exact",
+      "threshold": "standard",
+      "citation": "Nielsen 响应时间上限 0.1s",
+      "principle": "可用性",
+      "violation": "操作后没有即时反馈，用户会重复点。"
+    },
+    {
+      "id": "AL-01",
+      "title": "对齐",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "align_dev_p90",
+      "unit": "px@1080p",
+      "gate": {
+        "warn": {
+          "gt": 6
+        }
+      },
+      "minSamples": 4,
+      "requires": [
+        "boxes",
+        "groups"
+      ],
+      "note": "组内左/中/基线聚类的稳健偏差（p90），不用 std（单个离群值就失效）。样本 <4 记 UNMEASURED",
+      "measure": "exact",
+      "threshold": "proposal",
+      "citation": "6px/2px 与 p90 口径均为提案",
+      "principle": "对齐",
+      "violation": "同组元素边缘不在一条线上，视线每行都要重找起点。",
+      "needsPreciseBoxes": true
+    },
+    {
+      "id": "AL-02",
+      "title": "规则线定位",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "rule_line_gap_delta_px",
+      "unit": "px@1080p",
+      "gate": {
+        "warn": {
+          "gt": 8
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "boxes"
+      ],
+      "secondary": {
+        "metric": "rule_line_offset_spread",
+        "gate": {
+          "warn": {
+            "gt": 8
+          }
+        }
+      },
+      "note": "分隔线（细长横/竖线）上下留白之差，全图取最大者；同类线之间的上留白极差 >8px 另报一条。实测顶部线 31.6/72.4、中间线 59.6/60.4，此前没有任何规则管这个",
+      "measure": "exact",
+      "threshold": "proposal",
+      "citation": "8px 为提案：规则线应视觉居中，光学偏移容忍 1–2px，8px 已是一贴一浮",
+      "principle": "对齐",
+      "violation": "分隔线一侧贴住内容、另一侧悬空，读者会把线读成上面内容的底边或下面内容的下划线。",
+      "needsPreciseBoxes": true
+    },
+    {
+      "id": "PR-01",
+      "title": "亲密性",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "gap_ratio",
+      "unit": "ratio",
+      "gate": {
+        "warn": {
+          "lt": 1.2
+        }
+      },
+      "minSamples": 3,
+      "requires": [
+        "boxes"
+      ],
+      "note": "旧的聚类口径：最近邻间距一维聚类出两簇，比 = 簇间 / 簇内。已由 GR-02 取代，本版不再单独判定，保留 ID 供旧报告比对——聚类在 1.2 附近分不开，正是「跑不出来也不报」的来源",
+      "supersededBy": "GR-02",
+      "measure": "model",
+      "threshold": "proposal",
+      "citation": "1.2/1.5 为提案；分组依赖聚类模型",
+      "principle": "亲密性",
+      "violation": "组间间距不大于组内间距，两块内容被读成一组。"
+    },
+    {
+      "id": "GR-02",
+      "title": "分组间距比",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "group_gap_ratio",
+      "unit": "ratio",
+      "gate": {
+        "warn": {
+          "lt": 1.8
+        }
+      },
+      "minSamples": 3,
+      "requires": [
+        "boxes",
+        "groups"
+      ],
+      "note": "组间缝 / 组内间距；组间取最窄的一条缝（最弱处决定分组）。分组来自 <g>/group/container；缺分组声明时记 UNMEASURED，不退回聚类（聚类在 1.2 附近分不开）。实测 0.77、1.23 粘连，2.78 分开，1.8 是分界",
+      "measure": "exact",
+      "threshold": "proposal",
+      "citation": "『组间明显大于组内』是格式塔接近性的通行做法；1.8 是本库在真实样本上校准的提案值，不是规范数字",
+      "principle": "亲密性",
+      "violation": "组间缝不比组内间距宽，两块内容被读成一组，分组只能靠猜。",
+      "needsPreciseBoxes": true
+    },
+    {
+      "id": "GR-01",
+      "title": "网格",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "grid_align_share",
+      "unit": "ratio",
+      "gate": {
+        "warn": {
+          "lt": 0.8
+        }
+      },
+      "minSamples": 5,
+      "requires": [
+        "boxes"
+      ],
+      "note": "先从坐标 GCD/一维聚类推断网格，再测偏差；容差 0.5 个网格单元，不写死 1px",
+      "measure": "exact",
+      "threshold": "proposal",
+      "citation": "容差 0.5 单元为提案；网格需先推断",
+      "principle": "网格",
+      "violation": "元素不在同一个骨架里，版面像随手摆的。",
+      "needsPreciseBoxes": true
+    },
+    {
+      "id": "NS-02",
+      "title": "内边距",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "padding_cv",
+      "unit": "ratio",
+      "gate": {
+        "warn": {
+          "gt": 0.35
+        }
+      },
+      "minSamples": 4,
+      "requires": [
+        "boxes"
+      ],
+      "note": "四边 CV；光学对齐（左边齐文字、右边留呼吸）是合法例外，所以只能 WARN，不能阻断",
+      "measure": "exact",
+      "threshold": "proposal",
+      "citation": "CV 0.35 为提案，光学对齐是合法例外",
+      "principle": "负空间",
+      "violation": "四边内边距差得离谱，视觉重心歪向一边。",
+      "needsPreciseBoxes": true
+    },
+    {
+      "id": "CT-01",
+      "title": "层级落差",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "size_ratio_rank1_rank2",
+      "unit": "ratio",
+      "gate": {
+        "warn": {
+          "lt": 1.2
+        }
+      },
+      "minSamples": 2,
+      "requires": [
+        "boxes",
+        "roles"
+      ],
+      "secondary": {
+        "metric": "size_ratio_rank1_body",
+        "gate": {
+          "warn": {
+            "lt": 1.5
+          }
+        }
+      },
+      "note": "只约束首两档与最大档对正文两端，不要求每对相邻档都 >=1.25（否则字号通胀）",
+      "measure": "exact",
+      "threshold": "proposal",
+      "citation": "1.2/1.5 为提案，只约束两端",
+      "principle": "视觉层次",
+      "violation": "标题与正文几乎同号，主次读不出来。"
+    },
+    {
+      "id": "VH-01",
+      "title": "层次排名",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "primary_rank",
+      "unit": "rank",
+      "gate": {
+        "warn": {
+          "gt": 1
+        }
+      },
+      "minSamples": 2,
+      "requires": [
+        "boxes",
+        "salience"
+      ],
+      "note": "salience 是代理量（面积^0.5 x 对比差 x 位置先验），只提示不阻断",
+      "measure": "model",
+      "threshold": "proposal",
+      "citation": "显著性为代理模型，参数未验证",
+      "principle": "视觉层次",
+      "violation": "第一眼落在装饰上，主信息排在后面。"
+    },
+    {
+      "id": "VH-02",
+      "title": "焦点唯一",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "high_salience_count",
+      "unit": "count",
+      "gate": {
+        "warn": {
+          "gt": 2
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "salience"
+      ],
+      "note": "首屏高显著元素 <=2",
+      "measure": "model",
+      "threshold": "proposal",
+      "citation": "高显著 ≤2 为提案",
+      "principle": "视觉层次",
+      "violation": "几个元素一样抢眼，等于没有重点。"
+    },
+    {
+      "id": "BL-01",
+      "title": "平衡",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "weight_delta_ratio",
+      "unit": "ratio",
+      "gate": {
+        "warn": {
+          "gt": 0.15
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "salience"
+      ],
+      "note": "左右/上下视觉重量矩差 / 总重；代理量",
+      "measure": "model",
+      "threshold": "proposal",
+      "citation": "0.15 为提案；视觉重量是代理量",
+      "principle": "平衡",
+      "violation": "一侧视觉重量明显偏大，画面重心一直往那边滑。"
+    },
+    {
+      "id": "BL-02",
+      "title": "对称",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "mirror_diff",
+      "unit": "ratio",
+      "gate": {
+        "warn": {
+          "gt": 0.03
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "rendered_frame"
+      ],
+      "note": "仅在意图声明为对称构图时启用，否则 NA",
+      "measure": "model",
+      "threshold": "proposal",
+      "citation": "0.03 为提案；仅在声明对称时启用",
+      "principle": "平衡",
+      "violation": "声称对称但镜像有偏差，看起来像没对齐。"
+    },
+    {
+      "id": "PS-01",
+      "title": "比例",
+      "severity": "info",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "size_ratio_primary_secondary",
+      "unit": "ratio",
+      "gate": {
+        "warn": {
+          "lt": 1.5,
+          "gt": 3.0
+        }
+      },
+      "minSamples": 2,
+      "requires": [
+        "boxes",
+        "roles"
+      ],
+      "note": "主/次尺寸比落在 1.5-3.0 之外只记 info",
+      "measure": "exact",
+      "threshold": "proposal",
+      "citation": "1.5–3.0 为提案",
+      "principle": "比例",
+      "violation": "主次尺寸关系失衡，大小差得没有道理。"
+    },
+    {
+      "id": "NS-01",
+      "title": "负空间",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "whitespace_ratio",
+      "unit": "ratio",
+      "gate": {
+        "warn": {
+          "lt": 0.3
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "boxes"
+      ],
+      "note": "留白率 = 背景色像素占比（取自四边环带的众数色），不是『1 − 主色占比』——后者会把 93.9% 的留白算成 6.1%，把满版判成占满、把留白判成挤。满版信息图不适用，记 NA",
+      "measure": "exact",
+      "threshold": "proposal",
+      "citation": "0.30 为提案，满版信息图不适用；口径是背景占比，不是主色占比",
+      "principle": "负空间",
+      "violation": "内容占满画面，没有落点，整体发闷。"
+    },
+    {
+      "id": "RP-01",
+      "title": "重复一致性",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "type_scale_levels",
+      "unit": "count",
+      "gate": {
+        "warn": {
+          "gt": 5
+        }
+      },
+      "minSamples": 3,
+      "requires": [
+        "boxes"
+      ],
+      "note": "字号档位数；不用 CV（2 档值的 CV 是噪声）",
+      "measure": "exact",
+      "threshold": "proposal",
+      "citation": "Web 排版实践：一个界面 4–8 档字号；Material 用固定 type scale 约束",
+      "principle": "重复与一致性",
+      "violation": "字号分了太多档，分不清哪几档是同一层。"
+    },
+    {
+      "id": "TY-01",
+      "title": "字体系统",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "family_count",
+      "unit": "count",
+      "gate": {
+        "warn": {
+          "gt": 3
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "boxes"
+      ],
+      "secondary": {
+        "metric": "weight_count",
+        "gate": {
+          "warn": {
+            "gt": 4
+          }
+        }
+      },
+      "note": "字体族 ≤3、字重档位 ≤4；品牌规范有例外时在报告注明",
+      "measure": "exact",
+      "threshold": "convention",
+      "citation": "Apple HIG：尽量减少字样数量；Web 排版实践 ≤2–3 个字体族",
+      "principle": "统一与多样",
+      "violation": "字体族或字重太多，像几个项目拼起来的。"
+    },
+    {
+      "id": "TY-02",
+      "title": "行长",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "chars_per_line",
+      "unit": "chars",
+      "gate": {
+        "warn": {
+          "gt": 45
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "boxes",
+        "font_metrics"
+      ],
+      "note": "中文 25-45 字/行；西文 65ch。需字体度量，缺则 UNMEASURED",
+      "measure": "exact",
+      "threshold": "convention",
+      "citation": "行长惯例：西文 65ch 上限",
+      "principle": "可读性",
+      "violation": "每行字太多，换行时容易串行。"
+    },
+    {
+      "id": "OR-01",
+      "title": "孤行",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "last_line_chars",
+      "unit": "chars",
+      "gate": {
+        "warn": {
+          "lte": 1
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "boxes",
+        "line_breaks"
+      ],
+      "note": "段落行数 >=3 且末行 <=1 字",
+      "measure": "exact",
+      "threshold": "convention",
+      "citation": "排版工艺：孤字规避",
+      "principle": "可读性",
+      "violation": "段落末行只剩一个字，孤零零挂在下面。"
+    },
+    {
+      "id": "CL-01",
+      "title": "调色板",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "palette_count",
+      "unit": "count",
+      "gate": {
+        "warn": {
+          "gt": 6
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "rendered_frame"
+      ],
+      "secondary": {
+        "metric": "dominant_share",
+        "gate": {
+          "warn": {
+            "lt": 0.15
+          }
+        }
+      },
+      "note": "面积 >0.5% 的主色种类；最大占比 <0.15 视为无主色",
+      "measure": "exact",
+      "threshold": "proposal",
+      "citation": "主色 ≤6、占比 ≥0.15 均为提案",
+      "principle": "统一与多样",
+      "violation": "主色太多互相打架，或没有主色，整体发花。"
+    },
+    {
+      "id": "SN-01",
+      "title": "信号噪音比",
+      "severity": "warn",
+      "medium": [
+        "ui"
+      ],
+      "metric": "decor_ratio",
+      "unit": "ratio",
+      "gate": {
+        "warn": {
+          "gt": 0.3
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "boxes",
+        "roles"
+      ],
+      "note": "依赖角色标注，标注缺失时 UNMEASURED",
+      "measure": "model",
+      "threshold": "proposal",
+      "citation": "0.3 为提案；依赖角色标注",
+      "principle": "信息密度",
+      "violation": "装饰占比过高，信息被噪音稀释。"
+    },
+    {
+      "id": "ML-01",
+      "title": "分块数",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "chunk_count",
+      "unit": "count",
+      "gate": {
+        "warn": {
+          "gt": 9
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "boxes",
+        "groups"
+      ],
+      "note": "经验值，不是米勒定律（原文 7±2 讲的是绝对判断跨度）",
+      "measure": "model",
+      "threshold": "proposal",
+      "citation": "9 块为提案；分组本身依赖模型",
+      "principle": "信息密度",
+      "violation": "一屏信息块太多，记不住也扫不完。"
+    },
+    {
+      "id": "HK-01",
+      "title": "一级选项数",
+      "severity": "warn",
+      "medium": [
+        "ui"
+      ],
+      "metric": "top_option_count",
+      "unit": "count",
+      "gate": {
+        "warn": {
+          "gt": 7
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "interaction_map"
+      ],
+      "note": "希克定律是决策时间约 log2(n+1)，<=7 是设计经验值",
+      "measure": "model",
+      "threshold": "proposal",
+      "citation": "7 为提案；希克定律讲的是决策时间",
+      "principle": "信息密度",
+      "violation": "一级选项过多，选之前先得逐个读完。"
+    },
+    {
+      "id": "PN-01",
+      "title": "排版规范",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "punct_violations",
+      "unit": "count",
+      "gate": {
+        "warn": {
+          "gt": 0
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "text_content"
+      ],
+      "note": "中文句内半角标点；中英文之间无间距只记 info",
+      "measure": "exact",
+      "threshold": "standard",
+      "citation": "GB/T 15834 标点符号用法",
+      "principle": "可读性",
+      "violation": "中文里混着半角标点，阅读节奏被磕断。"
+    },
+    {
+      "id": "SC-01",
+      "title": "字幕规格",
+      "severity": "warn",
+      "medium": [
+        "ui"
+      ],
+      "metric": "caption_lines",
+      "unit": "lines",
+      "gate": {
+        "warn": {
+          "gt": 2
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "text_content",
+        "boxes"
+      ],
+      "secondary": {
+        "metric": "caption_chars_per_line",
+        "gate": {
+          "warn": {
+            "gt": 16
+          }
+        }
+      },
+      "note": "竖屏 12-16 字/行，横屏可到 20；超过 2 行需拆段 ｜ 当前 scope=static，本条停用",
+      "measure": "exact",
+      "threshold": "convention",
+      "citation": "字幕规格惯例：≤2 行",
+      "principle": "可读性",
+      "violation": "字幕行数/字数超限，屏幕下方被字占满。",
+      "outOfScope": "video"
+    },
+    {
+      "id": "TM-02",
+      "title": "动画时长",
+      "severity": "warn",
+      "medium": [
+        "ui"
+      ],
+      "metric": "duration_ms",
+      "unit": "ms",
+      "gate": {
+        "warn": {
+          "lt": 120,
+          "gt": 1500
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "timeline"
+      ],
+      "note": "入场 200-800ms 为常态；>1.5s 需明确叙事理由",
+      "measure": "exact",
+      "threshold": "convention",
+      "citation": "动效工艺：入场 200–800ms 为常态",
+      "principle": "运动与节奏",
+      "violation": "单个动作太长或太短，观众在等一个已经看懂的变化。"
+    },
+    {
+      "id": "TM-03",
+      "title": "缓动",
+      "severity": "warn",
+      "medium": [
+        "ui"
+      ],
+      "metric": "easing_class",
+      "unit": "enum",
+      "gate": {
+        "warn": {
+          "in": [
+            "linear"
+          ]
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "timeline"
+      ],
+      "note": "入场用 ease-out；匀速入场 = WARN。退场匀速可接受",
+      "measure": "exact",
+      "threshold": "convention",
+      "citation": "动效工艺：入场用 ease-out 是通行做法",
+      "principle": "运动与节奏",
+      "violation": "匀速起停，动作像机器在动，没有重量。"
+    },
+    {
+      "id": "TM-05",
+      "title": "布局属性动画",
+      "severity": "warn",
+      "medium": [
+        "ui"
+      ],
+      "metric": "animated_layout_props",
+      "unit": "count",
+      "gate": {
+        "warn": {
+          "gt": 0
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "timeline"
+      ],
+      "note": "动 width/height/x/y 在实时合成里掉帧；离线渲染管线不适用，medium 过滤后 NA",
+      "measure": "exact",
+      "threshold": "convention",
+      "citation": "性能惯例；仅对实时合成成立",
+      "principle": "运动与节奏",
+      "violation": "改布局属性做动画，实时合成时会掉帧。"
+    },
+    {
+      "id": "TM-07",
+      "title": "节奏一致性",
+      "severity": "warn",
+      "medium": [
+        "ui"
+      ],
+      "metric": "duration_cv",
+      "unit": "ratio",
+      "gate": {
+        "warn": {
+          "gt": 0.3
+        }
+      },
+      "minSamples": 3,
+      "requires": [
+        "timeline"
+      ],
+      "note": "同类动画时长分散度；样本 <3 记 UNMEASURED",
+      "measure": "exact",
+      "threshold": "proposal",
+      "citation": "CV 0.3 为提案",
+      "principle": "运动与节奏",
+      "violation": "同类动画时长各不相同，节奏是散的。"
+    },
+    {
+      "id": "TM-08",
+      "title": "同步性",
+      "severity": "warn",
+      "medium": [
+        "ui"
+      ],
+      "metric": "begin_offset_ms",
+      "unit": "ms",
+      "gate": {
+        "warn": {
+          "gt": 16
+        }
+      },
+      "minSamples": 2,
+      "requires": [
+        "timeline"
+      ],
+      "note": "协同动画偏差 <=1 帧(16ms)；显式错峰（>=3 个不同偏移）视为有意，记 PASS",
+      "measure": "exact",
+      "threshold": "convention",
+      "citation": "1 帧=16.7ms 是算术，但『必须同步』本身是惯例",
+      "principle": "运动与节奏",
+      "violation": "该同时发生的变化有偏移，看起来像一个卡住了。"
+    },
+    {
+      "id": "TM-09",
+      "title": "密度曲线",
+      "severity": "warn",
+      "medium": [
+        "ui"
+      ],
+      "metric": "density_peak_ratio",
+      "unit": "ratio",
+      "gate": {
+        "warn": {
+          "gt": 2
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "timeline"
+      ],
+      "note": "每秒元素/字符量的峰值不超均值 2 倍；连续无变化 >3s 单独报 ｜ 当前 scope=static，本条停用",
+      "measure": "model",
+      "threshold": "proposal",
+      "citation": "峰值 2 倍为提案；密度是代理量",
+      "principle": "运动与节奏",
+      "violation": "某一秒塞进几倍内容，另一段长时间不动。",
+      "outOfScope": "video"
+    },
+    {
+      "id": "KF-01",
+      "title": "关键帧密度",
+      "severity": "warn",
+      "medium": [
+        "ui"
+      ],
+      "metric": "keys_per_second",
+      "unit": "count",
+      "gate": {
+        "warn": {
+          "gt": 8
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "timeline"
+      ],
+      "note": "每属性每秒关键帧数；过密=动作糊，且难以维护",
+      "measure": "exact",
+      "threshold": "proposal",
+      "citation": "8 keys/s 为提案",
+      "principle": "运动与节奏",
+      "violation": "关键帧过密，动作糊成一团，也改不动。"
+    },
+    {
+      "id": "MZ-01",
+      "title": "缓动一致性",
+      "severity": "warn",
+      "medium": [
+        "ui"
+      ],
+      "metric": "easing_families_per_element",
+      "unit": "count",
+      "gate": {
+        "warn": {
+          "gt": 1
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "timeline"
+      ],
+      "note": "同一元素多属性同时动却用不同缓动族，会产生拉扯感",
+      "measure": "exact",
+      "threshold": "proposal",
+      "citation": "『同元素多缓动=拉扯』是推测",
+      "principle": "运动与节奏",
+      "violation": "同一元素多个属性用了不同缓动，动作被拉扯。"
+    },
+    {
+      "id": "JIT-01",
+      "title": "亚像素抖动",
+      "severity": "warn",
+      "medium": [
+        "ui"
+      ],
+      "metric": "jitter_px",
+      "unit": "px",
+      "gate": {
+        "warn": {
+          "lt": 1.5,
+          "gt": 0.3
+        }
+      },
+      "minSamples": 3,
+      "requires": [
+        "timeline"
+      ],
+      "note": "非意图位移 0.3-1.5px 的帧间抖动；模板渲染常见",
+      "measure": "exact",
+      "threshold": "proposal",
+      "citation": "0.3–1.5px 抖动带为提案",
+      "principle": "运动与节奏",
+      "violation": "静止元素在亚像素间抖，画面一直在颤。"
+    },
+    {
+      "id": "TS-01",
+      "title": "转场时长",
+      "severity": "warn",
+      "medium": [
+        "ui"
+      ],
+      "metric": "transition_ms",
+      "unit": "ms",
+      "gate": {
+        "warn": {
+          "gt": 1200
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "timeline"
+      ],
+      "note": "150-600ms 为常态；>1.2s 拖节奏，硬切不设下限 ｜ 当前 scope=static，本条停用",
+      "measure": "exact",
+      "threshold": "convention",
+      "citation": "转场时长惯例 150–600ms",
+      "principle": "运动与节奏",
+      "violation": "转场过长，节奏被拖住。",
+      "outOfScope": "video"
+    },
+    {
+      "id": "EF-01",
+      "title": "末帧可读",
+      "severity": "warn",
+      "medium": [
+        "ui"
+      ],
+      "metric": "tail_motion_ms",
+      "unit": "ms",
+      "gate": {
+        "warn": {
+          "gt": 300
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "timeline",
+        "frames_sampled"
+      ],
+      "note": "最后 300ms 内文字仍在动，观感像没播完 ｜ 当前 scope=static，本条停用",
+      "measure": "exact",
+      "threshold": "proposal",
+      "citation": "300ms 尾段为提案",
+      "principle": "运动与节奏",
+      "violation": "最后一刻还在动，观感像没播完。",
+      "outOfScope": "video"
+    },
+    {
+      "id": "ASR-01",
+      "title": "音画对齐",
+      "severity": "warn",
+      "medium": [
+        "ui"
+      ],
+      "metric": "text_vs_vo_offset_ms",
+      "unit": "ms",
+      "gate": {
+        "warn": {
+          "gt": 400
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "asr",
+        "timeline"
+      ],
+      "note": "文字出现时刻与旁白对应词时间差；无 ASR 时 UNMEASURED ｜ 当前 scope=static，本条停用",
+      "measure": "exact",
+      "threshold": "convention",
+      "citation": "音画同步容差惯例，400ms 为宽松档",
+      "principle": "运动与节奏",
+      "violation": "文字与旁白不同步，像对不上口型。",
+      "outOfScope": "video"
+    },
+    {
+      "id": "CT-03",
+      "title": "图形对比",
+      "severity": "warn",
+      "medium": [
+        "ui"
+      ],
+      "metric": "wcag_contrast_nontext",
+      "unit": "ratio",
+      "gate": {
+        "warn": {
+          "lt": 3.0
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "rendered_frame"
+      ],
+      "note": "WCAG 2.2 §1.4.11 非文本对比 3:1；图标、边框、图表元素",
+      "measure": "exact",
+      "threshold": "standard",
+      "citation": "WCAG 2.2 §1.4.11：非文本对比 3:1",
+      "principle": "对比",
+      "violation": "图标/边框与底色太接近，形状糊在背景里。"
+    },
+    {
+      "id": "TM-06",
+      "title": "语义方向",
+      "severity": "human",
+      "medium": [
+        "ui"
+      ],
+      "metric": null,
+      "gate": null,
+      "minSamples": 0,
+      "requires": [
+        "timeline",
+        "script"
+      ],
+      "note": "位移方向与因果/流程/时间顺序是否一致；只能人判，但必须逐条回答 ｜ 当前 scope=static，本条停用",
+      "measure": "semantic",
+      "threshold": "proposal",
+      "citation": "语义判断，不设数值",
+      "principle": "运动与节奏",
+      "violation": "位移方向与因果/流程相反，把顺序讲反了。",
+      "outOfScope": "video"
+    },
+    {
+      "id": "JK-01",
+      "title": "惯例取舍",
+      "severity": "human",
+      "medium": [
+        "ui"
+      ],
+      "metric": null,
+      "gate": null,
+      "minSamples": 0,
+      "requires": [
+        "interaction_map"
+      ],
+      "note": "偏离平台惯例要有降低理解成本的理由，不能只为特别",
+      "measure": "semantic",
+      "threshold": "proposal",
+      "citation": "语义判断，不设数值",
+      "principle": "可用性",
+      "violation": "偏离平台惯例又没有理由，用户得先试错。"
+    },
+    {
+      "id": "RC-01",
+      "title": "识别优于回忆",
+      "severity": "human",
+      "medium": [
+        "ui"
+      ],
+      "metric": null,
+      "gate": null,
+      "minSamples": 0,
+      "requires": [
+        "interaction_map"
+      ],
+      "note": "跨屏引用是否需要记住上一屏的内容",
+      "measure": "semantic",
+      "threshold": "proposal",
+      "citation": "语义判断，不设数值",
+      "principle": "可用性",
+      "violation": "要记住上一屏的内容才能继续，识别退化成回忆。"
+    },
+    {
+      "id": "ER-01",
+      "title": "错误提示质量",
+      "severity": "human",
+      "medium": [
+        "ui"
+      ],
+      "metric": null,
+      "gate": null,
+      "minSamples": 0,
+      "requires": [
+        "interaction_map"
+      ],
+      "note": "是否给出可执行的下一步；只有错误码 = 不合格",
+      "measure": "semantic",
+      "threshold": "proposal",
+      "citation": "语义判断，不设数值",
+      "principle": "可用性",
+      "violation": "只给错误码不给下一步，用户不知道该改什么。"
+    },
+    {
+      "id": "GE-02",
+      "title": "格式塔·相似",
+      "principle": "格式塔·相似",
+      "measure": "exact",
+      "threshold": "convention",
+      "citation": "相似性：外观一致即同类；『完全一致』本身是惯例判断",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "style_variants_per_class",
+      "unit": "count",
+      "gate": {
+        "warn": {
+          "gt": 1
+        }
+      },
+      "minSamples": 2,
+      "requires": [
+        "boxes",
+        "style"
+      ],
+      "violation": "同类元素的颜色/圆角/字重不一致，读者会当成两种东西。",
+      "note": "按 role+kind 分组比较 style 签名；boxes 缺 style 字段记 UNMEASURED",
+      "needsPreciseBoxes": true
+    },
+    {
+      "id": "GE-03",
+      "title": "格式塔·闭合",
+      "principle": "格式塔·闭合",
+      "measure": "exact",
+      "threshold": "proposal",
+      "citation": "0.15 为提案值；闭合感知本身是格式塔事实",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "gap_ratio_of_perimeter",
+      "unit": "ratio",
+      "gate": {
+        "warn": {
+          "gt": 0.15
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "vector_paths"
+      ],
+      "implemented": false,
+      "violation": "容器缺口过大，边界补不完整，分组失效。",
+      "note": "需要路径数据；脚本尚未实现，先人工看",
+      "needsPreciseBoxes": true
+    },
+    {
+      "id": "GE-04",
+      "title": "格式塔·连续",
+      "principle": "格式塔·连续",
+      "measure": "exact",
+      "threshold": "proposal",
+      "citation": "30° 为提案值；连续性本身是格式塔事实",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "turn_angle_deg",
+      "unit": "deg",
+      "gate": {
+        "warn": {
+          "gt": 30
+        }
+      },
+      "minSamples": 3,
+      "requires": [
+        "boxes"
+      ],
+      "implemented": false,
+      "violation": "相邻元素连线成折线，视线走到一半被弹开。",
+      "note": "需要元素序列声明；脚本尚未实现",
+      "needsPreciseBoxes": true
+    },
+    {
+      "id": "CR-01",
+      "title": "共同区域",
+      "principle": "共同区域",
+      "measure": "model",
+      "threshold": "proposal",
+      "citation": "共同区域是格式塔事实；判定阈值是提案",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "cross_container_group_ratio",
+      "unit": "ratio",
+      "gate": {
+        "warn": {
+          "gt": 0.3
+        }
+      },
+      "minSamples": 2,
+      "requires": [
+        "boxes",
+        "groups"
+      ],
+      "implemented": false,
+      "violation": "同组元素不在同一底色或容器里，分组只能靠猜。",
+      "note": "依赖分组推断；脚本尚未实现",
+      "needsPreciseBoxes": true
+    },
+    {
+      "id": "SP-01",
+      "title": "间距体系",
+      "principle": "重复与一致性",
+      "measure": "exact",
+      "threshold": "proposal",
+      "citation": "7 档为提案值；间距阶梯是工艺惯例",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "spacing_scale_levels",
+      "unit": "count",
+      "gate": {
+        "warn": {
+          "gt": 7
+        }
+      },
+      "minSamples": 5,
+      "requires": [
+        "boxes"
+      ],
+      "violation": "间距取值太多太碎，看起来像随手拖出来的。",
+      "note": "统计同轴相邻元素间距的取值档数",
+      "needsPreciseBoxes": true
+    },
+    {
+      "id": "SG-01",
+      "title": "意义（形式追随功能）",
+      "principle": "意义",
+      "measure": "semantic",
+      "threshold": "proposal",
+      "citation": "无阈值可设，只能人判",
+      "severity": "human",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": null,
+      "gate": null,
+      "minSamples": 0,
+      "requires": [
+        "intent"
+      ],
+      "violation": "元素不承载信息、结构或情绪，去掉没有损失。",
+      "note": "必须逐个元素问『去掉会损失什么』"
+    },
+    {
+      "id": "TY-04",
+      "title": "阶梯外字号",
+      "principle": "重复与一致性",
+      "measure": "exact",
+      "threshold": "convention",
+      "citation": "Material 3 要求所有文本映射到预定义 type scale，不允许自造字号",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "off_scale_sizes",
+      "unit": "count",
+      "gate": {
+        "warn": {
+          "gt": 0
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "boxes",
+        "type_scale"
+      ],
+      "violation": "出现了不在字号阶梯里的字号，层级只能临时判断，同一套系统里没法复用。",
+      "note": "需 --scale 声明阶梯（如 20,26,32,40,56）；没有声明时记 UNMEASURED"
+    },
+    {
+      "id": "TY-05",
+      "title": "相邻档位比",
+      "principle": "视觉层次",
+      "measure": "exact",
+      "threshold": "convention",
+      "citation": "模块化比例 1.125–1.25；Material 明确要求字号差异要有冲击力、避免微小差异",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "min_adjacent_ratio",
+      "unit": "ratio",
+      "gate": {
+        "warn": {
+          "lt": 1.2
+        }
+      },
+      "minSamples": 3,
+      "requires": [
+        "boxes"
+      ],
+      "violation": "相邻两档字号差不到 1.2 倍，肉眼分不出层级，等于没有层级。",
+      "note": "只查阶梯本身，不要求每对元素都不同"
+    },
+    {
+      "id": "TY-06",
+      "title": "字重档位",
+      "principle": "重复与一致性",
+      "measure": "exact",
+      "threshold": "convention",
+      "citation": "Apple HIG：尽量减少字样数量，混用太多会模糊层级",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "weight_levels",
+      "unit": "count",
+      "gate": {
+        "warn": {
+          "gt": 3
+        }
+      },
+      "minSamples": 3,
+      "requires": [
+        "boxes"
+      ],
+      "violation": "字重用了 4 档以上，粗细之间的差别失去含义。",
+      "note": "与 TY-01（字体族）并列，分别管族和粗细"
+    },
+    {
+      "id": "TY-07",
+      "title": "长段落居中",
+      "principle": "可读性",
+      "measure": "exact",
+      "threshold": "convention",
+      "citation": "排版惯例：正文左对齐提供稳定阅读锚点，居中适合短标题",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "centered_long_lines",
+      "unit": "count",
+      "gate": {
+        "warn": {
+          "gt": 0
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "boxes"
+      ],
+      "violation": "超过一行的正文被居中，每换一行视线都要重新找起点。",
+      "note": "判定条件：对齐为居中且字符数 > 30"
+    },
+    {
+      "id": "TY-08",
+      "title": "纤细字重",
+      "principle": "可读性",
+      "measure": "exact",
+      "threshold": "convention",
+      "citation": "Apple HIG：避免使用纤细字重，小字号下难以看清",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "thin_weight_small",
+      "unit": "count",
+      "gate": {
+        "warn": {
+          "gt": 0
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "boxes"
+      ],
+      "violation": "小字号配 300 以下的字重，笔画细到发虚，远看会断。",
+      "note": "判定条件：font-weight ≤ 300 且字号 < 24"
+    },
+    {
+      "id": "TY-09",
+      "title": "段距大于行距",
+      "principle": "亲密性",
+      "measure": "exact",
+      "threshold": "convention",
+      "citation": "排版惯例：段落间距必须明显大于行间距，否则段落失去边界",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "paragraph_gap_ratio",
+      "unit": "ratio",
+      "gate": {
+        "warn": {
+          "lt": 1.5
+        }
+      },
+      "minSamples": 2,
+      "requires": [
+        "boxes",
+        "paragraphs"
+      ],
+      "violation": "段落间距和行距几乎一样，读者分不清是换行还是换段。",
+      "note": "需要段落归属标注；没有时记 UNMEASURED"
+    },
+    {
+      "id": "TY-10",
+      "title": "强调样式过载",
+      "principle": "视觉层次",
+      "measure": "exact",
+      "threshold": "convention",
+      "citation": "排版惯例：一屏内用尽粗体、斜体、颜色、下划线，层级会互相抵消",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "emphasis_variants",
+      "unit": "count",
+      "gate": {
+        "warn": {
+          "gt": 3
+        }
+      },
+      "minSamples": 3,
+      "requires": [
+        "boxes"
+      ],
+      "violation": "同一屏里用了四种以上强调手段，等于谁都不突出。",
+      "note": "统计字重≠400、斜体、非主色、下划线的组合类型"
+    },
+    {
+      "id": "TX-01",
+      "title": "文字配色预算",
+      "principle": "统一与多样",
+      "measure": "exact",
+      "threshold": "convention",
+      "citation": "配色实践：中性文字色 ≤3（主/次/辅），强调色 ≤2；其余靠字号字重区分",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "text_color_count",
+      "unit": "count",
+      "gate": {
+        "warn": {
+          "gt": 3
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "boxes"
+      ],
+      "violation": "文字用了太多颜色，读者会以为它们分别代表不同的状态。",
+      "note": "按饱和度分两层：中性色管层级，强调色管语义；两层都超才算违规",
+      "secondary": {
+        "metric": "text_accent_colors",
+        "gate": {
+          "warn": {
+            "gt": 2
+          }
+        }
+      }
+    }
+  ],
+  "provenance": {
+    "measure": {
+      "exact": "定义即数值，无可争参数",
+      "model": "代理模型的输出，仅序关系可信",
+      "semantic": "只能人判"
+    },
+    "threshold": {
+      "standard": "可引用规范，改动需换引文",
+      "convention": "行业惯例，可辩护无强制力",
+      "proposal": "本项目提案，只保证内部一致"
+    }
+  },
+  "principles": {
+    "亲密性": "格式塔·接近，同组要近、异组要远",
+    "对比": "该跳出来的要跳出来，包括文字与底色、图形与底色",
+    "重复与一致性": "同类东西长得一样，体现为字体族/字号/字重/间距的档位收敛",
+    "对齐": "边缘落在同一根线上，视线不用重新找起点",
+    "网格": "元素共享同一套坐标骨架",
+    "格式塔·相似": "外观相似即同类",
+    "格式塔·闭合": "边界能被补全，容器才成立",
+    "格式塔·连续": "视线沿一条路径流动，不被折断",
+    "共同区域": "共享底色/容器的元素被读成一组",
+    "视觉层次": "第一眼落在最重要的地方，且有且只有一个第一",
+    "负空间": "留白是主动的，不是剩下的",
+    "平衡": "视觉重量不往一边倒",
+    "比例": "大小关系有依据",
+    "统一与多样": "整体成立，局部有变化",
+    "信息密度": "单位面积的认知负荷可控",
+    "运动与节奏": "动的位置、方向、快慢有理由",
+    "意义": "形式服务于功能，没有装饰性冗余",
+    "可读性": "看得清、读得完、不串行（工程兜底）",
+    "可用性": "点得到、有反馈、记得住（工程兜底）",
+    "交付完整性": "资源完好、没有被裁、没有空屏（工程兜底）"
+  },
+  "scope": {
+    "in": [
+      "svg",
+      "html",
+      "png",
+      "jpg",
+      "design file export"
+    ],
+    "out": [
+      "video"
+    ],
+    "note": "视频评审（时序/抽帧/音画）整块停用，相关规则标 outOfScope，不进判定也不计入覆盖率"
+  }
+}

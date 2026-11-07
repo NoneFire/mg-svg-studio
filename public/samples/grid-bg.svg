@@ -1,0 +1,157 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="1920" height="1080" viewBox="0 0 1920 1080"
+     preserveAspectRatio="xMidYMid slice" role="img" aria-label="深色网格视频背景">
+  <title>深色网格视频背景 16:9</title>
+  <defs>
+    <!-- 底色：极深冷灰，上略暗下略亮 -->
+    <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"    stop-color="#0d0d10"/>
+      <stop offset="0.42" stop-color="#131317"/>
+      <stop offset="0.78" stop-color="#15151a"/>
+      <stop offset="1"    stop-color="#111114"/>
+    </linearGradient>
+
+    <!-- 大面积柔光：只为打破死黑、做出体积，强度很低 -->
+    <radialGradient id="washA" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0"    stop-color="#a8aec6" stop-opacity="0.04"/>
+      <stop offset="0.55" stop-color="#a8aec6" stop-opacity="0.018"/>
+      <stop offset="1"    stop-color="#a8aec6" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="washB" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0"    stop-color="#8b91a8" stop-opacity="0.032"/>
+      <stop offset="0.6"  stop-color="#8b91a8" stop-opacity="0.014"/>
+      <stop offset="1"    stop-color="#8b91a8" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="washC" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0"    stop-color="#c9ccd8" stop-opacity="0.028"/>
+      <stop offset="1"    stop-color="#c9ccd8" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- 暗角：四角压暗，但不压死 -->
+    <radialGradient id="vignette" cx="0.46" cy="0.44" r="0.78">
+      <stop offset="0"    stop-color="#000000" stop-opacity="0"/>
+      <stop offset="0.62" stop-color="#000000" stop-opacity="0.10"/>
+      <stop offset="0.86" stop-color="#000000" stop-opacity="0.32"/>
+      <stop offset="1"    stop-color="#000000" stop-opacity="0.55"/>
+    </radialGradient>
+
+    <!-- 右侧收暗，让重心偏左，方便放标题 -->
+    <linearGradient id="rightFade" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0.55" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="1"    stop-color="#000000" stop-opacity="0.26"/>
+    </linearGradient>
+
+    <!-- 每 5 格的辅助线，稍亮一点，给画面结构感 -->
+    <pattern id="gridMajor" width="270" height="270" patternUnits="userSpaceOnUse">
+      <path d="M270 0 H0 V270" fill="none" stroke="#dfe4f2" stroke-opacity="0.075" stroke-width="1.5"/>
+    </pattern>
+
+    <!-- 竖向极淡光带：模拟压缩后那种一条条的光柱 -->
+    <filter id="softBeam" x="-30%" y="-10%" width="160%" height="120%">
+      <feGaussianBlur stdDeviation="42"/>
+    </filter>
+    <linearGradient id="beamGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0"   stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.032"/>
+      <stop offset="1"   stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- 颗粒：抵消视频压缩后的色带 -->
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" seed="7" stitchTiles="stitch" result="noise"/>
+      <feColorMatrix in="noise" type="saturate" values="0" result="mono"/>
+      <feComponentTransfer in="mono">
+        <feFuncA type="linear" slope="0.05"/>
+      </feComponentTransfer>
+    </filter>
+
+  </defs>
+
+  <!-- 1. 底色 -->
+  <rect width="1920" height="1080" fill="url(#base)"/>
+
+  <!-- 2. 大面积柔光 -->
+  <ellipse cx="620" cy="470" rx="1000" ry="700" fill="url(#washA)"/>
+  <ellipse cx="1180" cy="760" rx="820" ry="520" fill="url(#washB)"/>
+  <ellipse cx="300" cy="900" rx="700" ry="420" fill="url(#washC)"/>
+
+  <!-- 3. 竖向光带（很淡，压在网格下面） -->
+  <g opacity="0.9">
+    <rect x="150"  y="-60" width="260" height="1200" fill="url(#beamGrad)" filter="url(#softBeam)"/>
+    <rect x="640"  y="-60" width="150" height="1200" fill="url(#beamGrad)" filter="url(#softBeam)"/>
+    <rect x="1010" y="-60" width="380" height="1200" fill="url(#beamGrad)" filter="url(#softBeam)"/>
+    <rect x="1560" y="-60" width="220" height="1200" fill="url(#beamGrad)" filter="url(#softBeam)"/>
+  </g>
+
+  <!-- 4. 网格 -->
+  <g id="grid" fill="none" stroke="#d3d9ec" stroke-linecap="butt">
+    <g stroke-opacity="0.10" stroke-width="1.5">
+      <line x1="54" y1="0" x2="54" y2="1080"/>
+      <line x1="108" y1="0" x2="108" y2="1080"/>
+      <line x1="162" y1="0" x2="162" y2="1080"/>
+      <line x1="216" y1="0" x2="216" y2="1080"/>
+      <line x1="324" y1="0" x2="324" y2="1080"/>
+      <line x1="378" y1="0" x2="378" y2="1080"/>
+      <line x1="432" y1="0" x2="432" y2="1080"/>
+      <line x1="486" y1="0" x2="486" y2="1080"/>
+      <line x1="594" y1="0" x2="594" y2="1080"/>
+      <line x1="648" y1="0" x2="648" y2="1080"/>
+      <line x1="702" y1="0" x2="702" y2="1080"/>
+      <line x1="756" y1="0" x2="756" y2="1080"/>
+      <line x1="864" y1="0" x2="864" y2="1080"/>
+      <line x1="918" y1="0" x2="918" y2="1080"/>
+      <line x1="972" y1="0" x2="972" y2="1080"/>
+      <line x1="1026" y1="0" x2="1026" y2="1080"/>
+      <line x1="1134" y1="0" x2="1134" y2="1080"/>
+      <line x1="1188" y1="0" x2="1188" y2="1080"/>
+      <line x1="1242" y1="0" x2="1242" y2="1080"/>
+      <line x1="1296" y1="0" x2="1296" y2="1080"/>
+      <line x1="1404" y1="0" x2="1404" y2="1080"/>
+      <line x1="1458" y1="0" x2="1458" y2="1080"/>
+      <line x1="1512" y1="0" x2="1512" y2="1080"/>
+      <line x1="1566" y1="0" x2="1566" y2="1080"/>
+      <line x1="1674" y1="0" x2="1674" y2="1080"/>
+      <line x1="1728" y1="0" x2="1728" y2="1080"/>
+      <line x1="1782" y1="0" x2="1782" y2="1080"/>
+      <line x1="1836" y1="0" x2="1836" y2="1080"/>
+      <line x1="0" y1="54" x2="1920" y2="54"/>
+      <line x1="0" y1="108" x2="1920" y2="108"/>
+      <line x1="0" y1="162" x2="1920" y2="162"/>
+      <line x1="0" y1="216" x2="1920" y2="216"/>
+      <line x1="0" y1="324" x2="1920" y2="324"/>
+      <line x1="0" y1="378" x2="1920" y2="378"/>
+      <line x1="0" y1="432" x2="1920" y2="432"/>
+      <line x1="0" y1="486" x2="1920" y2="486"/>
+      <line x1="0" y1="594" x2="1920" y2="594"/>
+      <line x1="0" y1="648" x2="1920" y2="648"/>
+      <line x1="0" y1="702" x2="1920" y2="702"/>
+      <line x1="0" y1="756" x2="1920" y2="756"/>
+      <line x1="0" y1="864" x2="1920" y2="864"/>
+      <line x1="0" y1="918" x2="1920" y2="918"/>
+      <line x1="0" y1="972" x2="1920" y2="972"/>
+      <line x1="0" y1="1026" x2="1920" y2="1026"/>
+    </g>
+    <g stroke-opacity="0.15" stroke-width="1.5">
+      <line x1="0" y1="0" x2="0" y2="1080"/>
+      <line x1="270" y1="0" x2="270" y2="1080"/>
+      <line x1="540" y1="0" x2="540" y2="1080"/>
+      <line x1="810" y1="0" x2="810" y2="1080"/>
+      <line x1="1080" y1="0" x2="1080" y2="1080"/>
+      <line x1="1350" y1="0" x2="1350" y2="1080"/>
+      <line x1="1620" y1="0" x2="1620" y2="1080"/>
+      <line x1="1890" y1="0" x2="1890" y2="1080"/>
+      <line x1="0" y1="0" x2="1920" y2="0"/>
+      <line x1="0" y1="270" x2="1920" y2="270"/>
+      <line x1="0" y1="540" x2="1920" y2="540"/>
+      <line x1="0" y1="810" x2="1920" y2="810"/>
+      <line x1="0" y1="1080" x2="1920" y2="1080"/>
+    </g>
+  </g>
+
+  <!-- 5. 压暗 -->
+  <rect width="1920" height="1080" fill="url(#rightFade)"/>
+  <rect width="1920" height="1080" fill="url(#vignette)"/>
+
+  <!-- 6. 颗粒 -->
+  <rect width="1920" height="1080" filter="url(#grain)" style="mix-blend-mode:overlay" opacity="0.9"/>
+</svg>

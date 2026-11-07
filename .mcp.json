@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "mg-svg-studio": {
+      "command": "node",
+      "args": ["bin/mgsvg.mjs", "mcp", "--project", "examples/demo.mgsvg", "--bridge", "7350"]
+    }
+  }
+}

@@ -1,0 +1,9 @@
+[
+  { "op": "style.set", "asset": "a_mw2wg6ur1", "element": "0.79.82.83", "patch": { "fill": "#e11d48" } },
+  { "op": "anim.update", "asset": "a_mw2wg6ur1", "group": "charIn", "patch": { "duration": 1.2, "stagger": 0.06 } },
+  { "op": "anim.keyframes", "asset": "a_mw2wg6ur1", "group": "sloganIn", "property": "letter-spacing",
+    "keyframes": [{ "offset": 0, "value": "0.5em" }, { "offset": 1, "value": "0.055em" }] },
+  { "op": "layout.set", "asset": "a_mw2wg6ur1", "container": "0.79.82",
+    "spec": { "mode": "row", "gap": 40, "alignY": "center" } },
+  { "op": "board.move", "asset": "a_mw2wg6ur1", "x": 0, "y": 0 }
+]

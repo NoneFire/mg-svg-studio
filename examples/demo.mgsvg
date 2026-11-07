@@ -1,0 +1,2450 @@
+{
+  "format": "mg-svg-studio/project",
+  "version": 1,
+  "name": "MG 素材示例库",
+  "updatedAt": "2026-11-05T02:01:20.180Z",
+  "assets": [
+    {
+      "id": "a_mw2wg6ur1",
+      "name": "赛博搬砖 · 开场动效",
+      "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1920\" height=\"1080\" viewBox=\"0 0 1920 1080\"\n     preserveAspectRatio=\"xMidYMid slice\" role=\"img\" aria-label=\"赛博搬砖皮卡付 开场动画\"\n     style=\"--t:0s\">\n  <title>赛博搬砖皮卡付 · 开场动画</title>\n  <desc>7 秒开场：网格点亮 → 横线画出 → 名字逐字落位 → 口号拉开字距。1920×1080，可循环播放的背景底。</desc>\n  <defs>\n    <linearGradient id=\"base\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\">\n      <stop offset=\"0\"    stop-color=\"#0d0d10\"/>\n      <stop offset=\"0.42\" stop-color=\"#131317\"/>\n      <stop offset=\"0.78\" stop-color=\"#15151a\"/>\n      <stop offset=\"1\"    stop-color=\"#111114\"/>\n    </linearGradient>\n\n    <radialGradient id=\"washA\" cx=\"0.5\" cy=\"0.5\" r=\"0.5\">\n      <stop offset=\"0\"    stop-color=\"#a8aec6\" stop-opacity=\"0.04\"/>\n      <stop offset=\"0.55\" stop-color=\"#a8aec6\" stop-opacity=\"0.018\"/>\n      <stop offset=\"1\"    stop-color=\"#a8aec6\" stop-opacity=\"0\"/>\n    </radialGradient>\n    <radialGradient id=\"washB\" cx=\"0.5\" cy=\"0.5\" r=\"0.5\">\n      <stop offset=\"0\"    stop-color=\"#8b91a8\" stop-opacity=\"0.032\"/>\n      <stop offset=\"0.6\"  stop-color=\"#8b91a8\" stop-opacity=\"0.014\"/>\n      <stop offset=\"1\"    stop-color=\"#8b91a8\" stop-opacity=\"0\"/>\n    </radialGradient>\n    <radialGradient id=\"washC\" cx=\"0.5\" cy=\"0.5\" r=\"0.5\">\n      <stop offset=\"0\"    stop-color=\"#c9ccd8\" stop-opacity=\"0.028\"/>\n      <stop offset=\"1\"    stop-color=\"#c9ccd8\" stop-opacity=\"0\"/>\n    </radialGradient>\n\n    <radialGradient id=\"vignette\" cx=\"0.46\" cy=\"0.44\" r=\"0.78\">\n      <stop offset=\"0\"    stop-color=\"#000000\" stop-opacity=\"0\"/>\n      <stop offset=\"0.62\" stop-color=\"#000000\" stop-opacity=\"0.10\"/>\n      <stop offset=\"0.86\" stop-color=\"#000000\" stop-opacity=\"0.32\"/>\n      <stop offset=\"1\"    stop-color=\"#000000\" stop-opacity=\"0.55\"/>\n    </radialGradient>\n\n    <linearGradient id=\"rightFade\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\">\n      <stop offset=\"0.55\" stop-color=\"#000000\" stop-opacity=\"0\"/>\n      <stop offset=\"1\"    stop-color=\"#000000\" stop-opacity=\"0.26\"/>\n    </linearGradient>\n\n    <filter id=\"softBeam\" x=\"-30%\" y=\"-10%\" width=\"160%\" height=\"120%\">\n      <feGaussianBlur stdDeviation=\"42\"/>\n    </filter>\n    <linearGradient id=\"beamGrad\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\">\n      <stop offset=\"0\"   stop-color=\"#ffffff\" stop-opacity=\"0\"/>\n      <stop offset=\"0.5\" stop-color=\"#ffffff\" stop-opacity=\"0.032\"/>\n      <stop offset=\"1\"   stop-color=\"#ffffff\" stop-opacity=\"0\"/>\n    </linearGradient>\n\n    <filter id=\"grain\" x=\"0\" y=\"0\" width=\"100%\" height=\"100%\">\n      <feTurbulence type=\"fractalNoise\" baseFrequency=\"0.85\" numOctaves=\"3\" seed=\"7\" stitchTiles=\"stitch\" result=\"noise\"/>\n      <feColorMatrix in=\"noise\" type=\"saturate\" values=\"0\" result=\"mono\"/>\n      <feComponentTransfer in=\"mono\">\n        <feFuncA type=\"linear\" slope=\"0.05\"/>\n      </feComponentTransfer>\n    </filter>\n\n    <linearGradient id=\"scanGrad\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\">\n      <stop offset=\"0\"    stop-color=\"#cfe4ff\" stop-opacity=\"0\"/>\n      <stop offset=\"0.55\" stop-color=\"#cfe4ff\" stop-opacity=\"0.03\"/>\n      <stop offset=\"0.92\" stop-color=\"#eaf4ff\" stop-opacity=\"0.12\"/>\n      <stop offset=\"1\"    stop-color=\"#ffffff\" stop-opacity=\"0.34\"/>\n    </linearGradient>\n\n    <linearGradient id=\"ruleGrad\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\">\n      <stop offset=\"0\"    stop-color=\"#8fe3ff\"/>\n      <stop offset=\"0.55\" stop-color=\"#d9f4ff\"/>\n      <stop offset=\"1\"    stop-color=\"#d9f4ff\" stop-opacity=\"0\"/>\n    </linearGradient>\n\n    <filter id=\"sweepBlur\" x=\"-20%\" y=\"-20%\" width=\"140%\" height=\"140%\">\n      <feGaussianBlur stdDeviation=\"60\"/>\n    </filter>\n  </defs>\n\n  <style>\n    .cjk  { font-family: \"PingFang SC\",\"Hiragino Sans GB\",\"Noto Sans SC\",\"Source Han Sans SC\",\"Microsoft YaHei\",sans-serif; }\n    .mono { font-family: \"SF Mono\",Menlo,Consolas,\"Roboto Mono\",monospace; }\n\n    #name text { font-size:116px; font-weight:600; fill:#f4f6fa; }\n\n    /* —— 名字逐字落位（挤压 / 拉伸 + 慢入慢出 + 轻微旋转弧线） —— */\n    .ch {\n      opacity:0; transform-box:fill-box; transform-origin:50% 100%;\n      animation-name: charIn; animation-duration:.80s; animation-fill-mode:both;\n      animation-timing-function: cubic-bezier(.4,0,.2,1);\n      animation-delay: calc(var(--d,0s) - var(--t,0s));\n    }\n    @keyframes charIn {\n      0%   { opacity:0; transform: translateY(40px) rotate(-2.4deg) scale(1.05); }\n      52%  { opacity:1; transform: translateY(-8px) rotate(.7deg)  scale(.985); }\n      74%  {           transform: translateY(3px)  rotate(0)     scale(1.014); }\n      100% { opacity:1; transform: translateY(0)    rotate(0)     scale(1); }\n    }\n\n    /* —— 横线：画出后过冲再收回（跟随动作 / 预备） —— */\n    #rule {\n      transform-box:fill-box; transform-origin:left center;\n      animation: ruleIn .62s cubic-bezier(.16,1.15,.3,1) .62s both;\n      animation-delay: calc(.62s - var(--t,0s));\n    }\n    @keyframes ruleIn { 0%{transform:scaleX(0)} 70%{transform:scaleX(1.07)} 100%{transform:scaleX(1)} }\n\n    /* —— 起点小方块：弹出（夸张 / 回弹） —— */\n    #dot {\n      transform-box:fill-box; transform-origin:center;\n      animation: dotPop .55s cubic-bezier(.2,1.4,.4,1) both;\n      animation-delay: calc(.54s - var(--t,0s));\n    }\n    @keyframes dotPop { 0%{transform:scale(0);opacity:0} 60%{transform:scale(1.6);opacity:1} 100%{transform:scale(1)} }\n\n    /* —— 口号：字距从松到紧（跟随动作，与名字收尾重叠） —— */\n    #slogan {\n      opacity:0; transform-box:fill-box; transform-origin:left bottom;\n      animation: sloganIn 1.05s cubic-bezier(.22,1,.36,1) both;\n      animation-delay: calc(2.00s - var(--t,0s));\n    }\n    @keyframes sloganIn {\n      0%   { opacity:0; letter-spacing:.44em; transform: translateY(22px); }\n      100% { opacity:1; letter-spacing:.055em; transform: translateY(0); }\n    }\n\n    /* —— 网格点亮 + 呼吸（次要动作） —— */\n    #grid {\n      opacity:0; animation: gridIn .9s ease-out both, gridBreathe 4.4s ease-in-out infinite;\n      animation-delay: calc(.08s - var(--t,0s)), calc(4.6s - var(--t,0s));\n    }\n    @keyframes gridIn { from{opacity:0} to{opacity:1} }\n    @keyframes gridBreathe { 0%,100%{opacity:1} 50%{opacity:.86} }\n\n    /* —— 扫描光带 —— */\n    #scan {\n      animation: scanMove 1.05s cubic-bezier(.42,0,.28,1) both;\n      animation-delay: calc(.10s - var(--t,0s));\n    }\n    @keyframes scanMove {\n      0%   { transform: translateX(-560px); opacity:0; }\n      12%  { opacity:1; }\n      80%  { opacity:1; }\n      100% { transform: translateX(2480px); opacity:0; }\n    }\n\n    /* —— 二次动作：一道很宽的光缓缓扫过 —— */\n    #sweep {\n      opacity:0; animation: sweepMove 1.8s ease-in-out both;\n      animation-delay: calc(2.35s - var(--t,0s));\n    }\n    @keyframes sweepMove {\n      0%   { transform: translateX(-980px); opacity:0; }\n      35%  { opacity:.9; }\n      100% { transform: translateX(1500px); opacity:0; }\n    }\n\n    /* —— 光带缓慢漂移，让定格之后画面仍在呼吸 —— */\n    #beams { animation: beamDrift 16s ease-in-out infinite; animation-delay: calc(0s - var(--t,0s)); }\n    @keyframes beamDrift { 0%,100% { transform: translateX(-16px); } 50% { transform: translateX(16px); } }\n\n    /* —— 整组轻微沉降 —— */\n    #title { animation: settle 1.3s ease-out both; animation-delay: calc(3.15s - var(--t,0s)); }\n    @keyframes settle { 0%{transform:translateY(7px)} 100%{transform:translateY(0)} }\n  </style>\n\n  <g id=\"stage\">\n    <rect width=\"1920\" height=\"1080\" fill=\"url(#base)\"/>\n    <ellipse cx=\"620\" cy=\"470\" rx=\"1000\" ry=\"700\" fill=\"url(#washA)\"/>\n    <ellipse cx=\"1180\" cy=\"760\" rx=\"820\" ry=\"520\" fill=\"url(#washB)\"/>\n    <ellipse cx=\"300\" cy=\"900\" rx=\"700\" ry=\"420\" fill=\"url(#washC)\"/>\n\n    <g id=\"beams\" opacity=\"0.9\">\n      <rect x=\"150\"  y=\"-60\" width=\"260\" height=\"1200\" fill=\"url(#beamGrad)\" filter=\"url(#softBeam)\"/>\n      <rect x=\"640\"  y=\"-60\" width=\"150\" height=\"1200\" fill=\"url(#beamGrad)\" filter=\"url(#softBeam)\"/>\n      <rect x=\"1010\" y=\"-60\" width=\"380\" height=\"1200\" fill=\"url(#beamGrad)\" filter=\"url(#softBeam)\"/>\n      <rect x=\"1560\" y=\"-60\" width=\"220\" height=\"1200\" fill=\"url(#beamGrad)\" filter=\"url(#softBeam)\"/>\n    </g>\n\n  <g id=\"grid\" fill=\"none\" stroke=\"#d3d9ec\" stroke-linecap=\"butt\">\n    <g stroke-opacity=\"0.10\" stroke-width=\"1.5\">\n      <line x1=\"54\" y1=\"0\" x2=\"54\" y2=\"1080\"/>\n      <line x1=\"108\" y1=\"0\" x2=\"108\" y2=\"1080\"/>\n      <line x1=\"162\" y1=\"0\" x2=\"162\" y2=\"1080\"/>\n      <line x1=\"216\" y1=\"0\" x2=\"216\" y2=\"1080\"/>\n      <line x1=\"324\" y1=\"0\" x2=\"324\" y2=\"1080\"/>\n      <line x1=\"378\" y1=\"0\" x2=\"378\" y2=\"1080\"/>\n      <line x1=\"432\" y1=\"0\" x2=\"432\" y2=\"1080\"/>\n      <line x1=\"486\" y1=\"0\" x2=\"486\" y2=\"1080\"/>\n      <line x1=\"594\" y1=\"0\" x2=\"594\" y2=\"1080\"/>\n      <line x1=\"648\" y1=\"0\" x2=\"648\" y2=\"1080\"/>\n      <line x1=\"702\" y1=\"0\" x2=\"702\" y2=\"1080\"/>\n      <line x1=\"756\" y1=\"0\" x2=\"756\" y2=\"1080\"/>\n      <line x1=\"864\" y1=\"0\" x2=\"864\" y2=\"1080\"/>\n      <line x1=\"918\" y1=\"0\" x2=\"918\" y2=\"1080\"/>\n      <line x1=\"972\" y1=\"0\" x2=\"972\" y2=\"1080\"/>\n      <line x1=\"1026\" y1=\"0\" x2=\"1026\" y2=\"1080\"/>\n      <line x1=\"1134\" y1=\"0\" x2=\"1134\" y2=\"1080\"/>\n      <line x1=\"1188\" y1=\"0\" x2=\"1188\" y2=\"1080\"/>\n      <line x1=\"1242\" y1=\"0\" x2=\"1242\" y2=\"1080\"/>\n      <line x1=\"1296\" y1=\"0\" x2=\"1296\" y2=\"1080\"/>\n      <line x1=\"1404\" y1=\"0\" x2=\"1404\" y2=\"1080\"/>\n      <line x1=\"1458\" y1=\"0\" x2=\"1458\" y2=\"1080\"/>\n      <line x1=\"1512\" y1=\"0\" x2=\"1512\" y2=\"1080\"/>\n      <line x1=\"1566\" y1=\"0\" x2=\"1566\" y2=\"1080\"/>\n      <line x1=\"1674\" y1=\"0\" x2=\"1674\" y2=\"1080\"/>\n      <line x1=\"1728\" y1=\"0\" x2=\"1728\" y2=\"1080\"/>\n      <line x1=\"1782\" y1=\"0\" x2=\"1782\" y2=\"1080\"/>\n      <line x1=\"1836\" y1=\"0\" x2=\"1836\" y2=\"1080\"/>\n      <line x1=\"0\" y1=\"54\" x2=\"1920\" y2=\"54\"/>\n      <line x1=\"0\" y1=\"108\" x2=\"1920\" y2=\"108\"/>\n      <line x1=\"0\" y1=\"162\" x2=\"1920\" y2=\"162\"/>\n      <line x1=\"0\" y1=\"216\" x2=\"1920\" y2=\"216\"/>\n      <line x1=\"0\" y1=\"324\" x2=\"1920\" y2=\"324\"/>\n      <line x1=\"0\" y1=\"378\" x2=\"1920\" y2=\"378\"/>\n      <line x1=\"0\" y1=\"432\" x2=\"1920\" y2=\"432\"/>\n      <line x1=\"0\" y1=\"486\" x2=\"1920\" y2=\"486\"/>\n      <line x1=\"0\" y1=\"594\" x2=\"1920\" y2=\"594\"/>\n      <line x1=\"0\" y1=\"648\" x2=\"1920\" y2=\"648\"/>\n      <line x1=\"0\" y1=\"702\" x2=\"1920\" y2=\"702\"/>\n      <line x1=\"0\" y1=\"756\" x2=\"1920\" y2=\"756\"/>\n      <line x1=\"0\" y1=\"864\" x2=\"1920\" y2=\"864\"/>\n      <line x1=\"0\" y1=\"918\" x2=\"1920\" y2=\"918\"/>\n      <line x1=\"0\" y1=\"972\" x2=\"1920\" y2=\"972\"/>\n      <line x1=\"0\" y1=\"1026\" x2=\"1920\" y2=\"1026\"/>\n    </g>\n    <g stroke-opacity=\"0.15\" stroke-width=\"1.5\">\n      <line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1080\"/>\n      <line x1=\"270\" y1=\"0\" x2=\"270\" y2=\"1080\"/>\n      <line x1=\"540\" y1=\"0\" x2=\"540\" y2=\"1080\"/>\n      <line x1=\"810\" y1=\"0\" x2=\"810\" y2=\"1080\"/>\n      <line x1=\"1080\" y1=\"0\" x2=\"1080\" y2=\"1080\"/>\n      <line x1=\"1350\" y1=\"0\" x2=\"1350\" y2=\"1080\"/>\n      <line x1=\"1620\" y1=\"0\" x2=\"1620\" y2=\"1080\"/>\n      <line x1=\"1890\" y1=\"0\" x2=\"1890\" y2=\"1080\"/>\n      <line x1=\"0\" y1=\"0\" x2=\"1920\" y2=\"0\"/>\n      <line x1=\"0\" y1=\"270\" x2=\"1920\" y2=\"270\"/>\n      <line x1=\"0\" y1=\"540\" x2=\"1920\" y2=\"540\"/>\n      <line x1=\"0\" y1=\"810\" x2=\"1920\" y2=\"810\"/>\n      <line x1=\"0\" y1=\"1080\" x2=\"1920\" y2=\"1080\"/>\n    </g>\n  </g>\n\n    <rect width=\"1920\" height=\"1080\" fill=\"url(#rightFade)\"/>\n    <rect width=\"1920\" height=\"1080\" fill=\"url(#vignette)\"/>\n    <rect width=\"1920\" height=\"1080\" filter=\"url(#grain)\" style=\"mix-blend-mode:overlay\" opacity=\"0.9\"/>\n\n    <g id=\"scan\">\n      <rect x=\"-150\" y=\"0\" width=\"150\" height=\"1080\" fill=\"url(#scanGrad)\"/>\n      <rect x=\"-2\"   y=\"0\" width=\"2\"   height=\"1080\" fill=\"#ffffff\" opacity=\"0.45\"/>\n    </g>\n\n    <g id=\"sweep\">\n      <rect x=\"-500\" y=\"120\" width=\"500\" height=\"840\" fill=\"#9fc4ff\" opacity=\"0.05\" filter=\"url(#sweepBlur)\"/>\n    </g>\n  </g>\n\n  <g id=\"title\">\n    <rect id=\"rule\" x=\"156\" y=\"455\" width=\"260\" height=\"3\" fill=\"url(#ruleGrad)\"/>\n    <rect id=\"dot\"  x=\"147\" y=\"452\" width=\"9\" height=\"9\" rx=\"1.5\" fill=\"#8fe3ff\"/>\n\n    <g id=\"name\">\n    <text class=\"ch cjk\" x=\"156.0\" y=\"595\" style=\"--d:0.950s\">赛</text>\n    <text class=\"ch cjk\" x=\"275.0\" y=\"595\" style=\"--d:1.035s\">博</text>\n    <text class=\"ch cjk\" x=\"394.0\" y=\"595\" style=\"--d:1.120s\">搬</text>\n    <text class=\"ch cjk\" x=\"513.0\" y=\"595\" style=\"--d:1.205s\">砖</text>\n    <text class=\"ch cjk\" x=\"632.0\" y=\"595\" style=\"--d:1.290s\">皮</text>\n    <text class=\"ch cjk\" x=\"751.0\" y=\"595\" style=\"--d:1.375s\">卡</text>\n    <text class=\"ch cjk\" x=\"870.0\" y=\"595\" style=\"--d:1.460s\">付</text>\n    </g>\n\n    <text id=\"slogan\" class=\"cjk\" x=\"156\" y=\"679\" font-size=\"42\" font-weight=\"400\" fill=\"#98a0b6\">聊一聊赛博世界的<tspan class=\"mono\" font-size=\"40\" fill=\"#8fe3ff\">everything</tspan></text>\n  </g>\n</svg>\n",
+      "width": 1920,
+      "height": 1080,
+      "kind": "animated",
+      "groups": [
+        {
+          "id": "a_mw2wg6ur1_g0",
+          "name": "beamDrift",
+          "targetId": "0.1.6",
+          "duration": 16,
+          "delay": 0,
+          "ease": "ease-in-out",
+          "iterations": "infinite",
+          "direction": "normal",
+          "fillMode": "none",
+          "tracks": [
+            {
+              "id": "t0",
+              "property": "transform",
+              "keyframes": [
+                {
+                  "offset": 0,
+                  "value": "translateX(-16px)"
+                },
+                {
+                  "offset": 0.5,
+                  "value": "translateX(16px)"
+                },
+                {
+                  "offset": 1,
+                  "value": "translateX(-16px)"
+                }
+              ]
+            }
+          ],
+          "origin": "css",
+          "originPoint": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "enabled": true
+        },
+        {
+          "id": "a_mw2wg6ur1_g1",
+          "name": "gridIn",
+          "targetId": "0.1.11",
+          "duration": 0.9,
+          "delay": 0.08,
+          "ease": "ease-out",
+          "iterations": 1,
+          "direction": "normal",
+          "fillMode": "both",
+          "tracks": [
+            {
+              "id": "t2",
+              "property": "opacity",
+              "keyframes": [
+                {
+                  "offset": 0,
+                  "value": "0"
+                },
+                {
+                  "offset": 1,
+                  "value": "1"
+                }
+              ]
+            }
+          ],
+          "origin": "css",
+          "originPoint": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "enabled": true
+        },
+        {
+          "id": "a_mw2wg6ur1_g2",
+          "name": "scanMove",
+          "targetId": "0.1.74",
+          "duration": 1.05,
+          "delay": 0.1,
+          "ease": "cubic-bezier(.42,0,.28,1)",
+          "iterations": 1,
+          "direction": "normal",
+          "fillMode": "both",
+          "tracks": [
+            {
+              "id": "t6",
+              "property": "opacity",
+              "keyframes": [
+                {
+                  "offset": 0,
+                  "value": "0"
+                },
+                {
+                  "offset": 0.12,
+                  "value": "1"
+                },
+                {
+                  "offset": 0.8,
+                  "value": "1"
+                },
+                {
+                  "offset": 1,
+                  "value": "0"
+                }
+              ]
+            },
+            {
+              "id": "t7",
+              "property": "transform",
+              "keyframes": [
+                {
+                  "offset": 0,
+                  "value": "translateX(-560px)"
+                },
+                {
+                  "offset": 1,
+                  "value": "translateX(2480px)"
+                }
+              ]
+            }
+          ],
+          "origin": "css",
+          "originPoint": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "enabled": true
+        },
+        {
+          "id": "a_mw2wg6ur1_g3",
+          "name": "dotPop",
+          "targetId": "0.79.81",
+          "duration": 0.55,
+          "delay": 0.54,
+          "ease": "cubic-bezier(.2,1.4,.4,1)",
+          "iterations": 1,
+          "direction": "normal",
+          "fillMode": "both",
+          "tracks": [
+            {
+              "id": "t16",
+              "property": "opacity",
+              "keyframes": [
+                {
+                  "offset": 0,
+                  "value": "0"
+                },
+                {
+                  "offset": 0.6,
+                  "value": "1"
+                },
+                {
+                  "offset": 1,
+                  "value": "1"
+                }
+              ]
+            },
+            {
+              "id": "t17",
+              "property": "transform",
+              "keyframes": [
+                {
+                  "offset": 0,
+                  "value": "scale(0)"
+                },
+                {
+                  "offset": 0.6,
+                  "value": "scale(1.6)"
+                },
+                {
+                  "offset": 1,
+                  "value": "scale(1)"
+                }
+              ]
+            }
+          ],
+          "origin": "css",
+          "originPoint": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "enabled": true
+        },
+        {
+          "id": "a_mw2wg6ur1_g4",
+          "name": "ruleIn",
+          "targetId": "0.79.80",
+          "duration": 0.62,
+          "delay": 0.62,
+          "ease": "cubic-bezier(.16,1.15,.3,1)",
+          "iterations": 1,
+          "direction": "normal",
+          "fillMode": "both",
+          "tracks": [
+            {
+              "id": "t14",
+              "property": "transform",
+              "keyframes": [
+                {
+                  "offset": 0,
+                  "value": "scaleX(0)"
+                },
+                {
+                  "offset": 0.7,
+                  "value": "scaleX(1.07)"
+                },
+                {
+                  "offset": 1,
+                  "value": "scaleX(1)"
+                }
+              ]
+            }
+          ],
+          "origin": "css",
+          "originPoint": {
+            "x": 0,
+            "y": 0.5
+          },
+          "enabled": true
+        },
+        {
+          "id": "a_mw2wg6ur1_g5",
+          "name": "charIn",
+          "targetId": "0.79.82.83",
+          "duration": 0.8,
+          "delay": 0.95,
+          "ease": "cubic-bezier(.4,0,.2,1)",
+          "iterations": 1,
+          "direction": "normal",
+          "fillMode": "both",
+          "tracks": [
+            {
+              "id": "t19",
+              "property": "opacity",
+              "keyframes": [
+                {
+                  "offset": 0,
+                  "value": "0"
+                },
+                {
+                  "offset": 0.52,
+                  "value": "1"
+                },
+                {
+                  "offset": 1,
+                  "value": "1"
+                }
+              ]
+            },
+            {
+              "id": "t20",
+              "property": "transform",
+              "keyframes": [
+                {
+                  "offset": 0,
+                  "value": "translateY(40px) rotate(-2.4deg) scale(1.05)"
+                },
+                {
+                  "offset": 0.52,
+                  "value": "translateY(-8px) rotate(.7deg)  scale(.985)"
+                },
+                {
+                  "offset": 0.74,
+                  "value": "translateY(3px)  rotate(0)     scale(1.014)"
+                },
+                {
+                  "offset": 1,
+                  "value": "translateY(0)    rotate(0)     scale(1)"
+                }
+              ]
+            }
+          ],
+          "origin": "css",
+          "originPoint": {
+            "x": 0.5,
+            "y": 1
+          },
+          "enabled": true,
+          "targetIds": [
+            "0.79.82.83",
+            "0.79.82.84",
+            "0.79.82.85",
+            "0.79.82.86",
+            "0.79.82.87",
+            "0.79.82.88",
+            "0.79.82.89"
+          ],
+          "stagger": 0.085
+        },
+        {
+          "id": "a_mw2wg6ur1_g6",
+          "name": "sloganIn",
+          "targetId": "0.79.90",
+          "duration": 1.05,
+          "delay": 2,
+          "ease": "cubic-bezier(.22,1,.36,1)",
+          "iterations": 1,
+          "direction": "normal",
+          "fillMode": "both",
+          "tracks": [
+            {
+              "id": "t40",
+              "property": "opacity",
+              "keyframes": [
+                {
+                  "offset": 0,
+                  "value": "0"
+                },
+                {
+                  "offset": 1,
+                  "value": "1"
+                }
+              ]
+            },
+            {
+              "id": "t41",
+              "property": "transform",
+              "keyframes": [
+                {
+                  "offset": 0,
+                  "value": "translateY(22px)"
+                },
+                {
+                  "offset": 1,
+                  "value": "translateY(0)"
+                }
+              ]
+            },
+            {
+              "id": "t42",
+              "property": "letter-spacing",
+              "keyframes": [
+                {
+                  "offset": 0,
+                  "value": ".44em"
+                },
+                {
+                  "offset": 1,
+                  "value": ".055em"
+                }
+              ]
+            }
+          ],
+          "origin": "css",
+          "originPoint": {
+            "x": 0,
+            "y": 1
+          },
+          "enabled": true
+        },
+        {
+          "id": "a_mw2wg6ur1_g7",
+          "name": "sweepMove",
+          "targetId": "0.1.77",
+          "duration": 1.8,
+          "delay": 2.35,
+          "ease": "ease-in-out",
+          "iterations": 1,
+          "direction": "normal",
+          "fillMode": "both",
+          "tracks": [
+            {
+              "id": "t9",
+              "property": "opacity",
+              "keyframes": [
+                {
+                  "offset": 0,
+                  "value": "0"
+                },
+                {
+                  "offset": 0.35,
+                  "value": ".9"
+                },
+                {
+                  "offset": 1,
+                  "value": "0"
+                }
+              ]
+            },
+            {
+              "id": "t10",
+              "property": "transform",
+              "keyframes": [
+                {
+                  "offset": 0,
+                  "value": "translateX(-980px)"
+                },
+                {
+                  "offset": 1,
+                  "value": "translateX(1500px)"
+                }
+              ]
+            }
+          ],
+          "origin": "css",
+          "originPoint": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "enabled": true
+        },
+        {
+          "id": "a_mw2wg6ur1_g8",
+          "name": "settle",
+          "targetId": "0.79",
+          "duration": 1.3,
+          "delay": 3.15,
+          "ease": "ease-out",
+          "iterations": 1,
+          "direction": "normal",
+          "fillMode": "both",
+          "tracks": [
+            {
+              "id": "t12",
+              "property": "transform",
+              "keyframes": [
+                {
+                  "offset": 0,
+                  "value": "translateY(7px)"
+                },
+                {
+                  "offset": 1,
+                  "value": "translateY(0)"
+                }
+              ]
+            }
+          ],
+          "origin": "css",
+          "originPoint": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "enabled": true
+        },
+        {
+          "id": "a_mw2wg6ur1_g9",
+          "name": "gridBreathe",
+          "targetId": "0.1.11",
+          "duration": 4.4,
+          "delay": 4.6,
+          "ease": "ease-in-out",
+          "iterations": "infinite",
+          "direction": "normal",
+          "fillMode": "none",
+          "tracks": [
+            {
+              "id": "t4",
+              "property": "opacity",
+              "keyframes": [
+                {
+                  "offset": 0,
+                  "value": "1"
+                },
+                {
+                  "offset": 0.5,
+                  "value": ".86"
+                },
+                {
+                  "offset": 1,
+                  "value": "1"
+                }
+              ]
+            }
+          ],
+          "origin": "css",
+          "originPoint": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "enabled": true
+        }
+      ],
+      "elements": [
+        {
+          "id": "0",
+          "tag": "svg",
+          "label": "svg",
+          "depth": 0,
+          "kind": "group"
+        },
+        {
+          "id": "0.1",
+          "tag": "g",
+          "label": "#stage",
+          "depth": 1,
+          "kind": "group",
+          "parentId": "0"
+        },
+        {
+          "id": "0.1.2",
+          "tag": "rect",
+          "label": "rect",
+          "depth": 2,
+          "kind": "shape",
+          "parentId": "0.1"
+        },
+        {
+          "id": "0.1.3",
+          "tag": "ellipse",
+          "label": "ellipse",
+          "depth": 2,
+          "kind": "shape",
+          "parentId": "0.1"
+        },
+        {
+          "id": "0.1.4",
+          "tag": "ellipse",
+          "label": "ellipse",
+          "depth": 2,
+          "kind": "shape",
+          "parentId": "0.1"
+        },
+        {
+          "id": "0.1.5",
+          "tag": "ellipse",
+          "label": "ellipse",
+          "depth": 2,
+          "kind": "shape",
+          "parentId": "0.1"
+        },
+        {
+          "id": "0.1.6",
+          "tag": "g",
+          "label": "#beams",
+          "depth": 2,
+          "kind": "group",
+          "parentId": "0.1"
+        },
+        {
+          "id": "0.1.6.7",
+          "tag": "rect",
+          "label": "rect",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.1.6"
+        },
+        {
+          "id": "0.1.6.8",
+          "tag": "rect",
+          "label": "rect",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.1.6"
+        },
+        {
+          "id": "0.1.6.9",
+          "tag": "rect",
+          "label": "rect",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.1.6"
+        },
+        {
+          "id": "0.1.6.10",
+          "tag": "rect",
+          "label": "rect",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.1.6"
+        },
+        {
+          "id": "0.1.11",
+          "tag": "g",
+          "label": "#grid",
+          "depth": 2,
+          "kind": "group",
+          "parentId": "0.1"
+        },
+        {
+          "id": "0.1.11.12",
+          "tag": "g",
+          "label": "g",
+          "depth": 3,
+          "kind": "group",
+          "parentId": "0.1.11"
+        },
+        {
+          "id": "0.1.11.12.13",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.14",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.15",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.16",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.17",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.18",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.19",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.20",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.21",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.22",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.23",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.24",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.25",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.26",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.27",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.28",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.29",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.30",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.31",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.32",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.33",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.34",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.35",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.36",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.37",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.38",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.39",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.40",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.41",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.42",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.43",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.44",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.45",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.46",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.47",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.48",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.49",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.50",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.51",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.52",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.53",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.54",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.55",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.12.56",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.12"
+        },
+        {
+          "id": "0.1.11.57",
+          "tag": "g",
+          "label": "g",
+          "depth": 3,
+          "kind": "group",
+          "parentId": "0.1.11"
+        },
+        {
+          "id": "0.1.11.57.58",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.57"
+        },
+        {
+          "id": "0.1.11.57.59",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.57"
+        },
+        {
+          "id": "0.1.11.57.60",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.57"
+        },
+        {
+          "id": "0.1.11.57.61",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.57"
+        },
+        {
+          "id": "0.1.11.57.62",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.57"
+        },
+        {
+          "id": "0.1.11.57.63",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.57"
+        },
+        {
+          "id": "0.1.11.57.64",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.57"
+        },
+        {
+          "id": "0.1.11.57.65",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.57"
+        },
+        {
+          "id": "0.1.11.57.66",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.57"
+        },
+        {
+          "id": "0.1.11.57.67",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.57"
+        },
+        {
+          "id": "0.1.11.57.68",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.57"
+        },
+        {
+          "id": "0.1.11.57.69",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.57"
+        },
+        {
+          "id": "0.1.11.57.70",
+          "tag": "line",
+          "label": "line",
+          "depth": 4,
+          "kind": "shape",
+          "parentId": "0.1.11.57"
+        },
+        {
+          "id": "0.1.71",
+          "tag": "rect",
+          "label": "rect",
+          "depth": 2,
+          "kind": "shape",
+          "parentId": "0.1"
+        },
+        {
+          "id": "0.1.72",
+          "tag": "rect",
+          "label": "rect",
+          "depth": 2,
+          "kind": "shape",
+          "parentId": "0.1"
+        },
+        {
+          "id": "0.1.73",
+          "tag": "rect",
+          "label": "rect",
+          "depth": 2,
+          "kind": "shape",
+          "parentId": "0.1"
+        },
+        {
+          "id": "0.1.74",
+          "tag": "g",
+          "label": "#scan",
+          "depth": 2,
+          "kind": "group",
+          "parentId": "0.1"
+        },
+        {
+          "id": "0.1.74.75",
+          "tag": "rect",
+          "label": "rect",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.1.74"
+        },
+        {
+          "id": "0.1.74.76",
+          "tag": "rect",
+          "label": "rect",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.1.74"
+        },
+        {
+          "id": "0.1.77",
+          "tag": "g",
+          "label": "#sweep",
+          "depth": 2,
+          "kind": "group",
+          "parentId": "0.1"
+        },
+        {
+          "id": "0.1.77.78",
+          "tag": "rect",
+          "label": "rect",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.1.77"
+        },
+        {
+          "id": "0.79",
+          "tag": "g",
+          "label": "#title",
+          "depth": 1,
+          "kind": "group",
+          "parentId": "0"
+        },
+        {
+          "id": "0.79.80",
+          "tag": "rect",
+          "label": "#rule",
+          "depth": 2,
+          "kind": "shape",
+          "parentId": "0.79"
+        },
+        {
+          "id": "0.79.81",
+          "tag": "rect",
+          "label": "#dot",
+          "depth": 2,
+          "kind": "shape",
+          "parentId": "0.79"
+        },
+        {
+          "id": "0.79.82",
+          "tag": "g",
+          "label": "#name",
+          "depth": 2,
+          "kind": "group",
+          "parentId": "0.79"
+        },
+        {
+          "id": "0.79.82.83",
+          "tag": "text",
+          "label": "“赛”",
+          "depth": 3,
+          "kind": "text",
+          "parentId": "0.79.82"
+        },
+        {
+          "id": "0.79.82.84",
+          "tag": "text",
+          "label": "“博”",
+          "depth": 3,
+          "kind": "text",
+          "parentId": "0.79.82"
+        },
+        {
+          "id": "0.79.82.85",
+          "tag": "text",
+          "label": "“搬”",
+          "depth": 3,
+          "kind": "text",
+          "parentId": "0.79.82"
+        },
+        {
+          "id": "0.79.82.86",
+          "tag": "text",
+          "label": "“砖”",
+          "depth": 3,
+          "kind": "text",
+          "parentId": "0.79.82"
+        },
+        {
+          "id": "0.79.82.87",
+          "tag": "text",
+          "label": "“皮”",
+          "depth": 3,
+          "kind": "text",
+          "parentId": "0.79.82"
+        },
+        {
+          "id": "0.79.82.88",
+          "tag": "text",
+          "label": "“卡”",
+          "depth": 3,
+          "kind": "text",
+          "parentId": "0.79.82"
+        },
+        {
+          "id": "0.79.82.89",
+          "tag": "text",
+          "label": "“付”",
+          "depth": 3,
+          "kind": "text",
+          "parentId": "0.79.82"
+        },
+        {
+          "id": "0.79.90",
+          "tag": "text",
+          "label": "“聊一聊赛博世界的ever”",
+          "depth": 2,
+          "kind": "text",
+          "parentId": "0.79"
+        },
+        {
+          "id": "0.79.90.91",
+          "tag": "tspan",
+          "label": "tspan.mono",
+          "depth": 3,
+          "kind": "other",
+          "parentId": "0.79.90"
+        }
+      ],
+      "overrides": {},
+      "layouts": {},
+      "warnings": [
+        "滤镜 #softBeam 已近似为模糊 42",
+        "滤镜 #grain 已忽略（feturbulence/fecolormatrix/fecomponenttransfer/fefunca 不是 Leafer 能直接渲染的）",
+        "滤镜 #sweepBlur 已近似为模糊 60"
+      ],
+      "source": "import",
+      "x": 0,
+      "y": 0,
+      "createdAt": 1793844080307,
+      "version": 1
+    },
+    {
+      "id": "a_mw2wg6y61",
+      "name": "深色网格 · 视频背景",
+      "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\"\n     width=\"1920\" height=\"1080\" viewBox=\"0 0 1920 1080\"\n     preserveAspectRatio=\"xMidYMid slice\" role=\"img\" aria-label=\"深色网格视频背景\">\n  <title>深色网格视频背景 16:9</title>\n  <defs>\n    <!-- 底色：极深冷灰，上略暗下略亮 -->\n    <linearGradient id=\"base\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\">\n      <stop offset=\"0\"    stop-color=\"#0d0d10\"/>\n      <stop offset=\"0.42\" stop-color=\"#131317\"/>\n      <stop offset=\"0.78\" stop-color=\"#15151a\"/>\n      <stop offset=\"1\"    stop-color=\"#111114\"/>\n    </linearGradient>\n\n    <!-- 大面积柔光：只为打破死黑、做出体积，强度很低 -->\n    <radialGradient id=\"washA\" cx=\"0.5\" cy=\"0.5\" r=\"0.5\">\n      <stop offset=\"0\"    stop-color=\"#a8aec6\" stop-opacity=\"0.04\"/>\n      <stop offset=\"0.55\" stop-color=\"#a8aec6\" stop-opacity=\"0.018\"/>\n      <stop offset=\"1\"    stop-color=\"#a8aec6\" stop-opacity=\"0\"/>\n    </radialGradient>\n    <radialGradient id=\"washB\" cx=\"0.5\" cy=\"0.5\" r=\"0.5\">\n      <stop offset=\"0\"    stop-color=\"#8b91a8\" stop-opacity=\"0.032\"/>\n      <stop offset=\"0.6\"  stop-color=\"#8b91a8\" stop-opacity=\"0.014\"/>\n      <stop offset=\"1\"    stop-color=\"#8b91a8\" stop-opacity=\"0\"/>\n    </radialGradient>\n    <radialGradient id=\"washC\" cx=\"0.5\" cy=\"0.5\" r=\"0.5\">\n      <stop offset=\"0\"    stop-color=\"#c9ccd8\" stop-opacity=\"0.028\"/>\n      <stop offset=\"1\"    stop-color=\"#c9ccd8\" stop-opacity=\"0\"/>\n    </radialGradient>\n\n    <!-- 暗角：四角压暗，但不压死 -->\n    <radialGradient id=\"vignette\" cx=\"0.46\" cy=\"0.44\" r=\"0.78\">\n      <stop offset=\"0\"    stop-color=\"#000000\" stop-opacity=\"0\"/>\n      <stop offset=\"0.62\" stop-color=\"#000000\" stop-opacity=\"0.10\"/>\n      <stop offset=\"0.86\" stop-color=\"#000000\" stop-opacity=\"0.32\"/>\n      <stop offset=\"1\"    stop-color=\"#000000\" stop-opacity=\"0.55\"/>\n    </radialGradient>\n\n    <!-- 右侧收暗，让重心偏左，方便放标题 -->\n    <linearGradient id=\"rightFade\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\">\n      <stop offset=\"0.55\" stop-color=\"#000000\" stop-opacity=\"0\"/>\n      <stop offset=\"1\"    stop-color=\"#000000\" stop-opacity=\"0.26\"/>\n    </linearGradient>\n\n    <!-- 每 5 格的辅助线，稍亮一点，给画面结构感 -->\n    <pattern id=\"gridMajor\" width=\"270\" height=\"270\" patternUnits=\"userSpaceOnUse\">\n      <path d=\"M270 0 H0 V270\" fill=\"none\" stroke=\"#dfe4f2\" stroke-opacity=\"0.075\" stroke-width=\"1.5\"/>\n    </pattern>\n\n    <!-- 竖向极淡光带：模拟压缩后那种一条条的光柱 -->\n    <filter id=\"softBeam\" x=\"-30%\" y=\"-10%\" width=\"160%\" height=\"120%\">\n      <feGaussianBlur stdDeviation=\"42\"/>\n    </filter>\n    <linearGradient id=\"beamGrad\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\">\n      <stop offset=\"0\"   stop-color=\"#ffffff\" stop-opacity=\"0\"/>\n      <stop offset=\"0.5\" stop-color=\"#ffffff\" stop-opacity=\"0.032\"/>\n      <stop offset=\"1\"   stop-color=\"#ffffff\" stop-opacity=\"0\"/>\n    </linearGradient>\n\n    <!-- 颗粒：抵消视频压缩后的色带 -->\n    <filter id=\"grain\" x=\"0\" y=\"0\" width=\"100%\" height=\"100%\">\n      <feTurbulence type=\"fractalNoise\" baseFrequency=\"0.85\" numOctaves=\"3\" seed=\"7\" stitchTiles=\"stitch\" result=\"noise\"/>\n      <feColorMatrix in=\"noise\" type=\"saturate\" values=\"0\" result=\"mono\"/>\n      <feComponentTransfer in=\"mono\">\n        <feFuncA type=\"linear\" slope=\"0.05\"/>\n      </feComponentTransfer>\n    </filter>\n\n  </defs>\n\n  <!-- 1. 底色 -->\n  <rect width=\"1920\" height=\"1080\" fill=\"url(#base)\"/>\n\n  <!-- 2. 大面积柔光 -->\n  <ellipse cx=\"620\" cy=\"470\" rx=\"1000\" ry=\"700\" fill=\"url(#washA)\"/>\n  <ellipse cx=\"1180\" cy=\"760\" rx=\"820\" ry=\"520\" fill=\"url(#washB)\"/>\n  <ellipse cx=\"300\" cy=\"900\" rx=\"700\" ry=\"420\" fill=\"url(#washC)\"/>\n\n  <!-- 3. 竖向光带（很淡，压在网格下面） -->\n  <g opacity=\"0.9\">\n    <rect x=\"150\"  y=\"-60\" width=\"260\" height=\"1200\" fill=\"url(#beamGrad)\" filter=\"url(#softBeam)\"/>\n    <rect x=\"640\"  y=\"-60\" width=\"150\" height=\"1200\" fill=\"url(#beamGrad)\" filter=\"url(#softBeam)\"/>\n    <rect x=\"1010\" y=\"-60\" width=\"380\" height=\"1200\" fill=\"url(#beamGrad)\" filter=\"url(#softBeam)\"/>\n    <rect x=\"1560\" y=\"-60\" width=\"220\" height=\"1200\" fill=\"url(#beamGrad)\" filter=\"url(#softBeam)\"/>\n  </g>\n\n  <!-- 4. 网格 -->\n  <g id=\"grid\" fill=\"none\" stroke=\"#d3d9ec\" stroke-linecap=\"butt\">\n    <g stroke-opacity=\"0.10\" stroke-width=\"1.5\">\n      <line x1=\"54\" y1=\"0\" x2=\"54\" y2=\"1080\"/>\n      <line x1=\"108\" y1=\"0\" x2=\"108\" y2=\"1080\"/>\n      <line x1=\"162\" y1=\"0\" x2=\"162\" y2=\"1080\"/>\n      <line x1=\"216\" y1=\"0\" x2=\"216\" y2=\"1080\"/>\n      <line x1=\"324\" y1=\"0\" x2=\"324\" y2=\"1080\"/>\n      <line x1=\"378\" y1=\"0\" x2=\"378\" y2=\"1080\"/>\n      <line x1=\"432\" y1=\"0\" x2=\"432\" y2=\"1080\"/>\n      <line x1=\"486\" y1=\"0\" x2=\"486\" y2=\"1080\"/>\n      <line x1=\"594\" y1=\"0\" x2=\"594\" y2=\"1080\"/>\n      <line x1=\"648\" y1=\"0\" x2=\"648\" y2=\"1080\"/>\n      <line x1=\"702\" y1=\"0\" x2=\"702\" y2=\"1080\"/>\n      <line x1=\"756\" y1=\"0\" x2=\"756\" y2=\"1080\"/>\n      <line x1=\"864\" y1=\"0\" x2=\"864\" y2=\"1080\"/>\n      <line x1=\"918\" y1=\"0\" x2=\"918\" y2=\"1080\"/>\n      <line x1=\"972\" y1=\"0\" x2=\"972\" y2=\"1080\"/>\n      <line x1=\"1026\" y1=\"0\" x2=\"1026\" y2=\"1080\"/>\n      <line x1=\"1134\" y1=\"0\" x2=\"1134\" y2=\"1080\"/>\n      <line x1=\"1188\" y1=\"0\" x2=\"1188\" y2=\"1080\"/>\n      <line x1=\"1242\" y1=\"0\" x2=\"1242\" y2=\"1080\"/>\n      <line x1=\"1296\" y1=\"0\" x2=\"1296\" y2=\"1080\"/>\n      <line x1=\"1404\" y1=\"0\" x2=\"1404\" y2=\"1080\"/>\n      <line x1=\"1458\" y1=\"0\" x2=\"1458\" y2=\"1080\"/>\n      <line x1=\"1512\" y1=\"0\" x2=\"1512\" y2=\"1080\"/>\n      <line x1=\"1566\" y1=\"0\" x2=\"1566\" y2=\"1080\"/>\n      <line x1=\"1674\" y1=\"0\" x2=\"1674\" y2=\"1080\"/>\n      <line x1=\"1728\" y1=\"0\" x2=\"1728\" y2=\"1080\"/>\n      <line x1=\"1782\" y1=\"0\" x2=\"1782\" y2=\"1080\"/>\n      <line x1=\"1836\" y1=\"0\" x2=\"1836\" y2=\"1080\"/>\n      <line x1=\"0\" y1=\"54\" x2=\"1920\" y2=\"54\"/>\n      <line x1=\"0\" y1=\"108\" x2=\"1920\" y2=\"108\"/>\n      <line x1=\"0\" y1=\"162\" x2=\"1920\" y2=\"162\"/>\n      <line x1=\"0\" y1=\"216\" x2=\"1920\" y2=\"216\"/>\n      <line x1=\"0\" y1=\"324\" x2=\"1920\" y2=\"324\"/>\n      <line x1=\"0\" y1=\"378\" x2=\"1920\" y2=\"378\"/>\n      <line x1=\"0\" y1=\"432\" x2=\"1920\" y2=\"432\"/>\n      <line x1=\"0\" y1=\"486\" x2=\"1920\" y2=\"486\"/>\n      <line x1=\"0\" y1=\"594\" x2=\"1920\" y2=\"594\"/>\n      <line x1=\"0\" y1=\"648\" x2=\"1920\" y2=\"648\"/>\n      <line x1=\"0\" y1=\"702\" x2=\"1920\" y2=\"702\"/>\n      <line x1=\"0\" y1=\"756\" x2=\"1920\" y2=\"756\"/>\n      <line x1=\"0\" y1=\"864\" x2=\"1920\" y2=\"864\"/>\n      <line x1=\"0\" y1=\"918\" x2=\"1920\" y2=\"918\"/>\n      <line x1=\"0\" y1=\"972\" x2=\"1920\" y2=\"972\"/>\n      <line x1=\"0\" y1=\"1026\" x2=\"1920\" y2=\"1026\"/>\n    </g>\n    <g stroke-opacity=\"0.15\" stroke-width=\"1.5\">\n      <line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1080\"/>\n      <line x1=\"270\" y1=\"0\" x2=\"270\" y2=\"1080\"/>\n      <line x1=\"540\" y1=\"0\" x2=\"540\" y2=\"1080\"/>\n      <line x1=\"810\" y1=\"0\" x2=\"810\" y2=\"1080\"/>\n      <line x1=\"1080\" y1=\"0\" x2=\"1080\" y2=\"1080\"/>\n      <line x1=\"1350\" y1=\"0\" x2=\"1350\" y2=\"1080\"/>\n      <line x1=\"1620\" y1=\"0\" x2=\"1620\" y2=\"1080\"/>\n      <line x1=\"1890\" y1=\"0\" x2=\"1890\" y2=\"1080\"/>\n      <line x1=\"0\" y1=\"0\" x2=\"1920\" y2=\"0\"/>\n      <line x1=\"0\" y1=\"270\" x2=\"1920\" y2=\"270\"/>\n      <line x1=\"0\" y1=\"540\" x2=\"1920\" y2=\"540\"/>\n      <line x1=\"0\" y1=\"810\" x2=\"1920\" y2=\"810\"/>\n      <line x1=\"0\" y1=\"1080\" x2=\"1920\" y2=\"1080\"/>\n    </g>\n  </g>\n\n  <!-- 5. 压暗 -->\n  <rect width=\"1920\" height=\"1080\" fill=\"url(#rightFade)\"/>\n  <rect width=\"1920\" height=\"1080\" fill=\"url(#vignette)\"/>\n\n  <!-- 6. 颗粒 -->\n  <rect width=\"1920\" height=\"1080\" filter=\"url(#grain)\" style=\"mix-blend-mode:overlay\" opacity=\"0.9\"/>\n</svg>\n",
+      "width": 1920,
+      "height": 1080,
+      "kind": "static",
+      "groups": [],
+      "elements": [
+        {
+          "id": "0",
+          "tag": "svg",
+          "label": "svg",
+          "depth": 0,
+          "kind": "group"
+        },
+        {
+          "id": "0.1",
+          "tag": "rect",
+          "label": "rect",
+          "depth": 1,
+          "kind": "shape",
+          "parentId": "0"
+        },
+        {
+          "id": "0.2",
+          "tag": "ellipse",
+          "label": "ellipse",
+          "depth": 1,
+          "kind": "shape",
+          "parentId": "0"
+        },
+        {
+          "id": "0.3",
+          "tag": "ellipse",
+          "label": "ellipse",
+          "depth": 1,
+          "kind": "shape",
+          "parentId": "0"
+        },
+        {
+          "id": "0.4",
+          "tag": "ellipse",
+          "label": "ellipse",
+          "depth": 1,
+          "kind": "shape",
+          "parentId": "0"
+        },
+        {
+          "id": "0.5",
+          "tag": "g",
+          "label": "g",
+          "depth": 1,
+          "kind": "group",
+          "parentId": "0"
+        },
+        {
+          "id": "0.5.6",
+          "tag": "rect",
+          "label": "rect",
+          "depth": 2,
+          "kind": "shape",
+          "parentId": "0.5"
+        },
+        {
+          "id": "0.5.7",
+          "tag": "rect",
+          "label": "rect",
+          "depth": 2,
+          "kind": "shape",
+          "parentId": "0.5"
+        },
+        {
+          "id": "0.5.8",
+          "tag": "rect",
+          "label": "rect",
+          "depth": 2,
+          "kind": "shape",
+          "parentId": "0.5"
+        },
+        {
+          "id": "0.5.9",
+          "tag": "rect",
+          "label": "rect",
+          "depth": 2,
+          "kind": "shape",
+          "parentId": "0.5"
+        },
+        {
+          "id": "0.10",
+          "tag": "g",
+          "label": "#grid",
+          "depth": 1,
+          "kind": "group",
+          "parentId": "0"
+        },
+        {
+          "id": "0.10.11",
+          "tag": "g",
+          "label": "g",
+          "depth": 2,
+          "kind": "group",
+          "parentId": "0.10"
+        },
+        {
+          "id": "0.10.11.12",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.13",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.14",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.15",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.16",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.17",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.18",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.19",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.20",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.21",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.22",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.23",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.24",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.25",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.26",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.27",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.28",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.29",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.30",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.31",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.32",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.33",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.34",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.35",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.36",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.37",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.38",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.39",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.40",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.41",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.42",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.43",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.44",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.45",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.46",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.47",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.48",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.49",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.50",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.51",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.52",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.53",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.54",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.11.55",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.11"
+        },
+        {
+          "id": "0.10.56",
+          "tag": "g",
+          "label": "g",
+          "depth": 2,
+          "kind": "group",
+          "parentId": "0.10"
+        },
+        {
+          "id": "0.10.56.57",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.56"
+        },
+        {
+          "id": "0.10.56.58",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.56"
+        },
+        {
+          "id": "0.10.56.59",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.56"
+        },
+        {
+          "id": "0.10.56.60",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.56"
+        },
+        {
+          "id": "0.10.56.61",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.56"
+        },
+        {
+          "id": "0.10.56.62",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.56"
+        },
+        {
+          "id": "0.10.56.63",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.56"
+        },
+        {
+          "id": "0.10.56.64",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.56"
+        },
+        {
+          "id": "0.10.56.65",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.56"
+        },
+        {
+          "id": "0.10.56.66",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.56"
+        },
+        {
+          "id": "0.10.56.67",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.56"
+        },
+        {
+          "id": "0.10.56.68",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.56"
+        },
+        {
+          "id": "0.10.56.69",
+          "tag": "line",
+          "label": "line",
+          "depth": 3,
+          "kind": "shape",
+          "parentId": "0.10.56"
+        },
+        {
+          "id": "0.70",
+          "tag": "rect",
+          "label": "rect",
+          "depth": 1,
+          "kind": "shape",
+          "parentId": "0"
+        },
+        {
+          "id": "0.71",
+          "tag": "rect",
+          "label": "rect",
+          "depth": 1,
+          "kind": "shape",
+          "parentId": "0"
+        },
+        {
+          "id": "0.72",
+          "tag": "rect",
+          "label": "rect",
+          "depth": 1,
+          "kind": "shape",
+          "parentId": "0"
+        }
+      ],
+      "overrides": {},
+      "layouts": {},
+      "warnings": [
+        "滤镜 #softBeam 已近似为模糊 42",
+        "滤镜 #grain 已忽略（feturbulence/fecolormatrix/fecomponenttransfer/fefunca 不是 Leafer 能直接渲染的）"
+      ],
+      "source": "import",
+      "x": 650,
+      "y": 0,
+      "createdAt": 1793844080430,
+      "version": 1
+    },
+    {
+      "id": "a_mw2wg71n1",
+      "name": "两条追责路径 · 信息图",
+      "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1600\" height=\"1320\" viewBox=\"0 0 1600 1320\" role=\"img\" aria-labelledby=\"t2 d2\">\n  <title id=\"t2\">同一个戒严夜，两条追责路径</title>\n  <desc id=\"d2\">左栏宪政追责：国会发起、宪法法院裁决，2024年12月7日首次弹劾未过，12月14日弹劾通过，2025年4月4日宪法法院一致罢免，6月3日大选。右栏刑事追责：检方起诉、法院审判，2024年12月31日签发逮捕令，2025年1月26日以发动内乱罪起诉，2026年2月19日一审无期，10月29日二审结案、检方求死刑，尚未宣判。</desc>\n  <defs>\n    <style>\n      text { font-family: -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif; fill: #172C36; }\n      .h1 { font-size: 56px; font-weight: 750; }\n      .sub { font-size: 24px; fill: #425A60; }\n      .kicker { font-size: 20px; font-weight: 700; letter-spacing: 2px; fill: #425A60; }\n      .coltitle { font-size: 40px; font-weight: 750; }\n      .metak { font-size: 24px; font-weight: 700; }\n      .meta { font-size: 24px; fill: #425A60; }\n      .date { font-size: 22px; font-weight: 800; }\n      .ev { font-size: 28px; font-weight: 700; }\n      .note { font-size: 20px; fill: #5C7077; }\n      .status { font-size: 28px; font-weight: 750; }\n    </style>\n  </defs>\n\n  <rect width=\"1600\" height=\"1320\" fill=\"#FFFFFF\"/>\n  <text x=\"80\" y=\"100\" class=\"h1\">同一个戒严夜，两条追责路径</text>\n  <text x=\"80\" y=\"152\" class=\"sub\">一条决定他还当不当总统，一条决定他要不要坐牢。两套标准、两种后果，各自独立。</text>\n  <line x1=\"80\" y1=\"188\" x2=\"1520\" y2=\"188\" stroke=\"#D3DED8\" stroke-width=\"1.5\"/>\n\n  <!-- 左栏 -->\n  <text x=\"80\" y=\"244\" class=\"kicker\">路径一</text>\n  <text x=\"80\" y=\"300\" class=\"coltitle\" fill=\"#176B63\">宪政追责：弹劾与罢免</text>\n  <text x=\"80\" y=\"340\" class=\"meta\">国会发起，宪法法院裁决</text>\n\n  <line x1=\"80\" y1=\"368\" x2=\"720\" y2=\"368\" stroke=\"#D3DED8\" stroke-width=\"1.5\"/>\n  <text x=\"80\" y=\"404\" class=\"metak\" fill=\"#176B63\">谁发起</text>\n  <text x=\"232\" y=\"404\" class=\"meta\">国会 · 300 席中需 200 票</text>\n  <text x=\"80\" y=\"440\" class=\"metak\" fill=\"#176B63\">谁裁决</text>\n  <text x=\"232\" y=\"440\" class=\"meta\">宪法法院 · 8 名法官全部同意</text>\n  <text x=\"80\" y=\"476\" class=\"metak\" fill=\"#176B63\">成立后果</text>\n  <text x=\"232\" y=\"476\" class=\"meta\">即刻罢免，60 日内举行大选</text>\n\n  <line x1=\"104\" y1=\"520\" x2=\"104\" y2=\"1040\" stroke=\"#176B63\" stroke-width=\"2\"/>\n  <g>\n    <circle cx=\"104\" cy=\"566\" r=\"9\" fill=\"#176B63\"/>\n    <text x=\"140\" y=\"546\" class=\"date\" fill=\"#176B63\">2024.12.07</text>\n    <text x=\"140\" y=\"582\" class=\"ev\">首次弹劾表决未过</text>\n    <text x=\"140\" y=\"614\" class=\"note\">195 人投票，未达 200 人门槛</text>\n  </g>\n  <g>\n    <circle cx=\"104\" cy=\"696\" r=\"11\" fill=\"#176B63\" stroke=\"#FFFFFF\" stroke-width=\"3\"/>\n    <text x=\"140\" y=\"676\" class=\"date\" fill=\"#176B63\">2024.12.14</text>\n    <text x=\"140\" y=\"712\" class=\"ev\">弹劾通过，职权暂停</text>\n    <text x=\"140\" y=\"744\" class=\"note\">204 票赞成</text>\n  </g>\n  <g>\n    <circle cx=\"104\" cy=\"826\" r=\"9\" fill=\"#176B63\"/>\n    <text x=\"140\" y=\"806\" class=\"date\" fill=\"#176B63\">2025.04.04</text>\n    <text x=\"140\" y=\"842\" class=\"ev\">宪法法院裁定罢免</text>\n    <text x=\"140\" y=\"874\" class=\"note\">8 比 0 一致通过</text>\n  </g>\n  <g>\n    <circle cx=\"104\" cy=\"956\" r=\"9\" fill=\"#176B63\"/>\n    <text x=\"140\" y=\"936\" class=\"date\" fill=\"#176B63\">2025.06.03</text>\n    <text x=\"140\" y=\"972\" class=\"ev\">大选，李在明当选</text>\n    <text x=\"140\" y=\"1004\" class=\"note\">得票 49.42%</text>\n  </g>\n\n  <rect x=\"80\" y=\"1080\" width=\"640\" height=\"120\" rx=\"10\" fill=\"#F2F7F5\" stroke=\"#176B63\" stroke-width=\"1.5\"/>\n  <text x=\"104\" y=\"1124\" class=\"status\" fill=\"#176B63\">路径已走完</text>\n  <text x=\"104\" y=\"1160\" class=\"meta\">总统去职，政权更替；大选在 60 天内完成</text>\n\n  <!-- 右栏 -->\n  <text x=\"840\" y=\"244\" class=\"kicker\">路径二</text>\n  <text x=\"840\" y=\"300\" class=\"coltitle\" fill=\"#A84E27\">刑事追责：内乱罪审判</text>\n  <text x=\"840\" y=\"340\" class=\"meta\">检方起诉，法院审判</text>\n\n  <line x1=\"840\" y1=\"368\" x2=\"1520\" y2=\"368\" stroke=\"#D3DED8\" stroke-width=\"1.5\"/>\n  <text x=\"840\" y=\"404\" class=\"metak\" fill=\"#A84E27\">谁发起</text>\n  <text x=\"992\" y=\"404\" class=\"meta\">检方 / 特别检察组</text>\n  <text x=\"840\" y=\"440\" class=\"metak\" fill=\"#A84E27\">谁裁决</text>\n  <text x=\"992\" y=\"440\" class=\"meta\">法院 · 一审、二审</text>\n  <text x=\"840\" y=\"476\" class=\"metak\" fill=\"#A84E27\">成立后果</text>\n  <text x=\"992\" y=\"476\" class=\"meta\">刑罚，与是否当总统无关</text>\n\n  <line x1=\"864\" y1=\"520\" x2=\"864\" y2=\"1040\" stroke=\"#A84E27\" stroke-width=\"2\"/>\n  <g>\n    <circle cx=\"864\" cy=\"566\" r=\"9\" fill=\"#A84E27\"/>\n    <text x=\"900\" y=\"546\" class=\"date\" fill=\"#A84E27\">2024.12.31</text>\n    <text x=\"900\" y=\"582\" class=\"ev\">法院签发逮捕令</text>\n  </g>\n  <g>\n    <circle cx=\"864\" cy=\"696\" r=\"9\" fill=\"#A84E27\"/>\n    <text x=\"900\" y=\"676\" class=\"date\" fill=\"#A84E27\">2025.01.26</text>\n    <text x=\"900\" y=\"712\" class=\"ev\">以发动内乱罪起诉</text>\n  </g>\n  <g>\n    <circle cx=\"864\" cy=\"826\" r=\"11\" fill=\"#A84E27\" stroke=\"#FFFFFF\" stroke-width=\"3\"/>\n    <text x=\"900\" y=\"806\" class=\"date\" fill=\"#A84E27\">2026.02.19</text>\n    <text x=\"900\" y=\"842\" class=\"ev\">一审：内乱头目罪，无期</text>\n    <text x=\"900\" y=\"874\" class=\"note\">前防长金龙显同案获刑 30 年</text>\n  </g>\n  <g>\n    <circle cx=\"864\" cy=\"956\" r=\"9\" fill=\"#A84E27\"/>\n    <text x=\"900\" y=\"936\" class=\"date\" fill=\"#A84E27\">2026.10.29</text>\n    <text x=\"900\" y=\"972\" class=\"ev\">二审结案，检方求死刑</text>\n    <text x=\"900\" y=\"1004\" class=\"note\">11 月 5 日最后辩论，宣判日期未定</text>\n  </g>\n\n  <rect x=\"840\" y=\"1080\" width=\"680\" height=\"120\" rx=\"10\" fill=\"#FCEEE7\" stroke=\"#A84E27\" stroke-width=\"1.5\" stroke-dasharray=\"6 4\"/>\n  <text x=\"864\" y=\"1124\" class=\"status\" fill=\"#A84E27\">尚未走完</text>\n  <text x=\"864\" y=\"1160\" class=\"meta\">二审未判，判决未生效；求刑不等于判决</text>\n\n  <!-- 底部对照 -->\n  <line x1=\"80\" y1=\"1240\" x2=\"1520\" y2=\"1240\" stroke=\"#D3DED8\" stroke-width=\"1.5\"/>\n  <text x=\"80\" y=\"1284\" class=\"note\">两条路径的关键差别：宪政追责问“还能不能执政”，结果是去职；刑事追责问“是否构成犯罪”，结果是刑罚。被罢免不等于被定罪。</text>\n\n  <text x=\"80\" y=\"1310\" class=\"note\">资料来源：新华社、央视新闻、韩联社。</text>\n</svg>\n",
+      "width": 1600,
+      "height": 1320,
+      "kind": "static",
+      "groups": [],
+      "elements": [
+        {
+          "id": "0",
+          "tag": "svg",
+          "label": "svg",
+          "depth": 0,
+          "kind": "group"
+        },
+        {
+          "id": "0.1",
+          "tag": "rect",
+          "label": "rect",
+          "depth": 1,
+          "kind": "shape",
+          "parentId": "0"
+        },
+        {
+          "id": "0.2",
+          "tag": "text",
+          "label": "“同一个戒严夜，两条追责路”",
+          "depth": 1,
+          "kind": "text",
+          "parentId": "0"
+        },
+        {
+          "id": "0.3",
+          "tag": "text",
+          "label": "“一条决定他还当不当总统，”",
+          "depth": 1,
+          "kind": "text",
+          "parentId": "0"
+        },
+        {
+          "id": "0.4",
+          "tag": "line",
+          "label": "line",
+          "depth": 1,
+          "kind": "shape",
+          "parentId": "0"
+        },
+        {
+          "id": "0.5",
+          "tag": "text",
+          "label": "“路径一”",
+          "depth": 1,
+          "kind": "text",
+          "parentId": "0"
+        },
+        {
+          "id": "0.6",
+          "tag": "text",
+          "label": "“宪政追责：弹劾与罢免”",
+          "depth": 1,
+          "kind": "text",
+          "parentId": "0"
+        },
+        {
+          "id": "0.7",
+          "tag": "text",
+          "label": "“国会发起，宪法法院裁决”",
+          "depth": 1,
+          "kind": "text",
+          "parentId": "0"
+        },
+        {
+          "id": "0.8",
+          "tag": "line",
+          "label": "line",
+          "depth": 1,
+          "kind": "shape",
+          "parentId": "0"
+        },
+        {
+          "id": "0.9",
+          "tag": "text",
+          "label": "“谁发起”",
+          "depth": 1,
+          "kind": "text",
+          "parentId": "0"
+        },
+        {
+          "id": "0.10",
+          "tag": "text",
+          "label": "“国会 · 300 席中需”",
+          "depth": 1,
+          "kind": "text",
+          "parentId": "0"
+        },
+        {
+          "id": "0.11",
+          "tag": "text",
+          "label": "“谁裁决”",
+          "depth": 1,
+          "kind": "text",
+          "parentId": "0"
+        },
+        {
+          "id": "0.12",
+          "tag": "text",
+          "label": "“宪法法院 · 8 名法官”",
+          "depth": 1,
+          "kind": "text",
+          "parentId": "0"
+        },
+        {
+          "id": "0.13",
+          "tag": "text",
+          "label": "“成立后果”",
+          "depth": 1,
+          "kind": "text",
+          "parentId": "0"
+        },
+        {
+          "id": "0.14",
+          "tag": "text",
+          "label": "“即刻罢免，60 日内举行”",
+          "depth": 1,
+          "kind": "text",
+          "parentId": "0"
+        },
+        {
+          "id": "0.15",
+          "tag": "line",
+          "label": "line",
+          "depth": 1,
+          "kind": "shape",
+          "parentId": "0"
+        },
+        {
+          "id": "0.16",
+          "tag": "g",
+          "label": "g",
+          "depth": 1,
+          "kind": "group",
+          "parentId": "0"
+        },
+        {
+          "id": "0.16.17",
+          "tag": "circle",
+          "label": "circle",
+          "depth": 2,
+          "kind": "shape",
+          "parentId": "0.16"
+        },
+        {
+          "id": "0.16.18",
+          "tag": "text",
+          "label": "“2024.12.07”",
+          "depth": 2,
+          "kind": "text",
+          "parentId": "0.16"
+        },
+        {
+          "id": "0.16.19",
+          "tag": "text",
+          "label": "“首次弹劾表决未过”",
+          "depth": 2,
+          "kind": "text",
+          "parentId": "0.16"
+        },
+        {
+          "id": "0.16.20",
+          "tag": "text",
+          "label": "“195 人投票，未达 2”",
+          "depth": 2,
+          "kind": "text",
+          "parentId": "0.16"
+        },
+        {
+          "id": "0.21",
+          "tag": "g",
+          "label": "g",
+          "depth": 1,
+          "kind": "group",
+          "parentId": "0"
+        },
+        {
+          "id": "0.21.22",
+          "tag": "circle",
+          "label": "circle",
+          "depth": 2,
+          "kind": "shape",
+          "parentId": "0.21"
+        },
+        {
+          "id": "0.21.23",
+          "tag": "text",
+          "label": "“2024.12.14”",
+          "depth": 2,
+          "kind": "text",
+          "parentId": "0.21"
+        },
+        {
+          "id": "0.21.24",
+          "tag": "text",
+          "label": "“弹劾通过，职权暂停”",
+          "depth": 2,
+          "kind": "text",
+          "parentId": "0.21"
+        },
+        {
+          "id": "0.21.25",
+          "tag": "text",
+          "label": "“204 票赞成”",
+          "depth": 2,
+          "kind": "text",
+          "parentId": "0.21"
+        },
+        {
+          "id": "0.26",
+          "tag": "g",
+          "label": "g",
+          "depth": 1,
+          "kind": "group",
+          "parentId": "0"
+        },
+        {
+          "id": "0.26.27",
+          "tag": "circle",
+          "label": "circle",
+          "depth": 2,
+          "kind": "shape",
+          "parentId": "0.26"
+        },
+        {
+          "id": "0.26.28",
+          "tag": "text",
+          "label": "“2025.04.04”",
+          "depth": 2,
+          "kind": "text",
+          "parentId": "0.26"
+        },
+        {
+          "id": "0.26.29",
+          "tag": "text",
+          "label": "“宪法法院裁定罢免”",
+          "depth": 2,
+          "kind": "text",
+          "parentId": "0.26"
+        },
+        {
+          "id": "0.26.30",
+          "tag": "text",
+          "label": "“8 比 0 一致通过”",
+          "depth": 2,
+          "kind": "text",
+          "parentId": "0.26"
+        },
+        {
+          "id": "0.31",
+          "tag": "g",
+          "label": "g",
+          "depth": 1,
+          "kind": "group",
+          "parentId": "0"
+        },
+        {
+          "id": "0.31.32",
+          "tag": "circle",
+          "label": "circle",
+          "depth": 2,
+          "kind": "shape",
+          "parentId": "0.31"
+        },
+        {
+          "id": "0.31.33",
+          "tag": "text",
+          "label": "“2025.06.03”",
+          "depth": 2,
+          "kind": "text",
+          "parentId": "0.31"
+        },
+        {
+          "id": "0.31.34",
+          "tag": "text",
+          "label": "“大选，李在明当选”",
+          "depth": 2,
+          "kind": "text",
+          "parentId": "0.31"
+        },
+        {
+          "id": "0.31.35",
+          "tag": "text",
+          "label": "“得票 49.42%”",
+          "depth": 2,
+          "kind": "text",
+          "parentId": "0.31"
+        },
+        {
+          "id": "0.36",
+          "tag": "rect",
+          "label": "rect",
+          "depth": 1,
+          "kind": "shape",
+          "parentId": "0"
+        },
+        {
+          "id": "0.37",
+          "tag": "text",
+          "label": "“路径已走完”",
+          "depth": 1,
+          "kind": "text",
+          "parentId": "0"
+        },
+        {
+          "id": "0.38",
+          "tag": "text",
+          "label": "“总统去职，政权更替；大选”",
+          "depth": 1,
+          "kind": "text",
+          "parentId": "0"
+        },
+        {
+          "id": "0.39",
+          "tag": "text",
+          "label": "“路径二”",
+          "depth": 1,
+          "kind": "text",
+          "parentId": "0"
+        },
+        {
+          "id": "0.40",
+          "tag": "text",
+          "label": "“刑事追责：内乱罪审判”",
+          "depth": 1,
+          "kind": "text",
+          "parentId": "0"
+        },
+        {
+          "id": "0.41",
+          "tag": "text",
+          "label": "“检方起诉，法院审判”",
+          "depth": 1,
+          "kind": "text",
+          "parentId": "0"
+        },
+        {
+          "id": "0.42",
+          "tag": "line",
+          "label": "line",
+          "depth": 1,
+          "kind": "shape",
+          "parentId": "0"
+        },
+        {
+          "id": "0.43",
+          "tag": "text",
+          "label": "“谁发起”",
+          "depth": 1,
+          "kind": "text",
+          "parentId": "0"
+        },
+        {
+          "id": "0.44",
+          "tag": "text",
+          "label": "“检方 / 特别检察组”",
+          "depth": 1,
+          "kind": "text",
+          "parentId": "0"
+        },
+        {
+          "id": "0.45",
+          "tag": "text",
+          "label": "“谁裁决”",
+          "depth": 1,
+          "kind": "text",
+          "parentId": "0"
+        },
+        {
+          "id": "0.46",
+          "tag": "text",
+          "label": "“法院 · 一审、二审”",
+          "depth": 1,
+          "kind": "text",
+          "parentId": "0"
+        },
+        {
+          "id": "0.47",
+          "tag": "text",
+          "label": "“成立后果”",
+          "depth": 1,
+          "kind": "text",
+          "parentId": "0"
+        },
+        {
+          "id": "0.48",
+          "tag": "text",
+          "label": "“刑罚，与是否当总统无关”",
+          "depth": 1,
+          "kind": "text",
+          "parentId": "0"
+        },
+        {
+          "id": "0.49",
+          "tag": "line",
+          "label": "line",
+          "depth": 1,
+          "kind": "shape",
+          "parentId": "0"
+        },
+        {
+          "id": "0.50",
+          "tag": "g",
+          "label": "g",
+          "depth": 1,
+          "kind": "group",
+          "parentId": "0"
+        },
+        {
+          "id": "0.50.51",
+          "tag": "circle",
+          "label": "circle",
+          "depth": 2,
+          "kind": "shape",
+          "parentId": "0.50"
+        },
+        {
+          "id": "0.50.52",
+          "tag": "text",
+          "label": "“2024.12.31”",
+          "depth": 2,
+          "kind": "text",
+          "parentId": "0.50"
+        },
+        {
+          "id": "0.50.53",
+          "tag": "text",
+          "label": "“法院签发逮捕令”",
+          "depth": 2,
+          "kind": "text",
+          "parentId": "0.50"
+        },
+        {
+          "id": "0.54",
+          "tag": "g",
+          "label": "g",
+          "depth": 1,
+          "kind": "group",
+          "parentId": "0"
+        },
+        {
+          "id": "0.54.55",
+          "tag": "circle",
+          "label": "circle",
+          "depth": 2,
+          "kind": "shape",
+          "parentId": "0.54"
+        },
+        {
+          "id": "0.54.56",
+          "tag": "text",
+          "label": "“2025.01.26”",
+          "depth": 2,
+          "kind": "text",
+          "parentId": "0.54"
+        },
+        {
+          "id": "0.54.57",
+          "tag": "text",
+          "label": "“以发动内乱罪起诉”",
+          "depth": 2,
+          "kind": "text",
+          "parentId": "0.54"
+        },
+        {
+          "id": "0.58",
+          "tag": "g",
+          "label": "g",
+          "depth": 1,
+          "kind": "group",
+          "parentId": "0"
+        },
+        {
+          "id": "0.58.59",
+          "tag": "circle",
+          "label": "circle",
+          "depth": 2,
+          "kind": "shape",
+          "parentId": "0.58"
+        },
+        {
+          "id": "0.58.60",
+          "tag": "text",
+          "label": "“2026.02.19”",
+          "depth": 2,
+          "kind": "text",
+          "parentId": "0.58"
+        },
+        {
+          "id": "0.58.61",
+          "tag": "text",
+          "label": "“一审：内乱头目罪，无期”",
+          "depth": 2,
+          "kind": "text",
+          "parentId": "0.58"
+        },
+        {
+          "id": "0.58.62",
+          "tag": "text",
+          "label": "“前防长金龙显同案获刑 3”",
+          "depth": 2,
+          "kind": "text",
+          "parentId": "0.58"
+        },
+        {
+          "id": "0.63",
+          "tag": "g",
+          "label": "g",
+          "depth": 1,
+          "kind": "group",
+          "parentId": "0"
+        },
+        {
+          "id": "0.63.64",
+          "tag": "circle",
+          "label": "circle",
+          "depth": 2,
+          "kind": "shape",
+          "parentId": "0.63"
+        },
+        {
+          "id": "0.63.65",
+          "tag": "text",
+          "label": "“2026.10.29”",
+          "depth": 2,
+          "kind": "text",
+          "parentId": "0.63"
+        },
+        {
+          "id": "0.63.66",
+          "tag": "text",
+          "label": "“二审结案，检方求死刑”",
+          "depth": 2,
+          "kind": "text",
+          "parentId": "0.63"
+        },
+        {
+          "id": "0.63.67",
+          "tag": "text",
+          "label": "“11 月 5 日最后辩论”",
+          "depth": 2,
+          "kind": "text",
+          "parentId": "0.63"
+        },
+        {
+          "id": "0.68",
+          "tag": "rect",
+          "label": "rect",
+          "depth": 1,
+          "kind": "shape",
+          "parentId": "0"
+        },
+        {
+          "id": "0.69",
+          "tag": "text",
+          "label": "“尚未走完”",
+          "depth": 1,
+          "kind": "text",
+          "parentId": "0"
+        },
+        {
+          "id": "0.70",
+          "tag": "text",
+          "label": "“二审未判，判决未生效；求”",
+          "depth": 1,
+          "kind": "text",
+          "parentId": "0"
+        },
+        {
+          "id": "0.71",
+          "tag": "line",
+          "label": "line",
+          "depth": 1,
+          "kind": "shape",
+          "parentId": "0"
+        },
+        {
+          "id": "0.72",
+          "tag": "text",
+          "label": "“两条路径的关键差别：宪政”",
+          "depth": 1,
+          "kind": "text",
+          "parentId": "0"
+        },
+        {
+          "id": "0.73",
+          "tag": "text",
+          "label": "“资料来源：新华社、央视新”",
+          "depth": 1,
+          "kind": "text",
+          "parentId": "0"
+        }
+      ],
+      "overrides": {},
+      "layouts": {},
+      "warnings": [],
+      "source": "import",
+      "x": 0,
+      "y": 431,
+      "createdAt": 1793844080555,
+      "version": 1
+    }
+  ]
+}

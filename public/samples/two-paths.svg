@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1320" viewBox="0 0 1600 1320" role="img" aria-labelledby="t2 d2">
+  <title id="t2">同一个戒严夜，两条追责路径</title>
+  <desc id="d2">左栏宪政追责：国会发起、宪法法院裁决，2024年12月7日首次弹劾未过，12月14日弹劾通过，2025年4月4日宪法法院一致罢免，6月3日大选。右栏刑事追责：检方起诉、法院审判，2024年12月31日签发逮捕令，2025年1月26日以发动内乱罪起诉，2026年2月19日一审无期，10月29日二审结案、检方求死刑，尚未宣判。</desc>
+  <defs>
+    <style>
+      text { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; fill: #172C36; }
+      .h1 { font-size: 56px; font-weight: 750; }
+      .sub { font-size: 24px; fill: #425A60; }
+      .kicker { font-size: 20px; font-weight: 700; letter-spacing: 2px; fill: #425A60; }
+      .coltitle { font-size: 40px; font-weight: 750; }
+      .metak { font-size: 24px; font-weight: 700; }
+      .meta { font-size: 24px; fill: #425A60; }
+      .date { font-size: 22px; font-weight: 800; }
+      .ev { font-size: 28px; font-weight: 700; }
+      .note { font-size: 20px; fill: #5C7077; }
+      .status { font-size: 28px; font-weight: 750; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="1320" fill="#FFFFFF"/>
+  <text x="80" y="100" class="h1">同一个戒严夜，两条追责路径</text>
+  <text x="80" y="152" class="sub">一条决定他还当不当总统，一条决定他要不要坐牢。两套标准、两种后果，各自独立。</text>
+  <line x1="80" y1="188" x2="1520" y2="188" stroke="#D3DED8" stroke-width="1.5"/>
+
+  <!-- 左栏 -->
+  <text x="80" y="244" class="kicker">路径一</text>
+  <text x="80" y="300" class="coltitle" fill="#176B63">宪政追责：弹劾与罢免</text>
+  <text x="80" y="340" class="meta">国会发起，宪法法院裁决</text>
+
+  <line x1="80" y1="368" x2="720" y2="368" stroke="#D3DED8" stroke-width="1.5"/>
+  <text x="80" y="404" class="metak" fill="#176B63">谁发起</text>
+  <text x="232" y="404" class="meta">国会 · 300 席中需 200 票</text>
+  <text x="80" y="440" class="metak" fill="#176B63">谁裁决</text>
+  <text x="232" y="440" class="meta">宪法法院 · 8 名法官全部同意</text>
+  <text x="80" y="476" class="metak" fill="#176B63">成立后果</text>
+  <text x="232" y="476" class="meta">即刻罢免，60 日内举行大选</text>
+
+  <line x1="104" y1="520" x2="104" y2="1040" stroke="#176B63" stroke-width="2"/>
+  <g>
+    <circle cx="104" cy="566" r="9" fill="#176B63"/>
+    <text x="140" y="546" class="date" fill="#176B63">2024.12.07</text>
+    <text x="140" y="582" class="ev">首次弹劾表决未过</text>
+    <text x="140" y="614" class="note">195 人投票，未达 200 人门槛</text>
+  </g>
+  <g>
+    <circle cx="104" cy="696" r="11" fill="#176B63" stroke="#FFFFFF" stroke-width="3"/>
+    <text x="140" y="676" class="date" fill="#176B63">2024.12.14</text>
+    <text x="140" y="712" class="ev">弹劾通过，职权暂停</text>
+    <text x="140" y="744" class="note">204 票赞成</text>
+  </g>
+  <g>
+    <circle cx="104" cy="826" r="9" fill="#176B63"/>
+    <text x="140" y="806" class="date" fill="#176B63">2025.04.04</text>
+    <text x="140" y="842" class="ev">宪法法院裁定罢免</text>
+    <text x="140" y="874" class="note">8 比 0 一致通过</text>
+  </g>
+  <g>
+    <circle cx="104" cy="956" r="9" fill="#176B63"/>
+    <text x="140" y="936" class="date" fill="#176B63">2025.06.03</text>
+    <text x="140" y="972" class="ev">大选，李在明当选</text>
+    <text x="140" y="1004" class="note">得票 49.42%</text>
+  </g>
+
+  <rect x="80" y="1080" width="640" height="120" rx="10" fill="#F2F7F5" stroke="#176B63" stroke-width="1.5"/>
+  <text x="104" y="1124" class="status" fill="#176B63">路径已走完</text>
+  <text x="104" y="1160" class="meta">总统去职，政权更替；大选在 60 天内完成</text>
+
+  <!-- 右栏 -->
+  <text x="840" y="244" class="kicker">路径二</text>
+  <text x="840" y="300" class="coltitle" fill="#A84E27">刑事追责：内乱罪审判</text>
+  <text x="840" y="340" class="meta">检方起诉，法院审判</text>
+
+  <line x1="840" y1="368" x2="1520" y2="368" stroke="#D3DED8" stroke-width="1.5"/>
+  <text x="840" y="404" class="metak" fill="#A84E27">谁发起</text>
+  <text x="992" y="404" class="meta">检方 / 特别检察组</text>
+  <text x="840" y="440" class="metak" fill="#A84E27">谁裁决</text>
+  <text x="992" y="440" class="meta">法院 · 一审、二审</text>
+  <text x="840" y="476" class="metak" fill="#A84E27">成立后果</text>
+  <text x="992" y="476" class="meta">刑罚，与是否当总统无关</text>
+
+  <line x1="864" y1="520" x2="864" y2="1040" stroke="#A84E27" stroke-width="2"/>
+  <g>
+    <circle cx="864" cy="566" r="9" fill="#A84E27"/>
+    <text x="900" y="546" class="date" fill="#A84E27">2024.12.31</text>
+    <text x="900" y="582" class="ev">法院签发逮捕令</text>
+  </g>
+  <g>
+    <circle cx="864" cy="696" r="9" fill="#A84E27"/>
+    <text x="900" y="676" class="date" fill="#A84E27">2025.01.26</text>
+    <text x="900" y="712" class="ev">以发动内乱罪起诉</text>
+  </g>
+  <g>
+    <circle cx="864" cy="826" r="11" fill="#A84E27" stroke="#FFFFFF" stroke-width="3"/>
+    <text x="900" y="806" class="date" fill="#A84E27">2026.02.19</text>
+    <text x="900" y="842" class="ev">一审：内乱头目罪，无期</text>
+    <text x="900" y="874" class="note">前防长金龙显同案获刑 30 年</text>
+  </g>
+  <g>
+    <circle cx="864" cy="956" r="9" fill="#A84E27"/>
+    <text x="900" y="936" class="date" fill="#A84E27">2026.10.29</text>
+    <text x="900" y="972" class="ev">二审结案，检方求死刑</text>
+    <text x="900" y="1004" class="note">11 月 5 日最后辩论，宣判日期未定</text>
+  </g>
+
+  <rect x="840" y="1080" width="680" height="120" rx="10" fill="#FCEEE7" stroke="#A84E27" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="864" y="1124" class="status" fill="#A84E27">尚未走完</text>
+  <text x="864" y="1160" class="meta">二审未判，判决未生效；求刑不等于判决</text>
+
+  <!-- 底部对照 -->
+  <line x1="80" y1="1240" x2="1520" y2="1240" stroke="#D3DED8" stroke-width="1.5"/>
+  <text x="80" y="1284" class="note">两条路径的关键差别：宪政追责问“还能不能执政”，结果是去职；刑事追责问“是否构成犯罪”，结果是刑罚。被罢免不等于被定罪。</text>
+
+  <text x="80" y="1310" class="note">资料来源：新华社、央视新闻、韩联社。</text>
+</svg>
