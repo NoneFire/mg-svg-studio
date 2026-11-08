@@ -74,7 +74,11 @@ export async function startBridge(port = 7350) {
     if ((type === 'style.set' || type === 'style.clear') && !element) {
       throw new Error('请先选中元素，或提供素材和元素 ID')
     }
-    if (!['style.set', 'style.clear', 'select', 'save', 'review', 'asset.add', 'asset.replaceSvg', 'asset.remove', 'asset.mergeVersions', 'asset.versions', 'asset.restoreVersion', 'asset.deleteVersions', 'project.reload'].includes(type)) throw new Error('不支持的实时命令')
+    const SUPPORTED = ['style.set', 'style.clear', 'select', 'save', 'review', 'asset.add', 'asset.replaceSvg',
+    'asset.remove', 'asset.mergeVersions', 'asset.versions', 'asset.restoreVersion', 'asset.deleteVersions', 'project.reload']
+  if (!SUPPORTED.includes(type)) {
+    throw new Error(`桥不支持命令「${type}」。当前支持：${SUPPORTED.join('、')}。若这是新加的命令，请重启 bridge（node bin/mgsvg.mjs bridge --port 7350）`)
+  }
     if (type === 'review' && payload.frame !== undefined && (
       typeof payload.frame !== 'number' || !Number.isFinite(payload.frame) || payload.frame < 0 || payload.frame > 1
     )) throw new Error('评审帧必须在 0 到 1 之间')

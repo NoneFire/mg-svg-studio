@@ -21,9 +21,10 @@ const commands = {
   },
   context: { bridge: 'value', session: 'value', wait: 'value', after: 'value' },
   live: {
-    bridge: 'value', session: 'value', current: 'switch', asset: 'value', element: 'value', set: 'repeat',
+    bridge: 'value', session: 'value', current: 'switch', asset: 'value', assets: 'value', element: 'value', set: 'repeat',
     clear: 'switch', select: 'value', save: 'switch', reload: 'switch', review: 'switch', frame: 'value', add: 'value', name: 'value', merge: 'value', replace: 'value', remove: 'switch', force: 'switch', versions: 'switch', restore: 'value', 'delete-versions': 'value',
   },
+  version: { bridge: 'value', session: 'value', current: 'switch', asset: 'value', assets: 'value', id: 'value', ids: 'value', json: 'switch' },
   bridge: { port: 'value' },
   mcp: { project: 'value', bridge: 'value' },
 } as const satisfies Record<string, Record<string, Option>>

@@ -19263,6 +19263,7 @@ var init_args = __esm({
         session: "value",
         current: "switch",
         asset: "value",
+        assets: "value",
         element: "value",
         set: "repeat",
         clear: "switch",
@@ -19281,6 +19282,7 @@ var init_args = __esm({
         restore: "value",
         "delete-versions": "value"
       },
+      version: { bridge: "value", session: "value", current: "switch", asset: "value", assets: "value", id: "value", ids: "value", json: "switch" },
       bridge: { port: "value" },
       mcp: { project: "value", bridge: "value" }
     };
@@ -19599,7 +19601,24 @@ async function startBridge(port = 7350) {
     if ((type === "style.set" || type === "style.clear") && !element) {
       throw new Error("\u8BF7\u5148\u9009\u4E2D\u5143\u7D20\uFF0C\u6216\u63D0\u4F9B\u7D20\u6750\u548C\u5143\u7D20 ID");
     }
-    if (!["style.set", "style.clear", "select", "save", "review", "asset.add", "asset.replaceSvg", "asset.remove", "asset.mergeVersions", "asset.versions", "asset.restoreVersion", "asset.deleteVersions", "project.reload"].includes(type)) throw new Error("\u4E0D\u652F\u6301\u7684\u5B9E\u65F6\u547D\u4EE4");
+    const SUPPORTED = [
+      "style.set",
+      "style.clear",
+      "select",
+      "save",
+      "review",
+      "asset.add",
+      "asset.replaceSvg",
+      "asset.remove",
+      "asset.mergeVersions",
+      "asset.versions",
+      "asset.restoreVersion",
+      "asset.deleteVersions",
+      "project.reload"
+    ];
+    if (!SUPPORTED.includes(type)) {
+      throw new Error(`\u6865\u4E0D\u652F\u6301\u547D\u4EE4\u300C${type}\u300D\u3002\u5F53\u524D\u652F\u6301\uFF1A${SUPPORTED.join("\u3001")}\u3002\u82E5\u8FD9\u662F\u65B0\u52A0\u7684\u547D\u4EE4\uFF0C\u8BF7\u91CD\u542F bridge\uFF08node bin/mgsvg.mjs bridge --port 7350\uFF09`);
+    }
     if (type === "review" && payload.frame !== void 0 && (typeof payload.frame !== "number" || !Number.isFinite(payload.frame) || payload.frame < 0 || payload.frame > 1)) throw new Error("\u8BC4\u5BA1\u5E27\u5FC5\u987B\u5728 0 \u5230 1 \u4E4B\u95F4");
     const id2 = randomUUID();
     pending.set(id2, {
@@ -20211,6 +20230,7 @@ var HELP = `mgsvg \u2014 MG SVG Studio \u9879\u76EE\u6587\u4EF6\u5DE5\u5177\uFF0
   mgsvg review <project> [--asset <id|name>] [--json] [--run] [--write]
   mgsvg review <project> --agent-prompt --asset <id|name> [--app <url>] [--project-url <path>]
   mgsvg review <project> --agent-result <file|-> --asset <id|name> (--write | --dry-run)
+  mgsvg version list|restore|delete --asset <id> (--session <id> | --current) [--id v] [--ids v,v]
   mgsvg bridge  [--port 7350]                  \u5F00\u672C\u5730\u9009\u62E9\u6865\uFF08Agent \u7528\u5B83\u770B\u4F60\u5728\u9009\u4EC0\u4E48\uFF09
   mgsvg context [--bridge 7350] [--session <id>] [--wait 30] [--after <selectionId>] [--json]
   mgsvg live    [--bridge 7350] (--session <id> | --current) [--asset <id>] [--element <id>]
@@ -20348,7 +20368,8 @@ async function runLive(flags) {
   const sessionId = str(flags, "session");
   const current = flags.current === true;
   if (Boolean(sessionId) === current) usage("\u8BF7\u4F7F\u7528 --session <id> \u9501\u5B9A\u76EE\u6807\uFF0C\u6216\u663E\u5F0F\u4F20 --current");
-  const asset = str(flags, "asset");
+  const batchAssets = (str(flags, "assets") || "").split(",").map((v2) => v2.trim()).filter(Boolean);
+  const asset = str(flags, "asset") || batchAssets[0];
   const element = str(flags, "element");
   const select = str(flags, "select");
   const set = Boolean(flags.set);
@@ -20365,7 +20386,7 @@ async function runLive(flags) {
   const deleteVersions = str(flags, "delete-versions");
   if (merge && (!asset || add)) usage("--merge \u9700\u8981 --asset \u6307\u5B9A\u76EE\u6807\u7D20\u6750");
   const name = str(flags, "name");
-  if ([set, clear, save, reload, review, Boolean(select), Boolean(add), Boolean(merge), Boolean(replace && asset), Boolean(remove && asset), Boolean(listVersions && asset), Boolean(restoreVersion && asset), Boolean(deleteVersions && asset)].filter(Boolean).length !== 1) {
+  if ([set, clear, save, reload, review, Boolean(select), Boolean(add), Boolean(merge), Boolean(replace), Boolean(remove), Boolean(listVersions && asset), Boolean(restoreVersion && asset), Boolean(deleteVersions && asset)].filter(Boolean).length !== 1) {
     usage("\u8BF7\u9009\u62E9\u4E00\u79CD\u64CD\u4F5C\uFF1A--set\u3001--clear\u3001--select\u3001--add\u3001--save\u3001--reload \u6216 --review");
   }
   if (sessionId && (set || clear) && (!asset || !element)) usage("\u9501\u5B9A\u5B9E\u65F6\u4FEE\u6539\u65F6\u9700\u8981 --asset \u548C --element");
@@ -20387,6 +20408,54 @@ async function runLive(flags) {
   }
   const port = portOf(flags, "bridge", 7350);
   const base = `http://127.0.0.1:${port}`;
+  const multi = (str(flags, "assets") || "").split(",").map((v2) => v2.trim()).filter(Boolean);
+  const targets = multi.length ? multi : asset ? [asset] : [];
+  if (!targets.length) {
+    const result = await sendLiveCommand(base, type, payload, sessionId, current);
+    if (flags.json) console.log(JSON.stringify(result, null, 2));
+    else console.log(describeLiveResult(type, result, { add, replace, remove, merge, restoreVersion, deleteVersions }));
+    return;
+  }
+  const collected = [];
+  for (const target of targets) {
+    const result = await sendLiveCommand(base, type, { ...payload, asset: target }, sessionId, current);
+    collected.push(result);
+    if (!flags.json) console.log(describeLiveResult(type, result, { add, replace, remove, merge, restoreVersion, deleteVersions }));
+  }
+  if (flags.json) console.log(JSON.stringify(collected.length === 1 ? collected[0] : collected, null, 2));
+}
+function describeLiveResult(type, raw, flags) {
+  const d2 = raw ?? {};
+  switch (type) {
+    case "save":
+      return `\u2713 \u5DF2\u4FDD\u5B58 ${d2.file ?? ""}${d2.dirty ? "\uFF0C\u4FDD\u5B58\u671F\u95F4\u6709\u65B0\u7684\u672A\u4FDD\u5B58\u6539\u52A8" : ""}`;
+    case "project.reload":
+      return `\u2713 \u5DF2\u91CD\u65B0\u8F7D\u5165 ${d2.file ?? ""}\uFF08${d2.assets ?? 0} \u4E2A\u7D20\u6750\uFF09`;
+    case "review":
+      return `${d2.assetName ?? d2.asset ?? ""}\uFF1A${d2.gate ?? "?"} \xB7 ${d2.counts?.FAIL ?? 0} \u786C\u4F24 / ${d2.counts?.WARN ?? 0} \u63D0\u793A`;
+    case "select":
+      return `\u2713 \u5DF2\u9009\u4E2D ${d2.selection?.elementId || d2.selection?.assetId || "\u7D20\u6750"}`;
+    case "asset.add":
+      return `\u2713 \u5DF2\u6DFB\u52A0 ${d2.name ?? ""}\uFF08${d2.asset ?? ""}\uFF09${d2.width ?? "?"}\xD7${d2.height ?? "?"}`;
+    case "asset.versions":
+      return d2.versions?.length ? d2.versions.map((v2) => `v${v2.index}  ${v2.createdAt ? new Date(v2.createdAt).toLocaleString() : ""}  ${v2.bytes ?? ""}B`).join("\n") : "\u8FD9\u4E2A\u7D20\u6750\u8FD8\u6CA1\u6709\u7248\u672C\u8BB0\u5F55";
+    case "asset.mergeVersions":
+      return `\u2713 \u5DF2\u5E76\u5165 ${d2.merged ?? 0} \u4E2A\u7248\u672C\uFF0C\u5F53\u524D\u6700\u9AD8 v${d2.index ?? "?"}`;
+    case "asset.restoreVersion":
+      return `\u2713 \u5DF2\u6062\u590D\u5230 v${d2.index ?? "?"}\uFF08${d2.width ?? "?"}\xD7${d2.height ?? "?"}\uFF09`;
+    case "asset.deleteVersions":
+      return `\u2713 \u5DF2\u5220\u9664 ${d2.removed ?? 0} \u4E2A\u7248\u672C`;
+    case "asset.replaceSvg":
+      return `\u2713 \u5DF2\u66FF\u6362\u7D20\u6750\u5185\u5BB9\uFF08${d2.width ?? "?"}\xD7${d2.height ?? "?"}\uFF09`;
+    case "asset.remove":
+      return `\u2713 \u5DF2\u5220\u9664\u7D20\u6750\u300C${d2.name ?? ""}\u300D`;
+    case "style.clear":
+      return `\u2713 \u5DF2\u6E05\u9664 ${d2.element ?? "\u5143\u7D20"} \u7684\u6837\u5F0F\u8986\u76D6`;
+    default:
+      return `\u2713 \u5DF2\u66F4\u65B0 ${d2.element ?? "\u5143\u7D20"}${d2.overrides ? `\uFF1A${Object.keys(d2.overrides).join(", ")}` : ""}`;
+  }
+}
+async function sendLiveCommand(base, type, payload, sessionId, current) {
   const queued = await bridgeFetch(`${base}/command`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -20400,23 +20469,7 @@ async function runLive(flags) {
     if (response.status === 200) {
       const outcome = await response.json();
       if (outcome.ok === false) throw new CliError(outcome.code || "STUDIO_ERROR", outcome.error, { commandId: id2 });
-      const status = save ? "written" : reload ? "reloaded" : review ? "reviewed" : select ? "selected" : add ? "added" : "applied";
-      success(status, outcome.result, () => {
-        const data = outcome.result;
-        if (save) console.log(`\u2713 \u5DF2\u4FDD\u5B58 ${data.file}${data.dirty ? "\uFF0C\u4FDD\u5B58\u671F\u95F4\u6709\u65B0\u7684\u672A\u4FDD\u5B58\u6539\u52A8" : ""}`);
-        else if (reload) console.log(`\u2713 \u5DF2\u91CD\u65B0\u8F7D\u5165 ${data.file}\uFF08${data.assets} \u4E2A\u7D20\u6750\uFF09`);
-        else if (review) console.log(`${data.assetName}\uFF1A${data.gate} \xB7 ${data.counts.FAIL} \u786C\u4F24 / ${data.counts.WARN} \u63D0\u793A`);
-        else if (select) console.log(`\u2713 \u5DF2\u9009\u4E2D ${data.selection?.elementId || data.selection?.assetId || "\u7D20\u6750"}`);
-        else if (add) console.log(`\u2713 \u5DF2\u6DFB\u52A0 ${data.name} (${data.asset}) ${data.width}\xD7${data.height}`);
-        else if (listVersions) console.log(data.versions?.length ? JSON.stringify(data.versions, null, 2) : "\u8FD9\u4E2A\u7D20\u6750\u8FD8\u6CA1\u6709\u7248\u672C\u8BB0\u5F55");
-        else if (merge) console.log(`\u2713 \u5DF2\u5E76\u5165 ${data.merged} \u4E2A\u7248\u672C\uFF0C\u5F53\u524D\u6700\u9AD8 v${data.index}`);
-        else if (replace) console.log(`\u2713 \u5DF2\u66FF\u6362\u7D20\u6750\u5185\u5BB9\uFF08${data.width}\xD7${data.height}\uFF09`);
-        else if (remove) console.log(`\u2713 \u5DF2\u5220\u9664\u7D20\u6750\u300C${data.name}\u300D`);
-        else if (restoreVersion) console.log(`\u2713 \u5DF2\u6062\u590D\u5230 ${restoreVersion}\uFF08${data.width}\xD7${data.height}\uFF09`);
-        else if (deleteVersions) console.log(`\u2713 \u5DF2\u5220\u9664 ${data.removed} \u4E2A\u7248\u672C`);
-        else console.log(`\u2713 ${data.element} \u2190 ${JSON.stringify(data.overrides ?? null)}`);
-      });
-      return;
+      return outcome.result;
     }
     if (response.status !== 204) break;
     await sleep2(120);
@@ -20457,6 +20510,22 @@ Studio \u9ED8\u8BA4\u8FDE\u63A5\u672C\u673A 7350 \u7AEF\u53E3\uFF1B\u5982\u679C\
     return;
   }
   if (cmd === "context") return readContext(flags);
+  if (cmd === "version") {
+    const sub = file || "list";
+    const target = str(flags, "asset");
+    if (!target) usage("version \u9700\u8981 --asset \u6307\u5B9A\u7D20\u6750");
+    if (sub === "list") flags.versions = true;
+    else if (sub === "restore") {
+      const id2 = str(flags, "id");
+      if (!id2) usage("version restore \u9700\u8981 --id <\u7248\u672C id>");
+      flags.restore = id2;
+    } else if (sub === "delete") {
+      const ids = str(flags, "ids");
+      if (!ids) usage("version delete \u9700\u8981 --ids <\u7248\u672C id,...>");
+      flags["delete-versions"] = ids;
+    } else usage("version \u652F\u6301 list / restore / delete");
+    return runLive(flags);
+  }
   if (cmd === "live") return runLive(flags);
   if (cmd === "init") {
     const target = file || str(flags, "project");
@@ -20574,7 +20643,8 @@ Studio \u9ED8\u8BA4\u8FDE\u63A5\u672C\u673A 7350 \u7AEF\u53E3\uFF1B\u5982\u679C\
     return;
   }
   const { project, snapshot } = readProjectFile(file);
-  const asset = str(flags, "asset") || "";
+  const batchAssets = (str(flags, "assets") || "").split(",").map((v2) => v2.trim()).filter(Boolean);
+  const asset = str(flags, "asset") || batchAssets[0] || "";
   const group = str(flags, "group") || "";
   const element = str(flags, "element") || "";
   let ops;

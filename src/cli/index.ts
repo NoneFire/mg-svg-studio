@@ -24,6 +24,7 @@ const HELP = `mgsvg — MG SVG Studio 项目文件工具（Agent 可直接改文
   mgsvg review <project> [--asset <id|name>] [--json] [--run] [--write]
   mgsvg review <project> --agent-prompt --asset <id|name> [--app <url>] [--project-url <path>]
   mgsvg review <project> --agent-result <file|-> --asset <id|name> (--write | --dry-run)
+  mgsvg version list|restore|delete --asset <id> (--session <id> | --current) [--id v] [--ids v,v]
   mgsvg bridge  [--port 7350]                  开本地选择桥（Agent 用它看你在选什么）
   mgsvg context [--bridge 7350] [--session <id>] [--wait 30] [--after <selectionId>] [--json]
   mgsvg live    [--bridge 7350] (--session <id> | --current) [--asset <id>] [--element <id>]
@@ -174,7 +175,8 @@ async function runLive(flags: Flags) {
   const sessionId = str(flags, 'session')
   const current = flags.current === true
   if (Boolean(sessionId) === current) usage('请使用 --session <id> 锁定目标，或显式传 --current')
-  const asset = str(flags, 'asset')
+  const batchAssets = (str(flags, 'assets') || '').split(',').map((v) => v.trim()).filter(Boolean)
+  const asset = str(flags, 'asset') || batchAssets[0]
   const element = str(flags, 'element')
   const select = str(flags, 'select')
   const set = Boolean(flags.set)
@@ -191,7 +193,7 @@ async function runLive(flags: Flags) {
   const deleteVersions = str(flags, 'delete-versions')
   if (merge && (!asset || add)) usage('--merge 需要 --asset 指定目标素材')
   const name = str(flags, 'name')
-  if ([set, clear, save, reload, review, Boolean(select), Boolean(add), Boolean(merge), Boolean(replace && asset), Boolean(remove && asset), Boolean(listVersions && asset), Boolean(restoreVersion && asset), Boolean(deleteVersions && asset)].filter(Boolean).length !== 1) {
+  if ([set, clear, save, reload, review, Boolean(select), Boolean(add), Boolean(merge), Boolean(replace), Boolean(remove), Boolean(listVersions && asset), Boolean(restoreVersion && asset), Boolean(deleteVersions && asset)].filter(Boolean).length !== 1) {
     usage('请选择一种操作：--set、--clear、--select、--add、--save、--reload 或 --review')
   }
   if (sessionId && (set || clear) && (!asset || !element)) usage('锁定实时修改时需要 --asset 和 --element')
@@ -238,6 +240,69 @@ async function runLive(flags: Flags) {
 
   const port = portOf(flags, 'bridge', 7350)
   const base = `http://127.0.0.1:${port}`
+  const multi = (str(flags, 'assets') || '')
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean)
+  const targets = multi.length ? multi : (asset ? [asset] : [])
+  if (!targets.length) {
+    const result = await sendLiveCommand(base, type, payload, sessionId, current)
+    if (flags.json) console.log(JSON.stringify(result, null, 2))
+    else console.log(describeLiveResult(type, result, { add, replace, remove, merge, restoreVersion, deleteVersions }))
+    return
+  }
+  const collected: unknown[] = []
+  for (const target of targets) {
+    const result = await sendLiveCommand(base, type, { ...payload, asset: target }, sessionId, current)
+    collected.push(result)
+    if (!flags.json) console.log(describeLiveResult(type, result, { add, replace, remove, merge, restoreVersion, deleteVersions }))
+  }
+  if (flags.json) console.log(JSON.stringify(collected.length === 1 ? collected[0] : collected, null, 2))
+}
+
+
+function describeLiveResult(type: BridgeCommand['type'], raw: unknown, flags: Record<string, unknown>): string {
+  const d = (raw ?? {}) as Record<string, any>
+  switch (type) {
+    case 'save':
+      return `✓ 已保存 ${d.file ?? ''}${d.dirty ? '，保存期间有新的未保存改动' : ''}`
+    case 'project.reload':
+      return `✓ 已重新载入 ${d.file ?? ''}（${d.assets ?? 0} 个素材）`
+    case 'review':
+      return `${d.assetName ?? d.asset ?? ''}：${d.gate ?? '?'} · ${d.counts?.FAIL ?? 0} 硬伤 / ${d.counts?.WARN ?? 0} 提示`
+    case 'select':
+      return `✓ 已选中 ${d.selection?.elementId || d.selection?.assetId || '素材'}`
+    case 'asset.add':
+      return `✓ 已添加 ${d.name ?? ''}（${d.asset ?? ''}）${d.width ?? '?'}×${d.height ?? '?'}`
+    case 'asset.versions':
+      return d.versions?.length
+        ? (d.versions as any[]).map((v) => `v${v.index}  ${v.createdAt ? new Date(v.createdAt).toLocaleString() : ''}  ${v.bytes ?? ''}B`).join('\n')
+        : '这个素材还没有版本记录'
+    case 'asset.mergeVersions':
+      return `✓ 已并入 ${d.merged ?? 0} 个版本，当前最高 v${d.index ?? '?'}`
+    case 'asset.restoreVersion':
+      return `✓ 已恢复到 v${d.index ?? '?'}（${d.width ?? '?'}×${d.height ?? '?'}）`
+    case 'asset.deleteVersions':
+      return `✓ 已删除 ${d.removed ?? 0} 个版本`
+    case 'asset.replaceSvg':
+      return `✓ 已替换素材内容（${d.width ?? '?'}×${d.height ?? '?'}）`
+    case 'asset.remove':
+      return `✓ 已删除素材「${d.name ?? ''}」`
+    case 'style.clear':
+      return `✓ 已清除 ${d.element ?? '元素'} 的样式覆盖`
+    default:
+      return `✓ 已更新 ${d.element ?? '元素'}${d.overrides ? `：${Object.keys(d.overrides).join(', ')}` : ''}`
+  }
+}
+
+
+async function sendLiveCommand(
+  base: string,
+  type: BridgeCommand['type'],
+  payload: BridgeCommand['payload'],
+  sessionId: string | undefined,
+  current: boolean,
+): Promise<unknown> {
   const queued = await bridgeFetch(`${base}/command`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -251,23 +316,7 @@ async function runLive(flags: Flags) {
     if (response.status === 200) {
       const outcome = await response.json() as BridgeResult
       if (outcome.ok === false) throw new CliError(outcome.code || 'STUDIO_ERROR', outcome.error, { commandId: id })
-      const status = save ? 'written' : reload ? 'reloaded' : review ? 'reviewed' : select ? 'selected' : add ? 'added' : 'applied'
-      success(status, outcome.result, () => {
-        const data = outcome.result as Record<string, any>
-        if (save) console.log(`✓ 已保存 ${data.file}${data.dirty ? '，保存期间有新的未保存改动' : ''}`)
-        else if (reload) console.log(`✓ 已重新载入 ${data.file}（${data.assets} 个素材）`)
-        else if (review) console.log(`${data.assetName}：${data.gate} · ${data.counts.FAIL} 硬伤 / ${data.counts.WARN} 提示`)
-        else if (select) console.log(`✓ 已选中 ${data.selection?.elementId || data.selection?.assetId || '素材'}`)
-        else if (add) console.log(`✓ 已添加 ${data.name} (${data.asset}) ${data.width}×${data.height}`)
-        else if (listVersions) console.log((data.versions as unknown[])?.length ? JSON.stringify(data.versions, null, 2) : '这个素材还没有版本记录')
-        else if (merge) console.log(`✓ 已并入 ${data.merged} 个版本，当前最高 v${data.index}`)
-        else if (replace) console.log(`✓ 已替换素材内容（${data.width}×${data.height}）`)
-        else if (remove) console.log(`✓ 已删除素材「${data.name}」`)
-        else if (restoreVersion) console.log(`✓ 已恢复到 ${restoreVersion}（${data.width}×${data.height}）`)
-        else if (deleteVersions) console.log(`✓ 已删除 ${data.removed} 个版本`)
-        else console.log(`✓ ${data.element} ← ${JSON.stringify(data.overrides ?? null)}`)
-      })
-      return
+      return outcome.result
     }
     if (response.status !== 204) break
     await sleep(120)
@@ -309,6 +358,23 @@ Studio 默认连接本机 7350 端口；如果刚启动桥，请刷新 Studio �
     return
   }
   if (cmd === 'context') return readContext(flags)
+  if (cmd === 'version') {
+    // 版本子命令：把 list/restore/delete 翻译成 live 的等价参数，复用同一套发送逻辑
+    const sub = file || 'list'
+    const target = str(flags, 'asset')
+    if (!target) usage('version 需要 --asset 指定素材')
+    if (sub === 'list') (flags as Record<string, unknown>).versions = true
+    else if (sub === 'restore') {
+      const id = str(flags, 'id')
+      if (!id) usage('version restore 需要 --id <版本 id>')
+      ;(flags as Record<string, unknown>).restore = id
+    } else if (sub === 'delete') {
+      const ids = str(flags, 'ids')
+      if (!ids) usage('version delete 需要 --ids <版本 id,...>')
+      ;(flags as Record<string, unknown>)['delete-versions'] = ids
+    } else usage('version 支持 list / restore / delete')
+    return runLive(flags)
+  }
   if (cmd === 'live') return runLive(flags)
 
   if (cmd === 'init') {
@@ -411,7 +477,8 @@ Studio 默认连接本机 7350 端口；如果刚启动桥，请刷新 Studio �
   }
 
   const { project, snapshot } = readProjectFile(file)
-  const asset = str(flags, 'asset') || ''
+  const batchAssets = (str(flags, 'assets') || '').split(',').map((v) => v.trim()).filter(Boolean)
+  const asset = str(flags, 'asset') || batchAssets[0] || ''
   const group = str(flags, 'group') || ''
   const element = str(flags, 'element') || ''
   let ops: ProjectOp[]
