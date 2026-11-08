@@ -26,7 +26,7 @@ export interface OpResult {
 export type ProjectOp =
   | { op: 'asset.add'; name: string; svg: string; width?: number; height?: number; x?: number; y?: number; id?: string }
   | { op: 'asset.remove'; asset: string }
-  | { op: 'asset.update'; asset: string; patch: Partial<Pick<Asset, 'name' | 'x' | 'y' | 'width' | 'height'>> }
+  | { op: 'asset.update'; asset: string; patch: Partial<Pick<Asset, 'name' | 'x' | 'y' | 'width' | 'height' | 'svg'>> }
   | { op: 'board.move'; asset: string; x: number; y: number }
   | { op: 'anim.set'; asset: string; group: AnimGroup }
   | { op: 'anim.update'; asset: string; group: string; patch: Partial<AnimGroup> }
@@ -103,6 +103,8 @@ export function stripRuntime(asset: Asset): Asset {
     kind: rest.kind,
     groups: rest.groups || [],
     elements: rest.elements || [],
+    videoCopy: rest.videoCopy ?? '',
+    voiceoverAudio: rest.voiceoverAudio,
     overrides: rest.overrides || {},
     layouts: rest.layouts || {},
     warnings: rest.warnings || [],
@@ -111,6 +113,8 @@ export function stripRuntime(asset: Asset): Asset {
     y: rest.y ?? 0,
     createdAt: rest.createdAt || Date.now(),
     review: rest.review,
+    agentReview: rest.agentReview,
+    variantOf: rest.variantOf,
     version: 1,
   }
 }
@@ -145,6 +149,8 @@ export function normalizeAsset(a: any): Asset {
     kind: groups.length ? 'animated' : 'static',
     groups,
     elements: Array.isArray(a.elements) ? a.elements : [],
+    videoCopy: typeof a.videoCopy === 'string' ? a.videoCopy : '',
+    voiceoverAudio: typeof a.voiceoverAudio === 'string' ? a.voiceoverAudio : undefined,
     overrides: a.overrides && typeof a.overrides === 'object' ? a.overrides : {},
     layouts: a.layouts && typeof a.layouts === 'object' ? a.layouts : {},
     warnings: Array.isArray(a.warnings) ? a.warnings : [],
@@ -153,6 +159,8 @@ export function normalizeAsset(a: any): Asset {
     y: Number(a.y) || 0,
     createdAt: Number(a.createdAt) || Date.now(),
     review: a.review && typeof a.review === 'object' ? a.review : undefined,
+    agentReview: a.agentReview && typeof a.agentReview === 'object' ? a.agentReview : undefined,
+    variantOf: typeof a.variantOf === 'string' ? a.variantOf : undefined,
     version: 1,
   }
 }
@@ -216,7 +224,17 @@ function applyOne(project: ProjectFile, op: ProjectOp): string {
     }
     case 'asset.update': {
       const asset = findAsset(project, op.asset)
-      Object.assign(asset, op.patch)
+      const { svg, ...fields } = op.patch
+      if (svg !== undefined) {
+        if (typeof svg !== 'string' || !svg.trim()) throw new Error('asset.update 的 svg 必须是非空字符串')
+        const doc = parseSvgDocument(svg)
+        asset.svg = svg
+        asset.width = doc.width || asset.width
+        asset.height = doc.height || asset.height
+        asset.elements = elementIndexOf(doc)
+        asset.warnings = doc.warnings
+      }
+      Object.assign(asset, fields)
       return `更新素材 ${asset.id}：${Object.keys(op.patch).join(', ')}`
     }
     case 'board.move': {

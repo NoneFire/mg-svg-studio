@@ -1,6 +1,6 @@
 import type { Asset } from '../../types'
-import { convertSvg, elementBaseMatrix } from '../convert'
-import { layoutContainer } from '../layout/apply'
+import { convertSvg } from '../convert'
+import { applyAssetLayouts } from '../layout/apply'
 import { AssetPlayer } from '../runtime'
 import { parseSvgDocument } from '../svg-doc'
 import type { Snapshot } from './snapshot'
@@ -28,12 +28,7 @@ export function applyStudioFrame(snap: Snapshot, asset: Asset, ids: Map<string, 
     }
   }
 
-  for (const [id, spec] of Object.entries(asset.layouts || {})) {
-    const container = converted.elements.get(id)
-    if (!container) continue
-    layoutContainer(container, spec)
-    for (const child of container.children) child.wrapper.setTransform(elementBaseMatrix(child), false)
-  }
+  applyAssetLayouts(converted, asset.layouts)
 
   if (player.groups.length) player.render(Math.min(player.duration * frame, player.lastFrameTime))
   for (const element of [snap.svg, ...Array.from(snap.svg.querySelectorAll<SVGElement>('*'))]) {

@@ -35,11 +35,19 @@ r = solveLayout(items, { mode: 'column', gap: 8, alignX: 'end', width: 200 })
 check('column stacks', r.boxes[0].y === 0 && r.boxes[1].y === 48, r.boxes)
 check('column align end', r.boxes.every((b) => Math.abs(b.x + b.width - 200) < 0.001), r.boxes)
 
+r = solveLayout(items, { mode: 'column', gap: 8, width: 400, justify: 'end' })
+check('column width does not move items vertically', r.boxes.map((b) => b.y).join(',') === '0,48,136,174', r.boxes)
+check('column height measures the stack', r.height === 214, r)
+
 // grid
 r = solveLayout(items, { mode: 'grid', cols: 2, gap: 10, rowGap: 10, width: 210, alignX: 'center', alignY: 'center' })
 check('grid cols + centering', r.boxes[0].x === 0 && r.boxes[1].x === 130, r.boxes)
 check('grid second row', r.boxes[2].y === 95 && r.boxes[3].y === 90, r.boxes)
 check('grid row height max', r.boxes[2].width === 80, r.boxes)
+
+r = solveLayout(items.slice(0, 2), { mode: 'grid', cols: 2, gap: 10, width: 100 })
+check('narrow grid preserves the gap and reports required width',
+  r.boxes[1].x - (r.boxes[0].x + r.boxes[0].width) === 10 && r.width === 210, r)
 
 // free
 r = solveLayout([{ id: 'x', width: 10, height: 10, x: 5, y: 7 }], { mode: 'free' })

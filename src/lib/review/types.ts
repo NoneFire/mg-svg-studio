@@ -80,6 +80,9 @@ export interface QvElement {
   fill?: string
   align?: string
   charCount?: number
+  /** 位图原始像素宽高（仅 data URI 的 PNG/JPEG 可读） */
+  imgW?: number
+  imgH?: number
   /** class 第一个 token，作为“同类”判据 */
   role?: string
   /** 最近的祖先组 id */
@@ -238,7 +241,7 @@ export interface ReviewReport {
   }
 }
 
-/** 存进项目文件的评审快照：只留非 PASS 的明细，够 Agent 直接读 */
+/** 存进项目文件的规则评审快照，保留正例、反例与未测项 */
 export interface ReviewSnapshot {
   inputHash: string
   options: ReviewOptions
@@ -247,7 +250,26 @@ export interface ReviewSnapshot {
   gate: GateVerdict
   counts: ReviewReport['counts']
   coverage: { measured: number; total: number; counts: Record<string, number> }
+  /** 全部规则结果：PASS 可作为正例，FAIL/WARN 可作为反例，未测仍明确保留。 */
   findings: Finding[]
+}
+
+export type AgentResultKind = 'positive' | 'negative' | 'unmeasured'
+
+export interface AgentReviewResult {
+  ruleId: string
+  result: AgentResultKind
+  reason: string
+  elementId?: string
+  bbox?: [number, number, number, number]
+}
+
+/** Agent 语义评审独立保存、独立过期，不混入公式规则闸门。 */
+export interface AgentReviewSnapshot {
+  inputHash: string
+  options: ReviewOptions
+  generatedAt: string
+  results: AgentReviewResult[]
 }
 
 export interface GridInfo {

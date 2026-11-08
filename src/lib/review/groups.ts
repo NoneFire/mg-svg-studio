@@ -80,6 +80,14 @@ const RULE_GROUP: Record<string, GroupId> = {
 const PRINCIPLE_GROUP: Record<string, GroupId> = {
   对比: 'contrast',
   可读性: 'type',
+  // 正反例表用的原则名
+  可读性与可辨识性: 'type',
+  亲密: 'layout',
+  格式塔: 'layout',
+  信息组织: 'layout',
+  平衡与比例: 'layout',
+  重复: 'consistency',
+  交付检查: 'delivery',
   视觉层次: 'type',
   统一与多样: 'contrast',
   对齐: 'layout',

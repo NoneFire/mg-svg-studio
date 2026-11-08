@@ -28,20 +28,20 @@ export default function TopBar({ studio }: { studio: Studio | null }) {
         <button
           id="library-toggle"
           className="tool-btn sidebar-toggle"
-          aria-label="素材库"
+          aria-label={store.leftOpen ? '收起素材与图层' : '展开素材与图层'}
           aria-controls="library"
           aria-expanded={store.leftOpen}
           onClick={() => store.setLeftOpen(!store.leftOpen)}
-          title={store.leftOpen ? '收起素材库' : '展开素材库'}
+          title={store.leftOpen ? '收起素材与图层' : '展开素材与图层'}
         >
           <Icon name="panelLeft" size={15} />
-          <span>素材库</span>
+          <span>素材</span>
         </button>
         <ProjectMenu />
       </div>
 
       <div className="topbar-center">
-        <div className="segmented" role="group" aria-label="全部动画">
+        <div className="segmented playback-controls" role="group" aria-label="全局播放控制">
           <button
             className="play-all"
             onClick={() => studio?.play(undefined, { restart: true })}
@@ -50,20 +50,23 @@ export default function TopBar({ studio }: { studio: Studio | null }) {
             title="从头播放全部动画"
           >
             <Icon name="play" size={13} />
-            <span>播放全部</span>
+            <span>播放</span>
           </button>
           <button onClick={() => studio?.showLastFrames()} disabled={!hasAnimations} aria-label="全部末帧" title="暂停全部动画并查看各自的末帧">
             <Icon name="skipForward" size={14} />
-            <span>全部末帧</span>
+            <span>末帧</span>
           </button>
           <button
             onClick={() => {
-              store.setLoop(!store.loop)
-              studio?.setLoop(store.loop)
+              const nextLoop = !store.loop
+              store.setLoop(nextLoop)
+              studio?.setLoop(nextLoop)
             }}
             className={store.loop ? 'active' : ''}
             aria-pressed={store.loop}
-            title="全局循环播放"
+            aria-label="循环播放"
+            disabled={!hasAnimations}
+            title={hasAnimations ? `循环播放已${store.loop ? '开启' : '关闭'}：${store.loop ? '播放结束后自动重播' : '播放结束后停止'}` : '没有可播放的动画'}
           >
             <Icon name="loop" size={13} />
             <span>循环</span>
@@ -73,10 +76,6 @@ export default function TopBar({ studio }: { studio: Studio | null }) {
 
       <div className="topbar-right">
         <CanvasViewControls studio={studio} />
-        <Button className="topbar-arrange" variant="ghost" size="sm" onClick={() => store.relayout()} title="按网格重新排列素材">
-          <Icon name="layers" size={14} />
-          <span>整理</span>
-        </Button>
         <div className="divider" />
         <Button
           variant="ghost"
@@ -94,14 +93,13 @@ export default function TopBar({ studio }: { studio: Studio | null }) {
         <button
           id="inspector-toggle"
           className="tool-btn sidebar-toggle"
-          aria-label="检查器"
           aria-controls="inspector"
           aria-expanded={store.rightOpen}
+          aria-label={store.rightOpen ? '收起检查器' : '打开检查器'}
           onClick={() => store.setRightOpen(!store.rightOpen)}
           title={store.rightOpen ? '收起检查器' : '打开检查器'}
         >
           <Icon name="panelRight" size={15} />
-          <span>检查器</span>
         </button>
       </div>
       {help && <HelpModal onClose={() => setHelp(false)} />}

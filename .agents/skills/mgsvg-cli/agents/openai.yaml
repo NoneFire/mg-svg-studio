@@ -1,0 +1,3 @@
+interface:
+  display_name: "MG SVG Studio CLI"
+  short_description: "使用 mgsvg 命令管理项目文件与实时选区"

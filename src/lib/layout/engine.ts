@@ -35,16 +35,14 @@ export function solveLayout(items: LayoutItem[], specIn: Partial<LayoutSpec> = {
   for (const item of items) {
     const { w, h } = size(item)
     const mainSize = horizontal ? w : h
-    const crossSize = horizontal ? h : w
     const nextMain = current.length ? mainUsed + gap + mainSize : mainSize
-    if (spec.wrap && innerW && horizontal && nextMain > innerW && current.length) {
+    if (spec.wrap && spec.width && horizontal && nextMain > innerW && current.length) {
       lines.push(buildLine(current, mainUsed, size, horizontal))
       current = []
       mainUsed = 0
     }
     current.push(item)
     mainUsed = current.length === 1 ? mainSize : mainUsed + gap + mainSize
-    void crossSize
   }
   if (current.length) lines.push(buildLine(current, mainUsed, size, horizontal))
 
@@ -52,10 +50,10 @@ export function solveLayout(items: LayoutItem[], specIn: Partial<LayoutSpec> = {
   let crossPos = pad
   for (const line of lines) {
     const lineMain = line.main
-    const free = innerW ? innerW - lineMain : 0
+    const free = horizontal ? innerW - lineMain : 0
     let offset = 0
     let extraGap = 0
-    if (innerW > 0 && free > 0) {
+    if (free > 0) {
       if (spec.justify === 'center') offset = free / 2
       else if (spec.justify === 'end') offset = free
       else if (spec.justify === 'between' && line.items.length > 1) extraGap = free / (line.items.length - 1)
@@ -65,7 +63,7 @@ export function solveLayout(items: LayoutItem[], specIn: Partial<LayoutSpec> = {
       const { w, h } = size(item)
       const crossSize = horizontal ? h : w
       const mainSize = horizontal ? w : h
-      const crossContainer = horizontal ? line.cross : innerW || line.cross
+      const crossContainer = horizontal ? line.cross : Math.max(innerW, line.cross)
       const crossOffset = alignOffset(crossContainer, crossSize, spec[horizontal ? 'alignY' : 'alignX'])
       if (horizontal) {
         boxes.push({ id: item.id, x: cursor, y: crossPos + crossOffset, width: w, height: h })
@@ -77,8 +75,8 @@ export function solveLayout(items: LayoutItem[], specIn: Partial<LayoutSpec> = {
     crossPos += line.cross + rowGap
   }
 
-  const contentW = innerW ? innerW + pad * 2 : Math.max(0, ...boxes.map((b) => b.x + b.width)) + pad
-  const contentH = lines.length ? crossPos - rowGap + pad : pad * 2
+  const contentW = Math.max(spec.width ?? 0, Math.max(pad, ...boxes.map((b) => b.x + b.width)) + pad)
+  const contentH = Math.max(pad, ...boxes.map((b) => b.y + b.height)) + pad
   return { boxes, width: contentW, height: contentH }
 }
 
@@ -111,7 +109,7 @@ function solveGrid(
 ): LayoutResult {
   const cols = Math.max(1, Math.floor(spec.cols || 1))
   const maxItemW = Math.max(1, ...items.map((i) => size(i).w))
-  const colW = innerW ? Math.max(1, (innerW - gap * (cols - 1)) / cols) : maxItemW
+  const colW = Math.max(maxItemW, (innerW - gap * (cols - 1)) / cols)
   const rows = Math.ceil(items.length / cols)
   const rowHeights: number[] = []
   for (let r = 0; r < rows; r++) {
@@ -132,7 +130,7 @@ function solveGrid(
       height: h,
     }
   })
-  const width = innerW ? innerW + pad * 2 : pad * 2 + cols * colW + gap * (cols - 1)
+  const width = pad * 2 + cols * colW + gap * (cols - 1)
   const height = pad * 2 + rowHeights.reduce((s, v) => s + v, 0) + rowGap * Math.max(0, rows - 1)
   return { boxes, width, height }
 }

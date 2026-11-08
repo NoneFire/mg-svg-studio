@@ -53,6 +53,43 @@ const round = (v: number) => Math.round(v * 100) / 100
 const groupIdCache = new WeakMap<Element, string>()
 let groupSeq = 0
 
+
+/** 从 data URI 的 PNG/JPEG 头部读原始宽高；读不到返回 null */
+function dataUriImageSize(href: string): { w: number; h: number } | null {
+  const m = /^data:image\/(png|jpe?g);base64,([\s\S]+)$/i.exec(href)
+  if (!m) return null
+  let bin: string
+  try {
+    bin = atob(m[2].slice(0, 8192))
+  } catch {
+    return null
+  }
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  if (m[1].toLowerCase() === 'png') {
+    if (bytes.length < 24) return null
+    const w = (bytes[16] << 24) | (bytes[17] << 16) | (bytes[18] << 8) | bytes[19]
+    const h = (bytes[20] << 24) | (bytes[21] << 16) | (bytes[22] << 8) | bytes[23]
+    return w > 0 && h > 0 ? { w, h } : null
+  }
+  let i = 2
+  while (i + 9 < bytes.length) {
+    if (bytes[i] !== 0xff) {
+      i++
+      continue
+    }
+    const marker = bytes[i + 1]
+    if (marker >= 0xc0 && marker <= 0xc3) {
+      const h = (bytes[i + 5] << 8) | bytes[i + 6]
+      const w = (bytes[i + 7] << 8) | bytes[i + 8]
+      return w > 0 && h > 0 ? { w, h } : null
+    }
+    const len = (bytes[i + 2] << 8) | bytes[i + 3]
+    i += 2 + len
+  }
+  return null
+}
+
 const SHAPE_TAGS = new Set(['rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon', 'path', 'image'])
 
 /**
@@ -205,10 +242,12 @@ export function extractBoxes(snap: Snapshot): BoxesResult {
 
     const kind: QvElement['kind'] = tag === 'text' ? 'text' : tag === 'image' ? 'image' : 'shape'
 
+    let imgSize: { w: number; h: number } | null = null
     if (tag === 'image') {
       const href = el.getAttribute('href') || el.getAttribute('xlink:href') || (el as SVGImageElement).href?.baseVal || ''
       if (!href.trim()) brokenImages.push(id)
       else if (!/^data:/i.test(href)) unresolvedImages.push(href)
+      else imgSize = dataUriImageSize(href)
     }
 
     const out: QvElement = {
@@ -250,6 +289,10 @@ export function extractBoxes(snap: Snapshot): BoxesResult {
 
     if (tag === 'image') {
       out.text = 'image'
+      if (imgSize) {
+        out.imgW = imgSize.w
+        out.imgH = imgSize.h
+      }
     }
     out.visible = visible
     ctx.elements.push(out)

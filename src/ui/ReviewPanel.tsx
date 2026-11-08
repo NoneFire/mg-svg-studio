@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { store } from '../store'
 import type { Asset } from '../types'
 import ReviewAllModal from './ReviewAllModal'
-import type { Studio } from '../lib/studio'
+import type { ReviewMarker, Studio } from '../lib/studio'
 import { Icon } from './Icon'
 import { Toggle } from './controls'
 import {
@@ -13,6 +13,7 @@ import {
   groupDesc,
   groupLabel,
   groupOf,
+  RULES,
   ruleset,
   runReview,
   reviewCache,
@@ -24,19 +25,9 @@ import {
   type ReviewCard,
   type ReviewOptions,
   type ReviewReport,
+  type AgentReviewSnapshot,
 } from '../lib/review'
-
-const GATE_LABEL: Record<ReviewReport['gate'], string> = {
-  BLOCKED: '有硬伤，先别发',
-  REVIEW_NEEDED: '还不算查过，需要复核',
-  DELIVERABLE: '自动项已查完，等人签发',
-}
-
-const GATE_HINT: Record<ReviewReport['gate'], string> = {
-  BLOCKED: '存在 FAIL 级别的判定，修完再重跑',
-  REVIEW_NEEDED: '有未测或未实现的规则，不能当通过',
-  DELIVERABLE: '没有 FAIL 与未测，但工具不签发通过',
-}
+import { agentReviewRules, type AgentReviewResult } from '../lib/review/agent'
 
 const STATUS_LABEL: Record<CoverageRow['status'], string> = {
   measured: '已测',
@@ -67,10 +58,11 @@ export default function ReviewPanel({ asset, studio }: { asset: Asset; studio: S
   const [batchProgress, setBatchProgress] = useState<{ done: number; total: number } | null>(null)
   const [showAll, setShowAll] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [showOpts, setShowOpts] = useState(false)
   const [showCoverage, setShowCoverage] = useState(false)
   const [filter, setFilter] = useState<'all' | CoverageRow['status']>('all')
   const [principle, setPrinciple] = useState<string | null>(null)
+  const [reviewMode, setReviewMode] = useState<'rules' | 'agent'>('rules')
+  const [agentResults, setAgentResults] = useState<AgentReviewResult[]>([])
   const [raster, setRaster] = useState<{ cols: number; gutter: number; margin: number }>(() => {
     try {
       const raw = localStorage.getItem('mg-raster')
@@ -134,18 +126,41 @@ export default function ReviewPanel({ asset, studio }: { asset: Asset; studio: S
   useEffect(() => {
     if (lastAsset.current === asset.id) return
     lastAsset.current = asset.id
+    // 只审设计稿本身：固定屏幕口径、按画布 1:1 换算字号，不继承历史投放参数
     const opts: ReviewOptions = { medium: 'ui', displayWidth: Math.round(asset.width), frame: 1 }
     setOptions(opts)
     setPrinciple(null)
+    setAgentResults([])
     store.setReviewFocus(null)
-    const cached = reviewCache.get(asset.id)
+    const previous = reviewCache.get(asset.id)
+    const cached = previous?.inputHash === reviewInputHash(asset, opts) ? previous : undefined
     setReport(cached || null)
     if (!cached) void runWith(opts, asset)
   }, [asset.id, asset.width, runWith, asset])
 
   const hash = reviewInputHash(asset, options)
   const stale = !!report && report.inputHash !== hash
-  const firstRun = !report && !busy
+
+  useEffect(() => {
+    const saved = asset.agentReview
+    setAgentResults(saved?.inputHash === hash ? saved.results : [])
+  }, [asset.id, asset.agentReview, hash])
+
+  const agentResultsStale = !!asset.agentReview && asset.agentReview.inputHash !== hash
+  const saveAgentResults = useCallback((results: AgentReviewResult[]) => {
+    setAgentResults(results)
+    if (!results.length) {
+      store.setAssetAgentReview(asset.id, undefined)
+      return
+    }
+    const snapshot: AgentReviewSnapshot = {
+      inputHash: hash,
+      options: { ...options },
+      generatedAt: new Date().toISOString(),
+      results,
+    }
+    store.setAssetAgentReview(asset.id, snapshot)
+  }, [asset.id, hash, options])
 
   const t = report
   const counts = t?.counts || { FAIL: 0, WARN: 0, PASS: 0, UNMEASURED: 0 }
@@ -222,37 +237,78 @@ export default function ReviewPanel({ asset, studio }: { asset: Asset; studio: S
     } catch {}
   }, [raster])
 
-  /* 画布标注：只放「有元素框」的判定，画布级的判定标不上去，单独说明 */
-  const markers = t
-    ? (() => {
-        const seen = new Set<string>()
-        const list: { id: string; ruleId: string; level: 'FAIL' | 'WARN' | 'UNMEASURED'; bbox: [number, number, number, number] }[] = []
-        for (const f of t.findings) {
-          if (f.level === 'PASS') continue
-          const bbox = t.boxes[f.element]
-          if (!bbox) continue
-          const key = `${f.ruleId}|${f.element}`
-          if (seen.has(key)) continue
-          seen.add(key)
-          list.push({ id: key, ruleId: f.ruleId, level: f.level, bbox })
+  const markers = useMemo<ReviewMarker[]>(() => {
+    if (!t) return []
+    const severity: Record<ReviewMarker['level'], number> = { FAIL: 0, WARN: 1, UNMEASURED: 2, PASS: 3 }
+    // 一个元素只出一个标注：取最严重的规则，其余条数并进标签
+    const byElement = new Map<string, ReviewMarker>()
+    const grouped = new Map<string, { ruleId: string; level: ReviewMarker['level']; bbox: ReviewMarker['bbox']; count: number }>()
+    for (const f of t.findings) {
+      if (f.level !== 'FAIL' && f.level !== 'WARN') continue
+      const bbox = t.boxes[f.element]
+      if (!bbox) {
+        // 整页属性（字号档位、色彩预算等）没有元素框：贴到画布左上角，每条单独一个标签
+        const title = RULES[f.ruleId]?.title ?? '评审'
+        byElement.set(`canvas|${f.ruleId}`, {
+          id: `canvas|${f.ruleId}`,
+          ruleId: f.ruleId,
+          label: title,
+          level: f.level,
+          bbox: [0, 0, 0, 0],
+        })
+        continue
+      }
+      const previous = grouped.get(f.element)
+      if (!previous) {
+        grouped.set(f.element, { ruleId: f.ruleId, level: f.level, bbox, count: 1 })
+      } else {
+        previous.count += 1
+        if (severity[f.level] < severity[previous.level]) {
+          previous.level = f.level
+          previous.ruleId = f.ruleId
         }
-        return list
-      })()
-    : []
+      }
+    }
+    for (const [element, item] of grouped) {
+      const title = RULES[item.ruleId]?.title ?? '评审'
+      byElement.set(`el|${element}`, {
+        id: `el|${element}`,
+        ruleId: item.ruleId,
+        label: item.count > 1 ? `${title} +${item.count - 1}` : title,
+        level: item.level,
+        bbox: item.bbox,
+      })
+    }
+    for (const result of agentResults) {
+      if (result.result !== 'negative') continue
+      const bbox = result.bbox || (result.elementId ? t.boxes[result.elementId] : undefined)
+      if (!bbox) continue
+      byElement.set(`agent|${result.ruleId}`, {
+        id: `agent|${result.ruleId}`,
+        ruleId: result.ruleId,
+        label: RULES[result.ruleId]?.title ?? '语义评审',
+        level: result.result === 'negative' ? 'FAIL' : 'UNMEASURED',
+        bbox,
+      })
+    }
+    return [...byElement.values()]
+  }, [t, agentResults])
   const canvasOnly = t ? t.findings.filter((f) => f.level !== 'PASS' && !t.boxes[f.element]).length : 0
 
   /* 标注口径：开着就全标；关掉时只标「当前选中那张卡」——选评审即上图 */
-  const activeMarkers = overlay ? markers : focus ? markers.filter((m) => m.ruleId === focus) : []
+  const activeMarkers = useMemo(() => overlay ? markers : focus ? markers.filter((m) => m.ruleId === focus) : [], [overlay, markers, focus])
 
   useEffect(() => {
     if (!studio) return
-    if (!t || !activeMarkers.length) {
+    if (t?.assetId !== asset.id || stale || !activeMarkers.length) {
       studio.setReviewMarkers(null, [], null)
       return
     }
+    const board = studio.getBoard(asset.id)
+    if (board?.player.groups.length) studio.seek(asset.id, board.player.lastFrameTime)
     studio.setReviewMarkers(asset.id, activeMarkers, focus)
     return () => studio.setReviewMarkers(null, [], null)
-  }, [studio, t, overlay, focus, asset.id, activeMarkers.length])
+  }, [studio, t, overlay, focus, asset.id, activeMarkers, stale])
 
   const focusRule = (ruleId: string) => {
     // 焦点落在被筛掉的那一类上时，先撤掉筛选，否则看不到卡
@@ -317,6 +373,8 @@ export default function ReviewPanel({ asset, studio }: { asset: Asset; studio: S
       .sort((a, b) => rank(a.worst) - rank(b.worst) || b.findings - a.findings || order(a.gid) - order(b.gid))
   })()
 
+  const semanticRules = agentReviewRules(ruleset.rules)
+
   const copyJson = async () => {
     if (!t) return
     const payload = {
@@ -353,6 +411,32 @@ export default function ReviewPanel({ asset, studio }: { asset: Asset; studio: S
     store.selectElement(asset.id, elementId.split(',')[0].trim())
   }
 
+  if (reviewMode === 'agent') {
+    return (
+      <div className="qv" ref={panelRef}>
+        <div className="qv-mode-tabs" role="tablist" aria-label="评审方式">
+          <button role="tab" aria-selected={false} onClick={() => setReviewMode('rules')}>规则评审</button>
+          <button role="tab" aria-selected="true" className="active">Agent 评审 <span>{semanticRules.length}</span></button>
+        </div>
+        <div className="qv-tools">
+          <Toggle checked={overlay} onChange={(v) => { store.setReviewOverlay(v) }} label="标注" />
+          <span className="spacer" />
+          <button className="qv-link" onClick={copyJson} disabled={!t} title="复制规则评审 JSON">
+            <Icon name="copy" size={11} /> {copied ? '已复制' : 'JSON'}
+          </button>
+        </div>
+        {t && !stale && overlay && <p className="qv-note qv-overlay-note">末帧显示 {markers.length} 处问题标注：红/橙为反例，紫为证据不足。</p>}
+        <AgentReviewPanel
+          asset={asset}
+          rules={semanticRules}
+          results={agentResults}
+          staleResult={agentResultsStale}
+          projectUrl={store.projectUrl}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="qv" ref={panelRef}>
       {showAll && batch && (
@@ -366,67 +450,48 @@ export default function ReviewPanel({ asset, studio }: { asset: Asset; studio: S
           }}
         />
       )}
-      <div className={`qv-gate ${t?.gate || 'idle'}`}>
-        <div className="qv-gate-head">
-          <span className="qv-gate-dot" />
-          <strong role="status">{busy ? '正在测量…' : t ? GATE_LABEL[t.gate] : '尚未评审'}</strong>
-        </div>
-        {t && (
-          <div className="qv-gate-meta">
-            <span className="qv-metric fail">{counts.FAIL} 硬伤</span>
-            <span className="qv-metric warn">{counts.WARN} 提示</span>
-            <span className="qv-metric unknown">{coverage ? coverage.counts.unmeasured || 0 : 0} 未测</span>
-            <span className="qv-metric unknown">
-              {(coverage ? (coverage.counts.not_implemented || 0) + (coverage.counts.not_run || 0) : 0)} 未实现
-            </span>
-            <span className="spacer" />
-            <span className="qv-mono">{coverage ? `已测 ${coverage.measured}/${coverage.total}` : ''}</span>
-          </div>
-        )}
-        {t && <p className="qv-gate-hint">{GATE_HINT[t.gate]}</p>}
-        {firstRun && !error && (
-          <p className="qv-gate-hint">
-            评审当前这一帧：先取每个元素的坐标与字号，再在像素上量对比度，最后按规则阈值判定。
-          </p>
-        )}
-        {error && <p className="qv-gate-hint qv-err">评审失败：{error}</p>}
-        {stale && (
-          <p className="qv-gate-hint qv-warn">画面或选项已更改。点击「重新评审」更新结果。</p>
-        )}
-        <div className="qv-gate-actions">
-          <button className={`qv-btn primary ${busy ? 'busy' : ''}`} onClick={run} disabled={busy || batchBusy} title="测量当前素材">
-            <Icon name={busy ? 'loop' : 'sparkle'} size={12} />
-            {busy ? '测量中' : t ? '重新评审' : '评审当前素材'}
-          </button>
-          <button
-            className={`qv-btn ${batchBusy ? 'busy' : ''}`}
-            onClick={runAll}
-            disabled={batchBusy || busy}
-            title="依次评审所有素材，出一张总表"
-          >
-            <Icon name={batchBusy ? 'loop' : 'layers'} size={12} />
-            {batchBusy && batchProgress ? `${batchProgress.done}/${batchProgress.total}` : '评审全部'}
-          </button>
-        </div>
+      <div className="qv-mode-tabs" role="tablist" aria-label="评审方式">
+        <button role="tab" aria-selected="true" className="active">规则评审 <span>{coverage?.measured || 0}</span></button>
+        <button role="tab" aria-selected={false} onClick={() => setReviewMode('agent')}>Agent 评审 <span>{semanticRules.length}</span></button>
+      </div>
+
+      <div className="qv-actions">
+        <button
+          className={`qv-btn primary ${busy ? 'busy' : ''}`}
+          onClick={run}
+          disabled={busy || batchBusy}
+          title="重跑全部数值规则"
+        >
+          <Icon name={busy ? 'loop' : 'sparkle'} size={12} />
+          {busy ? '测量中' : t ? '重跑规则评审' : '评审当前素材'}
+        </button>
+        <button
+          className={`qv-btn ${batchBusy ? 'busy' : ''}`}
+          onClick={runAll}
+          disabled={batchBusy || busy}
+          title="依次评审所有素材"
+        >
+          <Icon name={batchBusy ? 'loop' : 'layers'} size={12} />
+          {batchBusy && batchProgress ? `${batchProgress.done}/${batchProgress.total}` : '评审全部'}
+        </button>
+        {error && <span className="qv-note qv-err">评审失败：{error}</span>}
+        {!error && stale && <span className="qv-note qv-warn">画面已更改，点「重跑规则评审」更新。</span>}
       </div>
 
       <div className="qv-tools">
-        <button className="qv-link" aria-expanded={showOpts} onClick={() => setShowOpts((v) => !v)}>
-          <Icon name={showOpts ? 'chevronDown' : 'chevron'} size={11} /> 评审口径
-        </button>
-        <span className="spacer" />
-        <Toggle checked={overlay} onChange={(v) => store.setReviewOverlay(v)} label="标注" />
+        <Toggle checked={overlay} onChange={(v) => { store.setReviewOverlay(v) }} label="标注" />
         <Toggle checked={rasterOn} onChange={(v) => store.setReviewRaster(v)} label="栅格" />
+        <span className="spacer" />
         <button className="qv-link" onClick={copyJson} disabled={!t} title="复制评审 JSON">
           <Icon name="copy" size={11} /> {copied ? '已复制' : 'JSON'}
         </button>
       </div>
 
-      {t && (overlay || focus) && (
+      {t && !stale && (overlay || focus) && (
         <p className="qv-note qv-overlay-note">
           {overlay
-            ? `${markers.length} 处已标注到画布，点标注可定位卡片`
-            : `只标注选中的「${focus}」，打开「画布标注」看全部`}
+            ? `末帧显示 ${markers.length} 处问题标注：红/橙为反例，紫为证据不足；点标注可定位`
+            : `末帧标注选中的「${focus}」，开启标注可查看全部`}
           {canvasOnly > 0 ? `；${canvasOnly} 处是画面级判定，没有元素可标` : ''}
         </p>
       )}
@@ -528,61 +593,6 @@ export default function ReviewPanel({ asset, studio }: { asset: Asset; studio: S
         </div>
       )}
 
-      {showOpts && (
-        <div className="qv-opts">
-          <label className="qv-opt">
-            <span>媒介</span>
-            <select
-              className="text-input"
-              value={options.medium}
-              onChange={(e) => setOptions((o) => ({ ...o, medium: e.target.value as ReviewOptions['medium'] }))}
-            >
-              <option value="ui">屏幕 / 视频帧</option>
-              <option value="print">印刷 / 长图</option>
-            </select>
-          </label>
-          <label className="qv-opt">
-            <span>投放宽度</span>
-            <input
-              className="text-input mono"
-              type="number"
-              min={240}
-              value={options.displayWidth ?? ''}
-              onChange={(e) => setOptions((o) => ({ ...o, displayWidth: Number(e.target.value) || undefined }))}
-            />
-          </label>
-          <label className="qv-opt">
-            <span>定格帧</span>
-            <select
-              className="text-input"
-              value={String(options.frame ?? 1)}
-              onChange={(e) => setOptions((o) => ({ ...o, frame: Number(e.target.value) }))}
-            >
-              <option value="0">入场 0%</option>
-              <option value="0.5">中段 50%</option>
-              <option value="1">末帧 100%</option>
-            </select>
-          </label>
-          <label className="qv-opt">
-            <span>字号阶梯</span>
-            <input
-              className="text-input mono"
-              placeholder="留空则不判 TY-04"
-              value={(options.scaleLadder || []).join(',')}
-              onChange={(e) => {
-                const list = e.target.value
-                  .split(/[,，\s]+/)
-                  .map((v) => Number(v))
-                  .filter((v) => Number.isFinite(v) && v > 0)
-                setOptions((o) => ({ ...o, scaleLadder: list.length ? list : undefined }))
-              }}
-            />
-          </label>
-          <p className="qv-note">
-            投放宽度决定字号口径：有效字号 = 声明字号 × 投放宽 ÷ 画布宽。填 1920 就是按 1080p 原尺寸看。
-          </p>
-        </div>
-      )}
 
       {t && violated.length > 0 && (
         <div className="qv-principles">
@@ -658,15 +668,9 @@ export default function ReviewPanel({ asset, studio }: { asset: Asset; studio: S
               覆盖率 {coverage?.measured}/{coverage?.total} 条 · 未测 {coverage?.counts.unmeasured || 0} · 未实现{' '}
               {(coverage?.counts.not_implemented || 0) + (coverage?.counts.not_run || 0)}
             </button>
-            <p className="qv-note">
-              {t.details.texts} 个文字元素 · {t.details.elements} 个元素 · {t.details.elapsedMs}ms · 库 v
-              {t.libraryVersion} #{t.inputHash.slice(0, 6)}
+            <p className="qv-note qv-mono">
+              {t.details.elements} 元素 · {t.details.elapsedMs}ms · v{t.libraryVersion}
             </p>
-            {t.details.notes.map((note) => (
-              <p className="qv-note" key={note}>
-                · {note}
-              </p>
-            ))}
           </div>
 
           {showCoverage && coverage && (
@@ -690,7 +694,6 @@ export default function ReviewPanel({ asset, studio }: { asset: Asset; studio: S
                   .filter((row) => filter === 'all' || row.status === filter)
                   .map((row) => (
                     <div className={`qv-rule-row ${row.status}`} key={row.ruleId}>
-                      <span className="qv-rule-id">{row.ruleId}</span>
                       <span className="qv-rule-title">{row.title}</span>
                       <span className={`qv-status ${row.level || ''}`}>{STATUS_LABEL[row.status]}</span>
                       {row.reason && <span className="qv-rule-reason">{row.reason}</span>}
@@ -701,6 +704,7 @@ export default function ReviewPanel({ asset, studio }: { asset: Asset; studio: S
           )}
         </>
       )}
+
     </div>
   )
 }
@@ -747,7 +751,6 @@ function Card({
         <span className="qv-principle-name" title={PRINCIPLE_DESC[card.principle] || card.principle}>
           原则 · {card.principle}
         </span>
-        <span className="qv-rule-id">{card.ruleId}</span>
       </p>
       <p className="qv-violation">{card.violation}</p>
       {card.note && <p className="qv-card-note">{card.note}</p>}
@@ -787,5 +790,83 @@ function Card({
       </p>
       {card.fix && <p className="qv-fix">{card.fix}</p>}
     </article>
+  )
+}
+
+function AgentReviewPanel({
+  asset,
+  rules,
+  results,
+  staleResult,
+  projectUrl,
+}: {
+  asset: Asset
+  rules: typeof ruleset.rules
+  results: AgentReviewResult[]
+  staleResult: boolean
+  projectUrl: string | null
+}) {
+  const [copiedCli, setCopiedCli] = useState(false)
+
+  useEffect(() => {
+    setCopiedCli(false)
+  }, [asset.id])
+
+  const cliCommand = `mgsvg review ${projectUrl ? `"${projectUrl}"` : '<项目路径>'} --agent-prompt --asset ${asset.id}`
+
+  const copyCli = async () => {
+    try {
+      await navigator.clipboard.writeText(cliCommand)
+      setCopiedCli(true)
+      setTimeout(() => setCopiedCli(false), 1800)
+    } catch {
+      // 剪贴板不可用时命令可手动选中
+    }
+  }
+
+  const statusLabel = (result: AgentReviewResult['result']) =>
+    result === 'positive' ? '正例' : result === 'negative' ? '反例' : '未测'
+  const resultById = new Map(results.map((result) => [result.ruleId, result]))
+
+  return (
+    <section className="qv-agent">
+      <div className="qv-agent-head">
+        <div>
+          <h3>通过 mgsvg CLI 调用 Agent 评审</h3>
+          <p>这 {rules.length} 条规则需要语义判断。执行下面的命令，Agent 会读取末帧画面与规则，把结论写回项目。</p>
+        </div>
+        <span className="qv-agent-count">
+          {results.length}/{rules.length}
+        </span>
+      </div>
+      {staleResult && <p className="qv-note qv-warn">已有结论对应旧画面，请重跑规则评审后再执行一次。</p>}
+
+      <div className="qv-agent-rules">
+        {rules.length ? (
+          rules.map((rule) => {
+            const result = resultById.get(rule.id)
+            return (
+              <div className="qv-agent-rule" key={rule.id}>
+                <strong>{rule.title}</strong>
+                {result && <span className={`qv-agent-result ${result.result}`}>{statusLabel(result.result)}</span>}
+              </div>
+            )
+          })
+        ) : (
+          <p className="qv-note">当前规则库没有需要语义判断的规则。</p>
+        )}
+      </div>
+
+      <div className="qv-agent-cli-row">
+        <code className="qv-agent-cli" title="在项目根目录执行">{cliCommand}</code>
+        <button className="qv-btn primary" onClick={copyCli} disabled={!rules.length}>
+          <Icon name="copy" size={12} />
+          {copiedCli ? '已复制' : '复制命令'}
+        </button>
+      </div>
+      <p className="qv-note">
+        Agent 执行后把结论写回项目，Studio 重新加载即可看到。回写参数：<code>--agent-result &lt;out.json&gt; --write</code>。
+      </p>
+    </section>
   )
 }

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" fill="none">
+  <title>字幕样式 · 深灰胶囊</title>
+  <desc>原视频字幕：居中，距画面底部 56 px；原 CSS 字体栈 Plus Jakarta Sans / Noto Sans SC / PingFang SC。Studio 使用可用字体 Helvetica Neue / Heiti SC。50 px，字重 500，行高 1.35，字距 -0.01em；文字 #FAFAFA，背景 #4A4A48，内边距上下 8 px、左右 24 px，圆角 10 px，1 px 黑色 8% 描边。</desc>
+  <rect x="763.5" y="938.5" width="393" height="85.5" rx="10" fill="#4A4A48" stroke="#000000" stroke-opacity="0.08" stroke-width="1"/>
+  <text x="960" y="1008" text-anchor="middle" font-family="Helvetica Neue, Heiti SC, sans-serif" font-size="50" font-weight="500" letter-spacing="-0.5" fill="#FAFAFA">AI是没有记忆的</text>
+</svg>

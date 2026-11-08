@@ -1,4 +1,4 @@
-export { runReview, buildView, gateOf, reviewInputHash } from './review'
+export { runReview, buildView, gateOf, reviewInputHash, buildReviewFrameSvg } from './review'
 export {
   runReviewAll,
   reviewCache,
@@ -24,4 +24,7 @@ export type {
   ReviewView,
   Rule,
   ReviewSnapshot,
+  AgentReviewResult,
+  AgentReviewSnapshot,
+  AgentResultKind,
 } from './types'

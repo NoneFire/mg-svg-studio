@@ -1,4 +1,5 @@
-import raw from './rules.json'
+import raw from './rules-core.json'
+import fullRaw from './rules.json'
 import type {
   CoverageRow,
   Gate,
@@ -18,16 +19,23 @@ import type {
  * 重新同步：node scripts/sync-review-rules.mjs --from <skill>/assets/rules.json
  */
 export const ruleset = raw as unknown as Ruleset
+/** 收窄前的完整规则库（68 条），保留作对照与回退 */
+export const fullRuleset = fullRaw as unknown as Ruleset
 export const LIBRARY_VERSION = ruleset.libraryVersion
 
-export const RULES: Record<string, Rule> = Object.fromEntries(ruleset.rules.map((r) => [r.id, r]))
+// 全量查询表：layout 里可能计算规则库外的项（例如格式塔、字重档），需要能查到定义
+export const RULES: Record<string, Rule> = {
+  ...Object.fromEntries(fullRuleset.rules.map((r) => [r.id, r])),
+  ...Object.fromEntries(ruleset.rules.map((r) => [r.id, r])),
+}
+/** 当前生效的规则（23 条）；UI 与覆盖率只看这些 */
+export const ACTIVE_IDS = new Set(ruleset.rules.map((r) => r.id))
 
 /** 本实现真正能测的规则 → 需要的测量阶段。没进这张表的记 not_implemented，不算通过。 */
 export const IMPLEMENTED: Record<string, Set<Stage>> = {
   'QL-01': new Set<Stage>(['layout']),
   'QL-02': new Set<Stage>(['layout']),
   'QL-03': new Set<Stage>(['layout']),
-  'QL-04': new Set<Stage>(['layout']),
   'QL-07': new Set<Stage>(['media']),
   'VS-01': new Set<Stage>(['layout']),
   // DE-01 需要多帧采样才能说「全程不可见」，单帧评审不做，留在未实现里
@@ -40,6 +48,8 @@ export const IMPLEMENTED: Record<string, Set<Stage>> = {
   'GE-02': new Set<Stage>(['layout']),
   'SP-01': new Set<Stage>(['layout']),
   'TY-01': new Set<Stage>(['layout']),
+  'TY-02': new Set<Stage>(['layout']),
+  'CORE-02': new Set<Stage>(['layout']),
   'TY-04': new Set<Stage>(['layout']),
   'TY-05': new Set<Stage>(['layout']),
   'TY-06': new Set<Stage>(['layout']),

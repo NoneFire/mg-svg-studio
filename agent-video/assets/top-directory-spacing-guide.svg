@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" fill="none">
+  <title>画面间距 · 版式标注</title>
+  <desc>按 1920×1080 画布标出顶部章节目录、场景内容起始位置、左右留白、字幕底边距和设计文档中的安全区参考。</desc>
+  <defs>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10Z" fill="#2563EB"/>
+    </marker>
+    <marker id="arrow-ink" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10Z" fill="#6B7280"/>
+    </marker>
+    <style>
+      text { font-family: "Helvetica Neue", "Heiti SC", sans-serif; }
+      .eyebrow { font-size: 18px; font-weight: 700; letter-spacing: 2px; }
+      .heading { font-size: 42px; font-weight: 800; fill: #1A1A1A; }
+      .label { font-size: 22px; font-weight: 700; fill: #2563EB; }
+      .sub { font-size: 18px; font-weight: 500; fill: #6B6B6B; }
+      .measure { stroke: #2563EB; stroke-width: 2; marker-start: url(#arrow-blue); marker-end: url(#arrow-blue); }
+      .guide { stroke: #2563EB; stroke-width: 2; stroke-dasharray: 8 8; opacity: .48; }
+    </style>
+  </defs>
+
+  <rect width="1920" height="1080" fill="#FAF6F0"/>
+  <text x="80" y="90" class="eyebrow" fill="#2563EB">LAYOUT MEASUREMENTS</text>
+  <text x="80" y="145" class="heading">画面间距标注</text>
+  <text x="80" y="180" class="sub">实装尺寸按 1920 × 1080 画布；虚线示意内容区与留白。</text>
+
+  <!-- Canvas boundary and top chapter tracker -->
+  <rect x="20" y="16" width="1880" height="8" fill="#EBE9E4"/>
+  <rect x="20" y="16" width="851.64" height="8" fill="#2563EB"/>
+  <g fill="#D1D5DB">
+    <circle cx="140.32" cy="20" r="6"/><circle cx="318.92" cy="20" r="6"/>
+    <circle cx="454.28" cy="20" r="6"/><circle cx="1292.76" cy="20" r="6"/>
+    <circle cx="1723.16" cy="20" r="6"/>
+  </g>
+  <g font-size="18" font-weight="600" text-anchor="middle" fill="#999999">
+    <text x="20" y="62">引入</text><text x="140.32" y="62">AI 定义</text>
+    <text x="318.92" y="62">Agent 定义</text><text x="454.28" y="62">记忆</text>
+    <text x="870.64" y="62" fill="#2563EB" font-weight="800">工具</text>
+    <text x="1292.76" y="62">Agent Loop</text><text x="1723.16" y="62">总结</text>
+  </g>
+  <text x="1010" y="60" class="label">目录轨道：距顶 16 px · 左右 20 px · 1880 × 8 px</text>
+  <line x1="1888" y1="4" x2="1888" y2="16" class="measure"/>
+  <text x="1868" y="13" class="label" text-anchor="end">16 px</text>
+
+  <!-- Scene content area -->
+  <line x1="40" y1="200" x2="1880" y2="200" class="guide"/>
+  <line x1="40" y1="200" x2="40" y2="870" class="guide"/>
+  <line x1="1880" y1="200" x2="1880" y2="870" class="guide"/>
+  <line x1="65" y1="6" x2="65" y2="194" class="measure"/>
+  <rect x="82" y="83" width="236" height="64" rx="12" fill="#DBEAFE"/>
+  <text x="100" y="111" class="label">内容区从 y = 200 px 开始</text>
+  <text x="100" y="135" class="sub">场景 CSS：padding-top 200 px</text>
+
+  <!-- Central content and 24px card spacing example -->
+  <rect x="350" y="310" width="380" height="248" rx="18" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="2"/>
+  <rect x="754" y="310" width="380" height="248" rx="18" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="2"/>
+  <rect x="1158" y="310" width="380" height="248" rx="18" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="2"/>
+  <g text-anchor="middle">
+    <text x="540" y="405" font-size="28" font-weight="800" fill="#1A1A1A">内容卡片 A</text>
+    <text x="540" y="444" font-size="18" fill="#6B6B6B">示意画面主体</text>
+    <text x="944" y="405" font-size="28" font-weight="800" fill="#1A1A1A">内容卡片 B</text>
+    <text x="944" y="444" font-size="18" fill="#6B6B6B">横向间距标注</text>
+    <text x="1348" y="405" font-size="28" font-weight="800" fill="#1A1A1A">内容卡片 C</text>
+    <text x="1348" y="444" font-size="18" fill="#6B6B6B">安全区内排布</text>
+  </g>
+  <line x1="730" y1="590" x2="754" y2="590" class="measure"/>
+  <line x1="730" y1="552" x2="730" y2="604" stroke="#9CA3AF" stroke-width="1.5"/>
+  <line x1="754" y1="552" x2="754" y2="604" stroke="#9CA3AF" stroke-width="1.5"/>
+  <rect x="650" y="614" width="184" height="52" rx="12" fill="#DBEAFE"/>
+  <text x="742" y="648" class="label" text-anchor="middle">卡片间距 24 px</text>
+
+  <!-- Horizontal scene padding dimensions -->
+  <line x1="4" y1="760" x2="40" y2="760" class="measure"/>
+  <line x1="1880" y1="760" x2="1916" y2="760" class="measure"/>
+  <text x="21" y="730" class="label" text-anchor="middle">40</text>
+  <text x="1899" y="730" class="label" text-anchor="middle">40</text>
+  <text x="960" y="735" class="label" text-anchor="middle">场景内容左右内边距：40 px</text>
+
+  <!-- Design doc reference -->
+  <rect x="80" y="796" width="540" height="112" rx="16" fill="#FFFFFF" stroke="#D6D3D1" stroke-width="2"/>
+  <text x="108" y="834" class="eyebrow" fill="#6B6B6B">DESIGN DOC REFERENCE</text>
+  <text x="108" y="875" font-size="22" font-weight="700" fill="#1A1A1A">安全边距：左右 80 px · 上下 60 px</text>
+  <text x="108" y="899" font-size="17" fill="#6B6B6B">代码实装场景边距为左右 40 px、顶部 200 px。</text>
+
+  <!-- Caption sample and bottom spacing -->
+  <line x1="40" y1="938" x2="1880" y2="938" class="guide"/>
+  <rect x="600" y="938" width="720" height="86" rx="10" fill="#4A4A48"/>
+  <text x="960" y="995" font-size="40" font-weight="500" text-anchor="middle" fill="#FAFAFA">字幕示意：底部留白 56 px</text>
+  <line x1="1850" y1="1024" x2="1850" y2="1080" class="measure"/>
+  <rect x="1600" y="1038" width="220" height="38" rx="10" fill="#DBEAFE"/>
+  <text x="1710" y="1064" class="label" text-anchor="middle">字幕距底 56 px</text>
+  <text x="80" y="1000" class="sub">字幕：50 px 字号 · 内边距 8 × 24 px</text>
+  <text x="80" y="1030" class="sub">轨道离底 56 px；字幕胶囊贴轨道底边。</text>
+</svg>

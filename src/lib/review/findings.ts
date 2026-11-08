@@ -97,15 +97,20 @@ function defaultFix(f: Finding): string | null {
     case 'TY-08':
       return `把 ${f.element} 的字重从 300 以下提到 400：字号 ${n(ev.fontSize, 1)}px 本来就小`
     case 'SP-01':
-      return `把间距收敛到 4–6 档：当前用了 ${n(f.measured, 0)} 档（${(ev.levels as number[] | undefined)?.slice(0, 8).join(', ') || ''}）`
+      return `把同组间距收到同一档：当前有 ${n(f.measured, 0)} 处跨档（${(ev.groups as Array<{ gaps: number[]; modePx: number }> | undefined)?.slice(0, 2).map((g) => `${g.gaps.join('/')} → 目标 ${g.modePx}`).join('；') || ''}）`
     case 'TY-06':
       return `把字重档位收到 3 档以内：当前 ${(ev.weights as number[] | undefined)?.join(', ') || ''}`
-    case 'RP-01':
-      return `把字号档位从 ${n(f.measured, 0)} 收到 5 档以内：${(ev.sizes as number[] | undefined)?.join(' / ') || ''}`
+    case 'RP-01': {
+      const roles = (ev.roles as Array<{ role: string; variants: number; size: number }> | undefined) || []
+      const first = roles[0]
+      return first
+        ? `把 ${n(f.measured, 0)} 个偏离实例对齐到同类：「${first.role}」这一组有 ${first.variants} 种外观（共 ${first.size} 个）`
+        : `把同类实例的外观统一：当前有 ${n(f.measured, 0)} 个偏离`
+    }
     case 'TX-01':
       return `把中性文字色收到 ${3} 种以内：当前 ${(ev.colors as string[] | undefined)?.join(', ') || ''}`
     case 'CL-01':
-      return `把主色收到 6 个以内：当前 ${n(f.measured, 0)} 个（${(ev.palette as string[] | undefined)?.slice(0, 6).join(', ') || ''}）`
+      return `把可辨颜色收到 4 个以内：当前 ${n(f.measured, 0)} 个（${(ev.palette as string[] | undefined)?.slice(0, 6).join(', ') || ''}）`
     case 'NS-01':
       return `给内容留出边距：背景占比 ${n(f.measured, 2)}，目标 0.3 以上`
     case 'QL-07':

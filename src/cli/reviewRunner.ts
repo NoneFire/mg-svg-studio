@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import type { ReviewJob, ReviewJobResult } from '../lib/review/job'
+import type { ReviewJob, ReviewJobMode, ReviewJobResult } from '../lib/review/job'
 import { CliError } from './args'
 
 const CHROME_CANDIDATES = [
@@ -27,6 +27,7 @@ export async function reviewInBrowser(opts: {
   appUrl: string
   projectUrl: string
   target: string
+  mode?: ReviewJobMode
   timeoutMs?: number
 }): Promise<ReviewJobResult> {
   const chrome = CHROME_CANDIDATES.find((candidate) => candidate && fs.existsSync(candidate))
@@ -36,6 +37,7 @@ export async function reviewInBrowser(opts: {
   url.searchParams.set('project', opts.projectUrl)
   url.searchParams.set('review', opts.target)
   url.searchParams.set('review-job', '1')
+  if (opts.mode && opts.mode !== 'rules') url.searchParams.set('review-kind', opts.mode)
   const profile = fs.mkdtempSync(path.join(tmpdir(), 'mgsvg-review-'))
   const portFile = path.join(profile, 'DevToolsActivePort')
   const chromeProcess = spawn(chrome, [

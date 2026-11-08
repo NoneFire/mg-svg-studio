@@ -1,5 +1,8 @@
 import type { Asset } from '../../types'
-import { reviewInputHash, runReview, type ReviewInput } from './review'
+import { reviewInputHash, type ReviewInput } from './hash'
+import { reviewSnapshotOf } from './record'
+import { reviewCache } from './cache'
+import { runReview } from './review'
 import { LIBRARY_VERSION } from './rules'
 import type { GateVerdict, ReviewOptions, ReviewReport, ReviewSnapshot } from './types'
 
@@ -7,7 +10,7 @@ import type { GateVerdict, ReviewOptions, ReviewReport, ReviewSnapshot } from '.
  * 评审缓存：同一素材、同一输入指纹只算一次。
  * 面板、批量评审、CLI 的 `--run` 都读这一份，避免同一次会话里测三遍。
  */
-export const reviewCache = new Map<string, ReviewReport>()
+export { reviewCache } from './cache'
 
 export interface BatchRow {
   assetId: string
@@ -17,7 +20,7 @@ export interface BatchRow {
   measured: number
   total: number
   inputHash: string
-  /** 非 PASS 的条数：这张素材这一版真有问题的地方 */
+  /** 触发的规则条数（含 PASS 与非 PASS，用于 CLI 结果摘要） */
   findings: number
   error?: string
 }
@@ -39,23 +42,7 @@ export interface BatchResult {
   }
 }
 
-/** 把一份报告压成可存进项目文件的快照：只留非 PASS 明细 */
-export function reviewSnapshotOf(report: ReviewReport, options: ReviewOptions = {}): ReviewSnapshot {
-  return {
-    inputHash: report.inputHash,
-    options,
-    generatedAt: report.generatedAt,
-    libraryVersion: report.libraryVersion,
-    gate: report.gate,
-    counts: report.counts,
-    coverage: {
-      measured: report.coverage.measured,
-      total: report.coverage.total,
-      counts: report.coverage.counts,
-    },
-    findings: report.findings.filter((f) => f.level !== 'PASS'),
-  }
-}
+export { reviewSnapshotOf } from './record'
 
 /** 画面或口径改过，上一次的结论就不能当数 */
 export function isReviewStale(asset: ReviewInput, report: ReviewReport, options: ReviewOptions = {}): boolean {

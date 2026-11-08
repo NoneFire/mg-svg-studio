@@ -2,34 +2,16 @@ import { store } from '../store'
 import type { Studio } from './studio'
 import type { BridgeCommand, BridgeResult, StudioContext } from './bridge-protocol'
 import { parseStylePatch } from './style-patch'
-import { reviewCache, reviewSnapshotOf } from './review/batch'
-import { defaultReviewOptions } from './review/job'
-import { reviewInputHash, runReview } from './review/review'
+import { reviewCache } from './review/cache'
+import { reviewSnapshotOf } from './review/record'
+import { reviewInputHash } from './review/hash'
 
 /**
  * 浏览器侧：把「人此刻选了什么」推到本地桥（见 src/cli/bridge.ts）。
- * 只在打开 ?bridge=<port> 时启用；端口记在 localStorage，刷新后仍然生效。
+ * 默认连接本机选择桥（固定端口 7350），无需在 Studio URL 上添加参数。
  */
 
-export function bridgePort(): number | null {
-  try {
-    const param = new URLSearchParams(location.search).get('bridge')
-    if (param) {
-      const n = Number(param)
-      if (Number.isInteger(n) && n > 0 && n <= 65535) {
-        localStorage.setItem('mg-bridge', param)
-        return n
-      }
-      localStorage.removeItem('mg-bridge')
-      return null
-    }
-    const saved = localStorage.getItem('mg-bridge')
-    const n = saved ? Number(saved) : NaN
-    return Number.isInteger(n) && n > 0 && n <= 65535 ? n : null
-  } catch {
-    return null
-  }
-}
+export function bridgePort(): number { return 7350 }
 
 /** 一份「上下文包」：Agent 靠它知道自己被指着的是哪个元素、这一版有什么问题 */
 function buildStudioContext(studio: Studio, sessionId: string): Omit<StudioContext, 'ts' | 'selectionId'> {
@@ -39,6 +21,8 @@ function buildStudioContext(studio: Studio, sessionId: string): Omit<StudioConte
   const converted = asset && sel.elementId ? studio.getBoard(asset.id)?.content.elements.get(sel.elementId) : undefined
   const snapshot = asset?.review
   const review = asset && snapshot?.inputHash === reviewInputHash(asset, snapshot?.options) ? snapshot : undefined
+  const agentSnapshot = asset?.agentReview
+  const agentReviewStatus = !agentSnapshot ? 'none' : asset && agentSnapshot.inputHash === reviewInputHash(asset, agentSnapshot.options) ? 'ok' : 'stale'
 
   const payload: Omit<StudioContext, 'ts' | 'selectionId'> = {
     sessionId,
@@ -85,9 +69,7 @@ function buildStudioContext(studio: Studio, sessionId: string): Omit<StudioConte
     }
   }
   if (asset && review) {
-    const mine = (review.findings || []).filter(
-      (f) => f.level !== 'PASS' && sel.elementId && f.element === sel.elementId
-    )
+    const mine = (review.findings || []).filter((f) => sel.elementId && f.element === sel.elementId)
     const cached = reviewCache.get(asset.id)
     payload.review = {
       assetId: asset.id,
@@ -95,6 +77,15 @@ function buildStudioContext(studio: Studio, sessionId: string): Omit<StudioConte
       counts: review.counts,
       findingsForElement: mine,
       raster: cached?.inputHash === review.inputHash ? cached?.details.raster ?? undefined : undefined,
+    }
+  }
+  if (asset) {
+    payload.agentReview = {
+      status: agentReviewStatus,
+      generatedAt: agentSnapshot?.generatedAt,
+      resultsForElement: agentReviewStatus === 'ok'
+        ? (agentSnapshot?.results || []).filter((result) => result.elementId && result.elementId === sel.elementId)
+        : [],
     }
   }
   return payload
@@ -111,10 +102,32 @@ function uniqueMatch<T extends { id: string }>(items: T[], key: string, label: (
 
 async function applyCommand(studio: Studio, command: BridgeCommand): Promise<unknown> {
   const { type, payload } = command
-  if (type === 'save') return store.saveProject({ linkedOnly: true })
+  // CLI 保存：有权限就直接写，不主动弹授权框；没权限时明确提示用户手动授权一次
+  if (type === 'save') return store.saveProject({ linkedOnly: true, automatic: true })
+  if (type === 'asset.add') {
+    if (!payload.svg?.trim() || !payload.name?.trim()) throw new Error('添加素材需要 SVG 源码和名称')
+    await store.addSvgText(payload.svg, payload.name, payload.variantOf)
+    const added = store.selectedAsset
+    return { asset: added?.id, name: added?.name, width: added?.width, height: added?.height, dirty: store.projectDirty }
+  }
+  if (type === 'asset.variant') {
+    const target = uniqueMatch(store.assets, payload.asset!, (entry) => entry.name, '素材')
+    store.setVariantOf(target.id, payload.variantOf || null)
+    return { asset: target.id, variantOf: payload.variantOf || null }
+  }
+  if (type === 'project.reload') {
+    if (store.projectDirty) throw new Error('Studio 有未保存改动，请先保存或导出副本再重新载入')
+    if (!store.projectHandle && !store.projectUrl) throw new Error('当前 Studio 项目没有关联可重新载入的文件')
+    const reloaded = await store.reloadProject()
+    if (!reloaded) throw new Error('Studio 取消了重新载入')
+    return { file: store.projectFileName || store.projectUrl, assets: store.assets.length, dirty: store.projectDirty }
+  }
 
-  const asset = uniqueMatch(store.assets, payload.asset, (entry) => entry.name, '素材')
+  const asset = uniqueMatch(store.assets, payload.asset!, (entry) => entry.name, '素材')
   if (type === 'review') {
+    const [{ defaultReviewOptions }, { runReview }] = await Promise.all([
+      import('./review/job'), import('./review/review'),
+    ])
     const version = store.projectVersion
     const options = defaultReviewOptions(asset, payload.frame)
     const report = await runReview(structuredClone(asset), options)
@@ -143,8 +156,12 @@ async function applyCommand(studio: Studio, command: BridgeCommand): Promise<unk
   if (!element) throw new Error('请先选中元素，或提供元素 ID')
   if (type !== 'style.set' && type !== 'style.clear') throw new Error('不支持的命令')
   const patch = type === 'style.set' ? parseStylePatch(payload.patch) : null
-  store.editElementStyle(studio, asset, element.id, patch)
-  return { asset: asset.id, element: element.id, label: element.label, overrides: asset.overrides[element.id] ?? null, dirty: store.projectDirty }
+  store.endHistoryEdit()
+  if (patch) await store.updateElementStyle(asset.id, element.id, patch)
+  else await store.resetElementStyle(asset.id, element.id)
+  store.endHistoryEdit()
+  const overrides = store.assets.find((item) => item.id === asset.id)?.overrides[element.id]
+  return { asset: asset.id, element: element.id, label: element.label, overrides: overrides ?? null, dirty: store.projectDirty }
 }
 
 export function startBridgePublisher(studio: Studio | null): () => void {

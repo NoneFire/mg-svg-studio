@@ -38,10 +38,13 @@ export default function HelpModal({ onClose }: { onClose: () => void }) {
           <h3>软面板</h3>
           <p>
             左栏顶部可在「素材」和「图层」之间切换。图层支持搜索、折叠分组和多选。
-            用顶部左侧「素材库」和右侧「检查器」打开或收起对应面板。拖动检查器左缘可调宽度，点画布元素也会打开检查器。
+            用顶部左侧「素材」和右侧图标打开或收起对应面板。拖动检查器左缘可调宽度，点画布元素也会打开检查器。
           </p>
           <p>
             顶部「播放全部」从头播放所有动画，「全部末帧」暂停并显示每个素材的最后画面。底部时间轴只控制当前素材，拖动它的上边缘可调整高度。画布缩放和网格在顶部工具栏。
+          </p>
+          <p>
+            素材有录音时，时间轴顶部多一条语音轨：波形按时长铺开，标签上标时长，左侧可静音。按时间轴的播放键，语音会和动画一起播放；打开项目时的自动播放不出声。
           </p>
 
           <h3>布局与分层</h3>
@@ -49,7 +52,7 @@ export default function HelpModal({ onClose }: { onClose: () => void }) {
             <div className="help-row">
               <span className="tag good">布局内核</span>
               <span>
-                选中一个容器 <code>&lt;g&gt;</code>，在「布局」页签里用横向 / 纵向 / 网格加间距重排子元素。坐标由独立内核算出，渲染只负责画。
+                选中一个容器 <code>&lt;g&gt;</code>，在右侧「元素」页点「重排子元素」，预览横排、竖排或网格后再应用。
               </span>
             </div>
             <div className="help-row">
@@ -64,7 +67,7 @@ export default function HelpModal({ onClose }: { onClose: () => void }) {
           <h3>画布操作</h3>
           <h3>导入</h3>
           <p>
-            拖文件进来、点左上角素材库的 <code>+</code>，或者直接 <code>⌘V</code>：支持动画 / 静态 SVG 源码与文件、
+            拖文件进来、在左侧「素材」页搜索框旁点 <code>+</code>，或者直接 <code>⌘V</code>：支持动画 / 静态 SVG 源码与文件、
             PNG / JPEG / WebP 位图（会自动包成 SVG 素材，可参与布局与画板管理，但内部像素不可编辑）。
           </p>
 
@@ -85,13 +88,17 @@ export default function HelpModal({ onClose }: { onClose: () => void }) {
             <em>100%</em>
             <span>G</span>
             <em>网格开关</em>
+            <span>⌘/Ctrl+Z</span>
+            <em>撤销画布操作</em>
+            <span>⌘/Ctrl+Shift+Z</span>
+            <em>重做画布操作</em>
             <span>⌘D / Del</span>
             <em>复制 / 删除素材</em>
             <span>右上角 ☀ / ☾</span>
             <em>切换深色 / 浅色背景</em>
             <span>⌘S / ⌘O</span>
             <em>保存 / 打开项目文件</em>
-            <span>顶部「素材库」/「检查器」</span>
+            <span>顶部「素材」/检查器图标</span>
             <em>切换左栏或右栏</em>
           </div>
 
@@ -102,8 +109,8 @@ export default function HelpModal({ onClose }: { onClose: () => void }) {
             <code>mask</code> 会被忽略，并在「素材」面板里标出降级项。
           </p>
           <p className="muted">
-            素材与修改保存在本机 IndexedDB，不上传服务器；顶栏「项目」可把整个素材库存成 <code>.mgsvg</code> 文件，
-            Agent 可以用 <code>mgsvg</code> CLI 或 MCP 直接改这个文件。
+            素材与修改会自动保存在本机 IndexedDB，不上传服务器；链接可写的 <code>.mgsvg</code> 文件并完成首次授权后，
+            后续修改会自动写回文件。Agent 也可以用 <code>mgsvg</code> CLI 或 MCP 直接改这个文件。
           </p>
         </div>
       </div>

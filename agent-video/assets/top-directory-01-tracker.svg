@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="88" viewBox="0 0 1920 88" fill="none">
+  <title>顶部目录 01 · 进度轨道</title>
+  <desc>按原视频的章节导航样式制作：浅灰轨道、蓝色进度、圆形节点和章节文字。</desc>
+  <style>
+    text { font-family: "Helvetica Neue", "Heiti SC", sans-serif; }
+  </style>
+  <rect x="20" y="16" width="1880" height="8" fill="#EBE9E4"/>
+  <rect x="20" y="16" width="851.64" height="8" fill="#2563EB"/>
+  <g fill="#2563EB">
+    <circle cx="20" cy="20" r="7"/>
+    <circle cx="870.64" cy="20" r="7"/>
+  </g>
+  <g fill="#E5E7EB">
+    <circle cx="140.32" cy="20" r="6"/>
+    <circle cx="318.92" cy="20" r="6"/>
+    <circle cx="454.28" cy="20" r="6"/>
+    <circle cx="1292.76" cy="20" r="6"/>
+    <circle cx="1723.16" cy="20" r="6"/>
+  </g>
+  <g font-size="22" text-anchor="middle" dominant-baseline="alphabetic">
+    <text x="20" y="52" fill="#999999" font-weight="600">引入</text>
+    <text x="140.32" y="52" fill="#999999" font-weight="600">AI 定义</text>
+    <text x="318.92" y="52" fill="#999999" font-weight="600">Agent 定义</text>
+    <text x="454.28" y="52" fill="#999999" font-weight="600">记忆</text>
+    <text x="870.64" y="52" fill="#2563EB" font-weight="800">工具</text>
+    <text x="1292.76" y="52" fill="#999999" font-weight="600">Agent Loop</text>
+    <text x="1723.16" y="52" fill="#999999" font-weight="600">总结</text>
+  </g>
+</svg>

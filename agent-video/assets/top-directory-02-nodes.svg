@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="112" viewBox="0 0 1920 112" fill="none">
+  <title>顶部目录 02 · 章节节点</title>
+  <desc>轻量胶囊节点版章节导航，沿用原视频的蓝灰配色、章节顺序和定位间距。</desc>
+  <style>
+    text { font-family: "Helvetica Neue", "Heiti SC", sans-serif; }
+  </style>
+  <path d="M20 24H1900" stroke="#EBE9E4" stroke-width="8" stroke-linecap="round"/>
+  <path d="M20 24H870.64" stroke="#2563EB" stroke-width="8" stroke-linecap="round"/>
+  <g>
+    <circle cx="20" cy="24" r="11" fill="#FFFFFF" stroke="#2563EB" stroke-width="4"/>
+    <circle cx="140.32" cy="24" r="10" fill="#FFFFFF" stroke="#D1D5DB" stroke-width="3"/>
+    <circle cx="318.92" cy="24" r="10" fill="#FFFFFF" stroke="#D1D5DB" stroke-width="3"/>
+    <circle cx="454.28" cy="24" r="10" fill="#FFFFFF" stroke="#D1D5DB" stroke-width="3"/>
+    <circle cx="870.64" cy="24" r="11" fill="#2563EB" stroke="#FFFFFF" stroke-width="4"/>
+    <circle cx="1292.76" cy="24" r="10" fill="#FFFFFF" stroke="#D1D5DB" stroke-width="3"/>
+    <circle cx="1723.16" cy="24" r="10" fill="#FFFFFF" stroke="#D1D5DB" stroke-width="3"/>
+  </g>
+  <g font-size="22" text-anchor="middle" dominant-baseline="middle">
+    <g fill="#FFFFFF" font-size="16" font-weight="700">
+      <text x="20" y="24">1</text>
+      <text x="870.64" y="24">5</text>
+    </g>
+    <g fill="#999999" font-weight="600">
+      <rect x="72.32" y="51" width="136" height="42" rx="21" fill="#F3F4F6"/>
+      <text x="140.32" y="72">AI 定义</text>
+      <rect x="229.92" y="51" width="178" height="42" rx="21" fill="#F3F4F6"/>
+      <text x="318.92" y="72">Agent 定义</text>
+      <rect x="414.28" y="51" width="80" height="42" rx="21" fill="#F3F4F6"/>
+      <text x="454.28" y="72">记忆</text>
+      <rect x="807.64" y="51" width="126" height="42" rx="21" fill="#DBEAFE"/>
+      <text x="870.64" y="72" fill="#2563EB" font-weight="800">工具</text>
+      <rect x="1197.76" y="51" width="190" height="42" rx="21" fill="#F3F4F6"/>
+      <text x="1292.76" y="72">Agent Loop</text>
+      <rect x="1683.16" y="51" width="80" height="42" rx="21" fill="#F3F4F6"/>
+      <text x="1723.16" y="72">总结</text>
+    </g>
+  </g>
+</svg>

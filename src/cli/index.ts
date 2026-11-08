@@ -6,7 +6,7 @@ import { bridgeCommandTimeout, type BridgeCommand, type BridgeResult, type Studi
 import { NUMERIC_STYLE, parseStylePatch } from '../lib/style-patch'
 import { parseAnimationPatch, parseLayoutPatch } from '../lib/project-schema'
 import { reviewInputHash } from '../lib/review/review'
-import { reviewProjectFile } from './projectReview'
+import { agentPromptForProject, reviewProjectFile, saveAgentReviewResult } from './projectReview'
 import { CliError, num, parseArgv, portOf, str, usage, type Flags } from './args'
 
 const HELP = `mgsvg — MG SVG Studio 项目文件工具（Agent 可直接改文件）
@@ -15,29 +15,37 @@ const HELP = `mgsvg — MG SVG Studio 项目文件工具（Agent 可直接改文
   mgsvg init    <project> [--name 名称] [--force]
   mgsvg outline <project> [--asset <id>] [--elements] [--json]
   mgsvg apply   <project> --ops <file|-> [--dry-run] [--json]
-  mgsvg add     <project> --svg <file> --name <name> [--x 0] [--y 0] [--width 0] [--height 0]
+  mgsvg add     <project> --svg <file> --name <name> [--x 0] [--y 0] [--width 0] [--height 0] [--dry-run]
+  mgsvg replace <project> --asset <id> --svg <file> [--dry-run]
   mgsvg style   <project> --asset <id> --element <id|label> --set fill=#f00 [--set opacity=0.5] [--clear]
   mgsvg anim    <project> --asset <id> --group <id|name> --set duration=1.2 [--set ease=power2.out]
   mgsvg layer   <project> --asset <id> --group <id|name> --targets a,b,c [--stagger 0.08]
   mgsvg layout  <project> --asset <id> --container <id|label> --mode row --gap 40 [--cols 3] [--padding 0]
   mgsvg review <project> [--asset <id|name>] [--json] [--run] [--write]
+  mgsvg review <project> --agent-prompt --asset <id|name> [--app <url>] [--project-url <path>]
+  mgsvg review <project> --agent-result <file|-> --asset <id|name> (--write | --dry-run)
   mgsvg bridge  [--port 7350]                  开本地选择桥（Agent 用它看你在选什么）
   mgsvg context [--bridge 7350] [--session <id>] [--wait 30] [--after <selectionId>] [--json]
   mgsvg live    [--bridge 7350] (--session <id> | --current) [--asset <id>] [--element <id>]
-                --set fill=#f00 | --clear | --select <id|label> | --save | --review [--frame 0..1]
+                --set fill=#f00 | --clear | --select <id|label> | --add <svg> [--name 名称] [--variant-of <素材id>] |
+                --asset <id> --variant-of <素材id>（把已有素材并到某个版本旁） | --save | --reload | --review [--frame 0..1]
   mgsvg validate <project> [--json]
   mgsvg mcp     [--project <project>] [--bridge <port>]   启动 MCP server（stdio，可带选择桥）
 
 context / bridge：
-  bridge  常驻开一个 http://127.0.0.1:7350 的桥；Studio 用 ?bridge=7350 打开后，
+  bridge  常驻开一个 http://127.0.0.1:7350 的桥；Studio 默认连接此端口，
           你选中什么都会推到桥上，Agent 读 context 就能知道是哪个元素。
   context 读当前选区。--wait 等选区变化，--after 可指定之前的 selectionId。
-  live    在 Studio 中即时应用；--save 保存已链接的 .mgsvg。--review 评审未保存的素材，默认末帧。
+  live    在 Studio 中即时应用；--add 直接加入当前素材库并自动排布。--save 保存已链接的 .mgsvg。
+          --reload 从已链接文件重新载入；--review 评审未保存的素材，默认末帧。
+          多个页面连接同一桥时优先用 --session 锁定目标。
 
 review：
   默认读项目文件里存着的评审快照（面板跑过、保存过就有），并标出过期。
   --run      起无头 Chrome 打开正在跑的 Studio 现算一次（需要 --app，默认 http://localhost:5188）
   --write    把 --run 的结果写回项目文件
+  --agent-prompt 生成带当前末帧 SVG 和规则指纹的 Agent 语义评审提示词
+  --agent-result  导入 Agent 返回的 JSON；--write 保存，--dry-run 只校验，路径为 - 时从 stdin 读取
   --app <url>        Studio 地址
   --project-url <p>  Studio 上项目文件的可访问路径（默认按当前目录推算）
 
@@ -159,7 +167,7 @@ async function readContext(flags: Flags) {
     }
     if (!context || context.selectionId === baseline) throw new CliError('NO_NEW_SELECTION', '等待超时，期间没有新选区')
   }
-  if (!context) throw new CliError(session ? 'SESSION_NOT_FOUND' : 'NO_CONTEXT', `未收到 Studio 选区，请检查页面是否已连接 ?bridge=${port}`)
+  if (!context) throw new CliError(session ? 'SESSION_NOT_FOUND' : 'NO_CONTEXT', `未收到 Studio 选区，请确认本机 7350 端口的桥已启动，并刷新 Studio 页面`)
   success('read', context, () => console.log(fmtContext(context, false)))
 }
 
@@ -173,17 +181,43 @@ async function runLive(flags: Flags) {
   const set = Boolean(flags.set)
   const clear = flags.clear === true
   const save = flags.save === true
+  const reload = flags.reload === true
   const review = flags.review === true
-  if ([set, clear, save, review, Boolean(select)].filter(Boolean).length !== 1) {
-    usage('请选择一种操作：--set、--clear、--select、--save 或 --review')
+  const add = str(flags, 'add')
+  const name = str(flags, 'name')
+  const variantOnly = Boolean(str(flags, 'variant-of')) && Boolean(str(flags, 'asset')) && !add
+  if ([set, clear, save, reload, review, Boolean(select), Boolean(add), variantOnly].filter(Boolean).length !== 1) {
+    usage('请选择一种操作：--set、--clear、--select、--add、--save、--reload、--review，或 --asset 配 --variant-of')
   }
   if (sessionId && (set || clear) && (!asset || !element)) usage('锁定实时修改时需要 --asset 和 --element')
-  if ((save && (asset || element)) || ((review || select) && element)) usage('该操作不接受此素材或元素参数')
+  if (((save || reload) && (asset || element)) || ((review || select) && element) || (add && (asset || element || select))) usage('该操作不接受此素材或元素参数')
+  if (name && !add) usage('--name 只用于 --add')
+  const variantOf = str(flags, 'variant-of')
+  if (variantOf && !add && !asset) usage('--variant-of 要么配 --add，要么配 --asset 指定要归属的素材')
   const frame = num(flags, 'frame')
   if (frame !== undefined && (!review || frame < 0 || frame > 1)) usage('--frame 只用于 --review，范围为 0–1')
-  const type: BridgeCommand['type'] = save ? 'save' : review ? 'review' : select ? 'select' : clear ? 'style.clear' : 'style.set'
+  const type: BridgeCommand['type'] = save
+    ? 'save'
+    : reload
+      ? 'project.reload'
+      : review
+        ? 'review'
+        : select
+          ? 'select'
+          : add
+            ? 'asset.add'
+            : variantOf && asset
+              ? 'asset.variant'
+              : clear
+                ? 'style.clear'
+                : 'style.set'
   const payload: BridgeCommand['payload'] = { asset, element: select || element, frame }
   if (set) payload.patch = parseStylePatch(setPairs(flags, NUMERIC_STYLE, (value) => value))
+  if (add) {
+    payload.svg = fs.readFileSync(path.resolve(add), 'utf8')
+    payload.name = name || path.basename(add, path.extname(add))
+    if (variantOf) payload.variantOf = variantOf
+  }
 
   const port = portOf(flags, 'bridge', 7350)
   const base = `http://127.0.0.1:${port}`
@@ -200,12 +234,14 @@ async function runLive(flags: Flags) {
     if (response.status === 200) {
       const outcome = await response.json() as BridgeResult
       if (outcome.ok === false) throw new CliError(outcome.code || 'STUDIO_ERROR', outcome.error, { commandId: id })
-      const status = save ? 'written' : review ? 'reviewed' : select ? 'selected' : 'applied'
+      const status = save ? 'written' : reload ? 'reloaded' : review ? 'reviewed' : select ? 'selected' : add ? 'added' : 'applied'
       success(status, outcome.result, () => {
         const data = outcome.result as Record<string, any>
         if (save) console.log(`✓ 已保存 ${data.file}${data.dirty ? '，保存期间有新的未保存改动' : ''}`)
+        else if (reload) console.log(`✓ 已重新载入 ${data.file}（${data.assets} 个素材）`)
         else if (review) console.log(`${data.assetName}：${data.gate} · ${data.counts.FAIL} 硬伤 / ${data.counts.WARN} 提示`)
         else if (select) console.log(`✓ 已选中 ${data.selection?.elementId || data.selection?.assetId || '素材'}`)
+        else if (add) console.log(`✓ 已添加 ${data.name} (${data.asset}) ${data.width}×${data.height}`)
         else console.log(`✓ ${data.element} ← ${JSON.stringify(data.overrides ?? null)}`)
       })
       return
@@ -232,7 +268,7 @@ async function main() {
     const port = portOf(flags, 'port', 7350)
     const bridge = await startBridge(port)
     console.log(`选择桥已开在 http://127.0.0.1:${port}
-在 Studio 地址中添加 ?bridge=${port}`)
+Studio 默认连接本机 7350 端口；如果刚启动桥，请刷新 Studio 页面`)
     console.log('选中元素时这里会打印一行；Ctrl-C 退出')
     let last = ''
     const timer = setInterval(() => {
@@ -288,7 +324,25 @@ async function main() {
 
   if (cmd === 'review') {
     const target = str(flags, 'asset')
-    if (flags.run) {
+    const agentPrompt = !!flags['agent-prompt']
+    const agentResultFile = str(flags, 'agent-result')
+    if (agentPrompt && agentResultFile) usage('--agent-prompt 与 --agent-result 不能同时使用')
+    if ((agentPrompt || agentResultFile) && flags.run) usage('Agent 提示词/结果导入与 --run 不能同时使用')
+    if (agentPrompt) {
+      if (!target) usage('--agent-prompt 需要 --asset 指定单个素材')
+      if (flags.write || flags['dry-run']) usage('--agent-prompt 不接收 --write 或 --dry-run')
+      const result = await agentPromptForProject({ file, target, appUrl: str(flags, 'app'), projectUrl: str(flags, 'project-url') })
+      success('agent_prompt', result, () => console.log(result.prompt))
+    } else if (agentResultFile) {
+      if (!target) usage('--agent-result 需要 --asset 指定单个素材')
+      if (!flags.write && !flags['dry-run']) usage('--agent-result 需要 --write；可加 --dry-run 预览')
+      if (str(flags, 'app') || str(flags, 'project-url')) usage('--app 和 --project-url 只用于 --run 或 --agent-prompt')
+      const raw = agentResultFile === '-' ? await readStdin() : fs.readFileSync(path.resolve(agentResultFile), 'utf8')
+      const result = saveAgentReviewResult({ file, target, document: raw, write: !!flags.write, dryRun: !!flags['dry-run'] })
+      success(result.written ? 'agent_result_written' : 'agent_result_dry_run', result, () => {
+        console.log(`${result.assetName}：导入 Agent 结论 ${result.agentReview.results.length} 条${result.written ? '（已保存）' : '（未写入）'}`)
+      })
+    } else if (flags.run) {
       const result = await reviewProjectFile({ file, target, appUrl: str(flags, 'app'), projectUrl: str(flags, 'project-url'),
         write: !!flags.write, dryRun: !!flags['dry-run'] })
       success(result.written ? 'written' : flags['dry-run'] ? 'dry_run' : 'reviewed', result, () => {
@@ -296,19 +350,38 @@ async function main() {
         if (result.written) console.log(`✓ 已写入 ${result.file}`)
       })
     } else {
-      if (flags.write || flags.app || flags['project-url'] || flags['dry-run']) usage('这些选项需要 --run')
+      if (flags.write || flags.app || flags['project-url'] || flags['dry-run']) usage('这些选项需要 --run、--agent-prompt 或 --agent-result')
       const project = readProject(file)
       const rows = (target ? [findAsset(project, target)] : project.assets).map((asset) => {
         const snap = asset.review
         const status = !snap ? 'none' : snap.inputHash === reviewInputHash(asset, snap.options) ? 'ok' : 'stale'
+        const agentSnap = asset.agentReview
+        const agentStatus = !agentSnap ? 'none' : agentSnap.inputHash === reviewInputHash(asset, agentSnap.options) ? 'ok' : 'stale'
         return {
           id: asset.id, name: asset.name, status, review: status === 'ok' ? snap : null,
           lastReview: snap ? { gate: snap.gate, counts: snap.counts, generatedAt: snap.generatedAt } : null,
+          agentReviewStatus: agentStatus,
+          agentReview: agentStatus === 'ok' ? agentSnap : null,
+          lastAgentReview: agentSnap ? { generatedAt: agentSnap.generatedAt, results: agentSnap.results.length } : null,
         }
       })
       success('read', rows, () => {
         const labels = { ok: '已评审', stale: '已过期', none: '未评审' }
-        for (const row of rows) console.log(`${row.name}：${labels[row.status]}${row.lastReview ? ` · ${row.lastReview.gate}` : ''}`)
+        for (const row of rows) {
+          console.log(`${row.name}：规则 ${labels[row.status]}${row.lastReview ? ` · ${row.lastReview.gate}` : ''} · Agent ${labels[row.agentReviewStatus]}${row.lastAgentReview ? ` · ${row.lastAgentReview.results} 条` : ''}`)
+          if (row.status === 'ok' && row.review) {
+            for (const finding of row.review.findings) {
+              const measured = finding.measured === null ? '未测' : `${finding.measured}${finding.unit ? ` ${finding.unit}` : ''}`
+              console.log(`  ${finding.level.padEnd(10)} ${finding.ruleId} ${finding.title} · ${finding.element || '画面级'} · ${measured}`)
+            }
+          }
+          if (row.agentReviewStatus === 'ok' && row.agentReview) {
+            const agentLabels = { positive: '正例', negative: '反例', unmeasured: '未测' }
+            for (const result of row.agentReview.results) {
+              console.log(`  Agent ${agentLabels[result.result]} ${result.ruleId} · ${result.reason}${result.elementId ? ` · ${result.elementId}` : ''}`)
+            }
+          }
+        }
       })
     }
     return
@@ -336,6 +409,13 @@ async function main() {
       if ((width ?? 0) < 0 || (height ?? 0) < 0) usage('宽高不能小于 0')
       ops = [{ op: 'asset.add', svg: fs.readFileSync(path.resolve(svgFile), 'utf8'),
         name: str(flags, 'name') || path.basename(svgFile, '.svg'), width, height, x: num(flags, 'x'), y: num(flags, 'y') }]
+      break
+    }
+    case 'replace': {
+      const svgFile = str(flags, 'svg')
+      if (!asset) usage('replace 需要 --asset <id>')
+      if (!svgFile) usage('replace 需要 --svg <file>')
+      ops = [{ op: 'asset.update', asset, patch: { svg: fs.readFileSync(path.resolve(svgFile), 'utf8') } }]
       break
     }
     case 'style':

@@ -76,12 +76,20 @@ export interface Asset {
   groups: AnimGroup[]
   /** 解析后的元素索引，供侧边栏 / CLI / Agent 定位元素 */
   elements?: ProjectElement[]
+  /** 与 SVG 素材配套的视频文案 */
+  videoCopy?: string
+  /** 与视频文案配套的录音，使用可直接播放的 data URL 保存 */
+  voiceoverAudio?: string
   overrides: Record<string, StylePatch>
   /** 容器元素 id → 布局 spec（由布局内核计算，渲染层只负责画） */
   layouts?: Record<string, LayoutSpec>
   warnings: string[]
-  /** 最近一次评审的快照（非 PASS 明细）：随项目保存，CLI 直接读 */
+  /** 最近一次规则评审快照：随项目保存，包含正反例明细 */
   review?: import('./lib/review/types').ReviewSnapshot
+  /** 最近一次 Agent 语义评审：与公式评审分开保存、分开过期 */
+  agentReview?: import('./lib/review/types').AgentReviewSnapshot
+  /** 变体来源素材 ID；指向最初素材，供自动排列按时间把变体放在右侧 */
+  variantOf?: string
   source: 'sample' | 'import'
   x: number
   y: number

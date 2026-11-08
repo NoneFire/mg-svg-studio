@@ -7,6 +7,7 @@ import { Icon } from './Icon'
 import { SearchField } from './controls'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './kit/dropdown-menu'
 import LayersPanel from './LayersPanel'
+import AutoArrangeDialog from './AutoArrangeDialog'
 
 const thumbs = new WeakMap<Asset, { svg: string; groups: Asset['groups']; url: string }>()
 
@@ -56,34 +57,9 @@ export default function LeftPanel({ studio }: { studio: Studio | null }) {
 
   return (
     <Tabs.Root value={tab} onValueChange={setTab} asChild>
-      <aside id="library" aria-label="素材库" className={`left-panel ${store.leftOpen ? '' : 'collapsed'}`}>
+      <aside id="library" aria-label="素材与图层" className={`left-panel ${store.leftOpen ? '' : 'collapsed'}`}>
         <div className="panel-head">
-          <div className="library-title">
-            <h2>素材库</h2>
-            <span className="count">{assets.length}</span>
-            <span className="spacer" />
-            <button className="library-import" onClick={chooseFiles} title="导入 SVG 或图片">
-              <Icon name="plus" size={15} /> 导入
-            </button>
-            <input
-              ref={importRef}
-              type="file"
-              accept=".svg,.png,.jpg,.jpeg,.webp,.gif,.avif,image/svg+xml,image/*"
-              multiple
-              hidden
-              onChange={(event) => {
-                if (event.target.files?.length) void store.importFiles(event.target.files)
-                event.target.value = ''
-              }}
-            />
-            <button className="icon-btn" title="关闭素材库面板" onClick={() => {
-              store.setLeftOpen(false)
-              document.getElementById('library-toggle')?.focus()
-            }}>
-              <Icon name="panelLeft" size={15} />
-            </button>
-          </div>
-          <Tabs.List className="library-tabs" aria-label="素材库页签">
+          <Tabs.List className="library-tabs" aria-label="素材与图层页签">
             <Tabs.Trigger value="assets"><Icon name="shape" size={14} /> 素材</Tabs.Trigger>
             <Tabs.Trigger value="layers"><Icon name="layers" size={14} /> 图层</Tabs.Trigger>
           </Tabs.List>
@@ -91,7 +67,23 @@ export default function LeftPanel({ studio }: { studio: Studio | null }) {
 
         <Tabs.Content value="assets" className="library-pane">
           <div className="library-search">
-            <SearchField label="搜索素材" value={query} onChange={setQuery} />
+            <div className="library-search-row">
+              <SearchField label="搜索素材" value={query} onChange={setQuery} />
+              <button className="library-import" onClick={chooseFiles} title="导入 SVG 或图片" aria-label="导入 SVG 或图片">
+                <Icon name="plus" size={15} />
+              </button>
+              <input
+                ref={importRef}
+                type="file"
+                accept=".svg,.png,.jpg,.jpeg,.webp,.gif,.avif,image/svg+xml,image/*"
+                multiple
+                hidden
+                onChange={(event) => {
+                  if (event.target.files?.length) void store.importFiles(event.target.files)
+                  event.target.value = ''
+                }}
+              />
+            </div>
             {q && <span className="library-result" role="status">{filtered.length} / {assets.length} 项</span>}
           </div>
           <div className="asset-list">
@@ -132,6 +124,9 @@ export default function LeftPanel({ studio }: { studio: Studio | null }) {
                       <DropdownMenuItem onSelect={() => store.duplicateAsset(asset.id)}>
                         <Icon name="copy" size={14} /> 复制素材
                       </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => store.saveVariant(asset)}>
+                        <Icon name="copy" size={14} /> 另存为变体
+                      </DropdownMenuItem>
                       <DropdownMenuItem variant="destructive" onSelect={() => {
                         if (confirm(`删除素材「${asset.name}」？`)) void store.removeAsset(asset.id)
                       }}>
@@ -155,9 +150,7 @@ export default function LeftPanel({ studio }: { studio: Studio | null }) {
           </div>
           <div className="panel-foot">
             <span><Icon name="upload" size={13} /> 拖入或粘贴</span>
-            <button disabled={!assets.length} onClick={() => store.relayout()} title="按网格重新排列素材">
-              <Icon name="grid" size={13} /> 自动排列
-            </button>
+            <AutoArrangeDialog />
           </div>
         </Tabs.Content>
 

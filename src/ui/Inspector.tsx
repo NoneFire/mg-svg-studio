@@ -1,19 +1,21 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Tabs } from 'radix-ui'
 import { store } from '../store'
 import type { Studio } from '../lib/studio'
 import type { AnimGroup, Asset, Keyframe, PropTrack, StylePatch } from '../types'
-import { DEFAULT_LAYOUT, summarizeLayout, type Align, type Justify, type LayoutSpec } from '../lib/layout'
 import { Icon } from './Icon'
 import { Chip, ColorField, Field, IconButton, NumberInput, ResizeHandle, Select, TextInput } from './controls'
 import { groupColor } from './Timeline'
-import ReviewPanel from './ReviewPanel'
+import InspectorHistory from './InspectorHistory'
+import GroupLayout from './GroupLayout'
+import VideoCopyEditor from './VideoCopyEditor'
+
+const ReviewPanel = lazy(() => import('./ReviewPanel'))
 
 const INSPECTOR_TABS = [
+  { id: 'asset', label: '素材', icon: 'settings', Panel: AssetPanel },
   { id: 'anim', label: '动画', icon: 'animation', Panel: AnimPanel },
   { id: 'element', label: '元素', icon: 'shape', Panel: ElementPanel },
-  { id: 'layout', label: '布局', icon: 'grid', Panel: LayoutPanel },
-  { id: 'asset', label: '素材', icon: 'settings', Panel: AssetPanel },
   { id: 'review', label: '评审', icon: 'sparkle', Panel: ReviewPanel },
 ] as const
 
@@ -41,7 +43,7 @@ const TRACK_PROPS = ['opacity', 'transform', 'letter-spacing', 'fill', 'stroke',
 
 export default function Inspector({ studio }: { studio: Studio | null }) {
   const asset = store.selectedAsset
-  const [tab, setTab] = useState<Tab>('anim')
+  const [tab, setTab] = useState<Tab>('asset')
   const panelRef = useRef<HTMLElement>(null)
   const [bounds, setBounds] = useState({ min: MIN_WIDTH, max: MAX_WIDTH, initial: 360 })
   const [preferredWidth, setPreferredWidth] = useState(() => {
@@ -85,9 +87,10 @@ export default function Inspector({ studio }: { studio: Studio | null }) {
     setTab((cur) => {
       if (cur === 'review') return cur
       if (store.selection.elementId) return 'element'
-      return store.selection.assetId && cur === 'element' ? 'anim' : cur
+      if (store.inspectorFocusVersion && store.selection.assetId) return 'asset'
+      return store.selection.assetId && cur === 'element' ? 'asset' : cur
     })
-  }, [store.selection.elementId, store.selection.assetId])
+  }, [store.selection.elementId, store.selection.assetId, store.inspectorFocusVersion])
 
   return (
     <Tabs.Root value={tab} onValueChange={(value) => setTab(value as Tab)} asChild>
@@ -114,45 +117,8 @@ export default function Inspector({ studio }: { studio: Studio | null }) {
             }
           }}
         />
-        <div className="inspector-head">
-          <div className="inspector-identity">
-            {asset ? (
-              <div className="inspector-asset">
-                <input
-                  className="asset-title-input"
-                  aria-label="素材名称"
-                  title={asset.name}
-                  value={asset.name}
-                  onChange={(e) => store.renameAsset(asset.id, e.target.value)}
-                  spellCheck={false}
-                />
-                <div className="inspector-meta">
-                  <span className="mono">{Math.round(asset.width)} × {Math.round(asset.height)}</span>
-                  <span>
-                    {asset.groups.length
-                      ? `${asset.groups.filter((g) => g.enabled !== false).length} 条动画`
-                      : '静态素材'}
-                  </span>
-                  {asset.warnings.length > 0 && (
-                    <button className="warn-text" title={asset.warnings.join('\n')} onClick={() => setTab('asset')}>
-                      {asset.warnings.length} 处降级
-                    </button>
-                  )}
-                </div>
-              </div>
-            ) : <h2>检查器</h2>}
-            <button
-              className="icon-btn"
-              title="关闭检查器面板"
-              onClick={() => {
-                store.setRightOpen(false)
-                document.getElementById('inspector-toggle')?.focus()
-              }}
-            >
-              <Icon name="close" size={16} />
-            </button>
-          </div>
-          {asset && (
+        {asset && (
+          <div className="inspector-head">
             <Tabs.List className="inspector-tabs" aria-label="检查器页签">
               {INSPECTOR_TABS.map(({ id, label, icon }) => (
                 <Tabs.Trigger key={id} value={id}>
@@ -160,19 +126,21 @@ export default function Inspector({ studio }: { studio: Studio | null }) {
                 </Tabs.Trigger>
               ))}
             </Tabs.List>
-          )}
-        </div>
+          </div>
+        )}
         {asset ? (
           INSPECTOR_TABS.map(({ id, Panel }) => (
             <Tabs.Content key={id} value={id} className="inspector-body">
-              <Panel asset={asset} studio={studio} />
+              <Suspense fallback={<div className="inspector-empty" role="status">正在加载面板…</div>}>
+                <Panel asset={asset} studio={studio} />
+              </Suspense>
             </Tabs.Content>
           ))
         ) : (
           <div className="inspector-empty">
             <Icon name="shape" size={24} />
             <strong>未选中素材</strong>
-            <p>在画布或左侧素材库中选择素材，即可编辑动画、元素和布局。</p>
+            <p>在画布或左侧「素材」页中选择素材，即可编辑动画、元素和布局。</p>
           </div>
         )}
       </aside>
@@ -203,19 +171,14 @@ function AnimPanel({ asset, studio }: { asset: Asset; studio: Studio | null }) {
     if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight
   }, [selectedId])
 
-  const commit = (groups: AnimGroup[]) => {
-    store.updateGroups(asset.id, groups)
-    studio?.refreshAsset(asset)
-  }
-
-  const updateGroup = (patch: Partial<AnimGroup>) => {
+  const updateGroup = (patch: Partial<AnimGroup>, field = Object.keys(patch).join(',')) => {
     if (!group) return
-    commit(asset.groups.map((g) => (g.id === group.id ? { ...g, ...patch } : g)))
+    store.updateGroups(asset.id, asset.groups.map((g) => (g.id === group.id ? { ...g, ...patch } : g)), `${group.id}:${field}`)
   }
 
   const updateTrack = (trackId: string, keyframes: Keyframe[]) => {
     if (!group) return
-    updateGroup({ tracks: group.tracks.map((t) => (t.id === trackId ? { ...t, keyframes } : t)) })
+    updateGroup({ tracks: group.tracks.map((t) => (t.id === trackId ? { ...t, keyframes } : t)) }, trackId)
   }
 
   return (
@@ -238,7 +201,7 @@ function AnimPanel({ asset, studio }: { asset: Asset; studio: Studio | null }) {
       )}
 
       <header className="group-list-head">
-        <h3>动画轨道 <span className="muted">{asset.groups.length} 条</span></h3>
+        <span className="muted">{asset.groups.length} 条动画</span>
         <button className="btn ghost tiny" aria-expanded={adding} onClick={() => setAdding((v) => !v)}>
           <Icon name={adding ? 'close' : 'plus'} size={13} />
           {adding ? '收起表单' : '添加动画'}
@@ -273,7 +236,7 @@ function AnimPanel({ asset, studio }: { asset: Asset; studio: Studio | null }) {
                 title={g.enabled === false ? '启用' : '停用'}
                 aria-label={`${g.enabled === false ? '启用' : '停用'} ${g.name}`}
                 onClick={() => {
-                  commit(asset.groups.map((x) => (x.id === g.id ? { ...x, enabled: g.enabled === false } : x)))
+                  store.setGroupEnabled(asset.id, g.id, g.enabled === false)
                 }}
               >
                 <Icon name={g.enabled === false ? 'eyeOff' : 'eye'} size={13} />
@@ -305,13 +268,12 @@ function AnimPanel({ asset, studio }: { asset: Asset; studio: Studio | null }) {
               size={13}
               danger
               onClick={() => {
-                commit(asset.groups.filter((g) => g.id !== group.id))
+                store.removeGroup(asset.id, group.id)
                 store.selectGroup(null)
               }}
             />
           </div>
 
-          <div className="psec-label">时间与播放</div>
           <div className="grid-2">
             <Field label="时长">
               <NumberInput value={group.duration} step={0.05} min={0.05} suffix="s" onChange={(v) => updateGroup({ duration: v })} />
@@ -383,9 +345,6 @@ function AnimPanel({ asset, studio }: { asset: Asset; studio: Studio | null }) {
 
           {(group.targetIds?.length || 1) > 1 && (
             <>
-              <div className="psec-label">
-                交错 <span className="psec-note">{group.targetIds!.length} 个目标</span>
-              </div>
               <Field label="交错延迟">
                 <NumberInput
                   value={group.stagger || 0}
@@ -406,9 +365,6 @@ function AnimPanel({ asset, studio }: { asset: Asset; studio: Studio | null }) {
             </>
           )}
 
-          <div className="psec-label">
-            关键帧 <span className="psec-note">{group.tracks.length} 个属性</span>
-          </div>
           <div className="tracks">
             {group.tracks.map((track) => (
               <TrackEditor
@@ -591,7 +547,6 @@ function AddGroupForm({ asset, studio, onDone }: { asset: Asset; studio: Studio 
             enabled: true,
           }
           store.addGroup(asset.id, group)
-          studio?.refreshAsset(asset)
           store.selectGroup(group.id)
           onDone()
         }}
@@ -613,7 +568,7 @@ function ElementPanel({ asset, studio }: { asset: Asset; studio: Studio | null }
 
   const apply = (patch: StylePatch) => {
     if (!selectedId) return
-    store.editElementStyle(studio, asset, selectedId, patch)
+    store.updateElementStyle(asset.id, selectedId, patch)
   }
 
 
@@ -627,6 +582,11 @@ function ElementPanel({ asset, studio }: { asset: Asset; studio: Studio | null }
             <Chip tone="accent">GROUP</Chip>
             <span className="element-label" title={selected.el.label}>{selected.el.label}</span>
           </div>
+          <InspectorHistory key={`${asset.id}:${selectedId}`} asset={asset} elementId={selectedId} />
+          {(selected.children.length > 1 || asset.layouts?.[selected.el.id]) && (
+            <GroupLayout key={`${asset.id}:${selected.el.id}`} asset={asset} id={selected.el.id}
+              label={selected.el.label || '分组'} count={selected.children.length} />
+          )}
           <p className="panel-note">
             <Icon name="layers" size={14} />
             <span>组本身支持整体透明度；填充/描边请选择内部的图形元素。</span>
@@ -654,11 +614,11 @@ function ElementPanel({ asset, studio }: { asset: Asset; studio: Studio | null }
               icon="reset"
               title="恢复原始样式"
               size={13}
-              onClick={() => store.editElementStyle(studio, asset, selectedId!, null)}
+              onClick={() => store.resetElementStyle(asset.id, selectedId!)}
             />
           </div>
+          <InspectorHistory key={`${asset.id}:${selectedId}`} asset={asset} elementId={selectedId} />
 
-          <div className="psec-label">外观</div>
           <div className="grid-2">
             <Field label="填充">
               <ColorField value={toColorValue(selected.node.fill)} onChange={(v) => apply({ fill: v })} />
@@ -678,7 +638,6 @@ function ElementPanel({ asset, studio }: { asset: Asset; studio: Studio | null }
 
           {selected.el.tag === 'text' && (
             <>
-              <div className="psec-label">文本</div>
               <Field label="文本">
                 <TextInput value={String((selected.node as any).text ?? '')} onChange={(v) => apply({ text: v })} />
               </Field>
@@ -699,7 +658,6 @@ function ElementPanel({ asset, studio }: { asset: Asset; studio: Studio | null }
             </Field>
           )}
 
-          <div className="psec-label">变换</div>
           <div className="grid-2">
             <Field label="旋转">
               <NumberInput
@@ -754,7 +712,6 @@ function AssetPanel({ asset, studio }: { asset: Asset; studio: Studio | null }) 
 
   return (
     <>
-      <div className="psec-label">概览</div>
       <div className="stat-grid">
         <div className="stat">
           <span className="stat-label">画布尺寸</span>
@@ -776,10 +733,11 @@ function AssetPanel({ asset, studio }: { asset: Asset; studio: Studio | null }) 
         </div>
       </div>
 
-      <div className="psec-label">信息</div>
       <Field label="名称">
         <TextInput value={asset.name} onChange={(v) => store.renameAsset(asset.id, v)} />
       </Field>
+      <VideoCopyEditor key={asset.id} asset={asset} />
+      <InspectorHistory key={asset.id} asset={asset} />
 
       <div className="meta-row">
         <span>来源</span>
@@ -795,8 +753,7 @@ function AssetPanel({ asset, studio }: { asset: Asset; studio: Studio | null }) 
       </div>
 
       {asset.warnings.length > 0 && (
-        <div className="warnings">
-          <h4>降级提示</h4>
+        <div className="warnings" aria-label="降级提示">
           <ul>
             {asset.warnings.map((w, i) => (
               <li key={i}>{w}</li>
@@ -805,7 +762,6 @@ function AssetPanel({ asset, studio }: { asset: Asset; studio: Studio | null }) 
         </div>
       )}
 
-      <div className="psec-label">操作</div>
       <div className="inspector-actions">
         <button
           className="btn ghost small"
@@ -821,10 +777,7 @@ function AssetPanel({ asset, studio }: { asset: Asset; studio: Studio | null }) 
         </button>
         <button
           className="btn ghost small"
-          onClick={async () => {
-            await store.reextract(asset.id)
-            studio?.refreshAsset(asset, { rebuildContent: true })
-          }}
+          onClick={() => store.reextract(asset.id)}
         >
           <Icon name="animation" size={13} /> 重新提取动画
         </button>
@@ -833,6 +786,12 @@ function AssetPanel({ asset, studio }: { asset: Asset; studio: Studio | null }) 
           onClick={() => store.duplicateAsset(asset.id)}
         >
           <Icon name="copy" size={13} /> 复制素材
+        </button>
+        <button
+          className="btn ghost small"
+          onClick={() => store.saveVariant(asset)}
+        >
+          <Icon name="copy" size={13} /> 另存为变体
         </button>
         <button
           className="btn danger small"
@@ -850,196 +809,6 @@ function AssetPanel({ asset, studio }: { asset: Asset; studio: Studio | null }) 
 function targetLabel(asset: Asset, targetId: string, studio: Studio | null) {
   const el = studio?.getBoard(asset.id)?.content.elements.get(targetId)
   return el ? el.el.label : ''
-}
-
-/* ------------------------------- 布局面板 ------------------------------- */
-
-function LayoutPanel({ asset, studio }: { asset: Asset; studio: Studio | null }) {
-  const board = studio?.getBoard(asset.id)
-  const groups = useMemo(() => {
-    const out: { id: string; label: string; count: number }[] = []
-    board?.content.elements.forEach((el) => {
-      if ((el.el.kind === 'group' || el.el.tag === 'svg') && el.children.length > 1) {
-        out.push({ id: el.el.id, label: el.el.label || el.el.tag, count: el.children.length })
-      }
-    })
-    return out
-  }, [asset.id, board, store.version])
-
-  const selectedIsGroup = groups.find((g) => g.id === store.selection.elementId)
-  const [containerId, setContainerId] = useState('')
-
-  useEffect(() => {
-    if (selectedIsGroup) {
-      setContainerId(selectedIsGroup.id)
-      return
-    }
-    setContainerId((prev) => (groups.some((g) => g.id === prev) ? prev : groups[0]?.id || ''))
-  }, [groups.length, selectedIsGroup?.id])
-
-  const container = groups.find((g) => g.id === containerId)
-  const spec: LayoutSpec = { ...DEFAULT_LAYOUT, ...(asset.layouts?.[containerId] || {}) }
-  const applied = !!asset.layouts?.[containerId]
-
-  const update = (patch: Partial<LayoutSpec>) => {
-    if (!containerId) return
-    const next = { ...spec, ...patch } as LayoutSpec
-    store.setLayout(asset.id, containerId, next)
-    studio?.applyLayout(asset.id, containerId, next)
-  }
-
-  if (!groups.length) {
-    return (
-      <div className="panel-note">
-        <Icon name="grid" size={16} />
-        <span>当前素材没有含多个子元素的容器。布局内核作用于「容器 → 子元素」，可以先在元素树里选一个 &lt;g&gt; 组。</span>
-      </div>
-    )
-  }
-
-  return (
-    <>
-      <div className="psec-label">布局容器</div>
-      <Field label="选择容器">
-        <select className="select" value={containerId} onChange={(e) => setContainerId(e.target.value)}>
-          {groups.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.label} · {g.count} 个子元素
-            </option>
-          ))}
-        </select>
-      </Field>
-
-      <div className="layout-summary">
-        <Icon name="grid" size={13} />
-        <span>{container ? summarizeLayout(container.count, spec) : ''}</span>
-        {applied && <span className="layout-badge">已应用</span>}
-      </div>
-
-      <div className="psec-label">排列方式</div>
-      <div className="preset-row">
-        {[
-          ['横向', { mode: 'row' } as Partial<LayoutSpec>],
-          ['纵向', { mode: 'column' } as Partial<LayoutSpec>],
-          ['2 列', { mode: 'grid', cols: 2 } as Partial<LayoutSpec>],
-          ['3 列', { mode: 'grid', cols: 3 } as Partial<LayoutSpec>],
-          ['自由', { mode: 'free' } as Partial<LayoutSpec>],
-        ].map(([label, preset]) => (
-          <button
-            key={label as string}
-            className={`mini-btn ${(preset as LayoutSpec).mode === spec.mode && hasPresetMatch(preset as Partial<LayoutSpec>, spec) ? 'on' : ''}`}
-            aria-pressed={hasPresetMatch(preset as Partial<LayoutSpec>, spec)}
-            onClick={() => update({ ...(preset as Partial<LayoutSpec>) })}
-          >
-            {label as string}
-          </button>
-        ))}
-      </div>
-
-      <div className="psec-label">间距与对齐</div>
-      <div className="grid-2">
-        <Field label="间距">
-          <NumberInput value={spec.gap} min={0} step={2} onChange={(v) => update({ gap: v, rowGap: v })} />
-        </Field>
-        <Field label="内边距">
-          <NumberInput value={spec.padding} min={0} step={2} onChange={(v) => update({ padding: v })} />
-        </Field>
-      </div>
-
-      {spec.mode === 'grid' && (
-        <Field label="列数">
-          <NumberInput value={spec.cols} min={1} max={12} step={1} onChange={(v) => update({ cols: Math.round(v) })} />
-        </Field>
-      )}
-
-      <div className="grid-2">
-        <Field label="水平对齐">
-          <Select
-            value={spec.alignX}
-            onChange={(v) => update({ alignX: v as Align })}
-            options={[
-              { value: 'start', label: '左 / 起始' },
-              { value: 'center', label: '居中' },
-              { value: 'end', label: '右 / 末尾' },
-            ]}
-          />
-        </Field>
-        <Field label="垂直对齐">
-          <Select
-            value={spec.alignY}
-            onChange={(v) => update({ alignY: v as Align })}
-            options={[
-              { value: 'start', label: '上 / 起始' },
-              { value: 'center', label: '居中' },
-              { value: 'end', label: '下 / 末尾' },
-            ]}
-          />
-        </Field>
-      </div>
-
-      {(spec.mode === 'row' || spec.mode === 'column') && (
-        <Field label="主轴分布">
-          <Select
-            value={spec.justify}
-            onChange={(v) => update({ justify: v as Justify })}
-            options={[
-              { value: 'start', label: '靠起始' },
-              { value: 'center', label: '居中' },
-              { value: 'end', label: '靠末尾' },
-              { value: 'between', label: '两端对齐（需要限定宽度）' },
-            ]}
-          />
-        </Field>
-      )}
-
-      <Field label="限定容器宽度">
-        <div className="row-inline">
-          <NumberInput
-            value={spec.width ?? 0}
-            min={0}
-            step={10}
-            suffix="px"
-            onChange={(v) => update({ width: v > 0 ? v : null })}
-          />
-          {spec.mode === 'row' && (
-            <button
-              className={`mini-toggle layout-wrap ${spec.wrap ? 'on' : ''}`}
-              title="自动换行"
-              aria-pressed={spec.wrap}
-              onClick={() => update({ wrap: !spec.wrap })}
-            >
-              自动换行
-            </button>
-          )}
-        </div>
-      </Field>
-
-      <div className="layout-actions">
-        <button className="btn ghost small" onClick={() => studio?.applyLayout(asset.id, containerId, spec)}>
-          <Icon name="reset" size={13} /> 重新计算
-        </button>
-        <button
-          className="btn ghost small"
-          onClick={() => {
-            store.setLayout(asset.id, containerId, null)
-            studio?.clearLayout(asset.id, containerId)
-          }}
-        >
-          <Icon name="close" size={13} /> 清除布局
-        </button>
-      </div>
-
-      <p className="hint">
-        布局内核只计算坐标，渲染层按结果摆放；元素自身的形状、样式和动画都不受影响。改完布局仍然可以逐个调元素。
-      </p>
-    </>
-  )
-}
-
-function hasPresetMatch(preset: Partial<LayoutSpec>, spec: LayoutSpec) {
-  if (preset.mode !== spec.mode) return false
-  if (preset.mode === 'grid') return preset.cols === spec.cols
-  return true
 }
 
 /* ------------------------------- 批量动画 ------------------------------- */
@@ -1125,7 +894,6 @@ function BatchAnim({ asset, studio, ids }: { asset: Asset; studio: Studio | null
                 enabled: true,
               }
               store.addGroup(asset.id, group)
-              studio?.refreshAsset(asset)
               store.selectGroup(group.id)
               store.clearMultiSelect()
             }}

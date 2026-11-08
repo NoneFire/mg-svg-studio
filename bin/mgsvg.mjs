@@ -1124,6 +1124,8 @@ function normalizeAsset(a) {
     kind: groups.length ? "animated" : "static",
     groups,
     elements: Array.isArray(a.elements) ? a.elements : [],
+    videoCopy: typeof a.videoCopy === "string" ? a.videoCopy : "",
+    voiceoverAudio: typeof a.voiceoverAudio === "string" ? a.voiceoverAudio : void 0,
     overrides: a.overrides && typeof a.overrides === "object" ? a.overrides : {},
     layouts: a.layouts && typeof a.layouts === "object" ? a.layouts : {},
     warnings: Array.isArray(a.warnings) ? a.warnings : [],
@@ -1132,6 +1134,8 @@ function normalizeAsset(a) {
     y: Number(a.y) || 0,
     createdAt: Number(a.createdAt) || Date.now(),
     review: a.review && typeof a.review === "object" ? a.review : void 0,
+    agentReview: a.agentReview && typeof a.agentReview === "object" ? a.agentReview : void 0,
+    variantOf: typeof a.variantOf === "string" ? a.variantOf : void 0,
     version: 1
   };
 }
@@ -1187,7 +1191,17 @@ function applyOne(project, op) {
     }
     case "asset.update": {
       const asset = findAsset(project, op.asset);
-      Object.assign(asset, op.patch);
+      const { svg, ...fields } = op.patch;
+      if (svg !== void 0) {
+        if (typeof svg !== "string" || !svg.trim()) throw new Error("asset.update \u7684 svg \u5FC5\u987B\u662F\u975E\u7A7A\u5B57\u7B26\u4E32");
+        const doc = parseSvgDocument(svg);
+        asset.svg = svg;
+        asset.width = doc.width || asset.width;
+        asset.height = doc.height || asset.height;
+        asset.elements = elementIndexOf(doc);
+        asset.warnings = doc.warnings;
+      }
+      Object.assign(asset, fields);
       return `\u66F4\u65B0\u7D20\u6750 ${asset.id}\uFF1A${Object.keys(op.patch).join(", ")}`;
     }
     case "board.move": {
@@ -1399,10 +1413,819 @@ var init_io = __esm({
 
 // src/lib/bridge-protocol.ts
 function bridgeCommandTimeout(type) {
-  return type === "review" ? 45e3 : 8e3;
+  return type === "review" ? 45e3 : type === "asset.add" || type === "project.reload" ? 2e4 : 8e3;
 }
 var init_bridge_protocol = __esm({
   "src/lib/bridge-protocol.ts"() {
+  }
+});
+
+// src/lib/review/rules-core.json
+var rules_core_default;
+var init_rules_core = __esm({
+  "src/lib/review/rules-core.json"() {
+    rules_core_default = {
+      libraryVersion: 4,
+      referenceCanvas: {
+        width: 1920,
+        height: 1080,
+        note: "\u51E0\u4F55\u9608\u503C\u4E3A px@1080p\uFF0C\u5B9E\u9645\u6309 scale = min(W,H)/1080 \u7F29\u653E"
+      },
+      coveragePolicy: {
+        rule: "\u6BCF\u6761\u5199\u4F5C\u89C4\u5219\u90FD\u5FC5\u987B\u6709\u53EF\u7B97\u6307\u6807\uFF08metric + gate\uFF09\u548C\u843D\u5730\u5B9E\u73B0\uFF1B\u6CA1\u6709 metric \u7684\u89C4\u5219\u4E0D\u7B97\u89C4\u5219",
+        noMetric: "\u65E0 metric \u7684\u89C4\u5219\u53EA\u80FD\u8BB0 severity=human\uFF0C\u8FDB\u4EBA\u5BA1\u6E05\u5355\uFF0C\u4E0D\u8BA1\u5165\u901A\u8FC7\u7387",
+        silent: "\u89C4\u5219\u5DF2\u5B9E\u73B0\u4F46\u672C\u6B21\u6CA1\u6709\u4EA7\u51FA\u8BB0\u5F55\u65F6\u8BB0 UNMEASURED\uFF0C\u4E0D\u5F97\u7B97 PASS\uFF1B\u62A5\u544A\u5FC5\u987B\u9010\u6761\u5217\u51FA\u72B6\u6001"
+      },
+      statusVocabulary: [
+        "PASS",
+        "WARN",
+        "FAIL",
+        "UNMEASURED",
+        "NA",
+        "DIAGNOSTIC"
+      ],
+      dimensions: {
+        measure: "exact \u5B9A\u4E49\u5373\u6570\u503C / model \u4EE3\u7406\u6A21\u578B\uFF0C\u4EC5\u5E8F\u5173\u7CFB\u53EF\u4FE1 / semantic \u53EA\u80FD\u4EBA\u5224",
+        threshold: "standard \u53EF\u5F15\u7528\u89C4\u8303\uFF0C\u6539\u52A8\u9700\u6362\u5F15\u6587 / convention \u884C\u4E1A\u60EF\u4F8B\uFF0C\u53EF\u8FA9\u62A4\u65E0\u5F3A\u5236\u529B / proposal \u672C\u9879\u76EE\u63D0\u6848\uFF0C\u6C38\u4E0D\u963B\u65AD",
+        severity: "blocker \u503C\u5F97\u4FEE / warn \u53EF\u8BA8\u8BBA / info \u53C2\u8003",
+        impact: "high \u9AD8\uFF08\u505A\u4E0D\u6210\uFF09/ medium \u4E2D\uFF08\u8BFB\u4E0D\u987A\uFF09/ low \u4F4E\uFF08\u4E0D\u7CBE\u81F4\uFF09\uFF1B\u53EA\u51B3\u5B9A\u6392\u5E8F\u4E0E\u5C55\u793A\u9884\u7B97\uFF0C\u4E0D\u51B3\u5B9A\u80FD\u4E0D\u80FD\u62E6",
+        medium: "video / ui / print",
+        status: "PASS/WARN/FAIL \u662F\u95F8\u95E8\u7ED3\u8BBA\uFF1BDIAGNOSTIC \u662F\u8BCA\u65AD\u8F93\u51FA\uFF0C\u4E0D\u53C2\u4E0E\u5224\u5B9A"
+      },
+      impactPolicy: {
+        axis: "\u5F71\u54CD\u7A0B\u5EA6\uFF1A\u9AD8=\u505A\u4E0D\u6210 / \u4E2D=\u8BFB\u4E0D\u987A / \u4F4E=\u4E0D\u7CBE\u81F4\uFF1B\u4E0E\u95F8\u95E8\u6743\u9650\uFF08\u80FD\u4E0D\u80FD\u62E6\uFF09\u3001\u5A92\u4ECB\uFF08video/ui/print\uFF09\u76F8\u4E92\u72EC\u7ACB",
+        labels: {
+          high: "\u9AD8",
+          medium: "\u4E2D",
+          low: "\u4F4E"
+        },
+        byPrinciple: {
+          \u53EF\u8BFB\u6027: "high",
+          \u53EF\u7528\u6027: "high",
+          \u4EA4\u4ED8\u5B8C\u6574\u6027: "high",
+          \u5BF9\u6BD4: "high",
+          \u4EB2\u5BC6\u6027: "medium",
+          \u89C6\u89C9\u5C42\u6B21: "medium",
+          \u5BF9\u9F50: "medium",
+          \u7F51\u683C: "medium",
+          "\u683C\u5F0F\u5854\xB7\u76F8\u4F3C": "medium",
+          "\u683C\u5F0F\u5854\xB7\u95ED\u5408": "medium",
+          "\u683C\u5F0F\u5854\xB7\u8FDE\u7EED": "medium",
+          \u5171\u540C\u533A\u57DF: "medium",
+          \u8D1F\u7A7A\u95F4: "medium",
+          \u91CD\u590D\u4E0E\u4E00\u81F4\u6027: "medium",
+          \u4FE1\u606F\u5BC6\u5EA6: "medium",
+          \u8FD0\u52A8\u4E0E\u8282\u594F: "medium",
+          \u7EDF\u4E00\u4E0E\u591A\u6837: "low",
+          \u5E73\u8861: "low",
+          \u6BD4\u4F8B: "low",
+          \u610F\u4E49: "low"
+        },
+        override: {
+          "SN-01": "low",
+          "OR-01": "low",
+          "PN-01": "low",
+          "NS-02": "low",
+          "TY-07": "medium",
+          "TY-08": "medium"
+        },
+        fallback: "medium",
+        order: [
+          "high",
+          "medium",
+          "low"
+        ],
+        budget: {
+          high: null,
+          medium: 5,
+          low: 0,
+          elementsPerCard: 5,
+          note: "\u9AD8\u5F71\u54CD\u4E0D\u6298\u53E0\uFF08\u4E00\u6761\u95EE\u9898\u90FD\u4E0D\u8BE5\u88AB\u85CF\uFF09\uFF1B\u4E2D\u5F71\u54CD\u6309\u89C4\u5219\u805A\u5408\u6210\u4E00\u5F20\u5361\uFF0C\u8D85\u8FC7 5 \u7C7B\u6298\u6210\u4E00\u884C\uFF1B\u4F4E\u5F71\u54CD\u53EA\u7ED9\u6761\u6570\u4E0E\u89C4\u5219 ID"
+        },
+        note: "\u5F71\u54CD\u7A0B\u5EA6\u53EA\u505A\u6392\u5E8F\u4E0E\u5C55\u793A\u9884\u7B97\uFF0C\u4E0D\u6539\u53D8 PASS/WARN/FAIL\uFF1A\u9AD8\u5F71\u54CD\u4E0D\u7B49\u4E8E\u80FD\u62E6\uFF0C\u4F4E\u5F71\u54CD\u4E5F\u4E0D\u7B49\u4E8E\u53EF\u5FFD\u7565\u3002\u5B8C\u6574\u8BB0\u5F55\u4ECD\u5728 findings[]\uFF0C\u6298\u53E0\u53EA\u53D1\u751F\u5728 view \u91CC"
+      },
+      rules: [
+        {
+          id: "PR-01",
+          title: "\u8BED\u4E49\u5206\u7EC4",
+          severity: "warn",
+          medium: [
+            "ui",
+            "print"
+          ],
+          metric: "gap_ratio",
+          unit: "ratio",
+          gate: {
+            warn: {
+              lt: 1.2
+            }
+          },
+          minSamples: 3,
+          requires: [
+            "boxes"
+          ],
+          note: "\u95F4\u8DDD\u6BD4\u7528\u4E8E\u5B9A\u4F4D\uFF0C\u7ED3\u5408\u5171\u540C\u533A\u57DF\u548C\u4EFB\u52A1\u8BED\u4E49\u505A\u4E00\u6B21\u5224\u65AD\u3002\u7F3A\u5C11\u53EF\u6838\u5BF9\u7684\u5F52\u5C5E\u8BC1\u636E\u65F6\u8BB0\u672A\u6D4B\u3002\u540C\u4E00\u5BB9\u5668\u5185\u7684\u884C\u8DDD\u6309\u7EC4\u5185\u95F4\u8DDD\u5904\u7406\uFF0C\u7528\u4E0E\u7EC4\u5185\u51C0\u8DDD\u76F8\u540C\u7684\u91CF\u53D6\u57FA\u51C6\uFF1B\u5BB9\u5668\u8FB9\u754C\u53EA\u7528\u6765\u5224\u65AD\u5F52\u5C5E\uFF0C\u4E0D\u5F53\u95F4\u8DDD\u7528\u3002",
+          supersededBy: "GR-02",
+          measure: "semantic",
+          threshold: "proposal",
+          citation: "Williams\u300A\u5199\u7ED9\u5927\u5BB6\u770B\u7684\u8BBE\u8BA1\u4E66\u300B\uFF08The Non-Designer's Design Book\uFF09 Proximity\uFF1B\u8003\u592B\u5361\u300A\u683C\u5F0F\u5854\u5FC3\u7406\u5B66\u539F\u7406\u300B\uFF08Principles of Gestalt Psychology, 1935\uFF09 \u63A5\u8FD1\u6027\u539F\u7406\uFF1BWertheimer 1923 \u8BBA\u6587",
+          principle: "\u4EB2\u5BC6",
+          violation: "\u914D\u9001\u5730\u5740\u7684\u6807\u7B7E\u79BB\u4ED8\u6B3E\u5B57\u6BB5 8px\uFF0C\u79BB\u81EA\u5DF1\u7684\u5730\u5740\u8F93\u5165\u6846 24px\uFF0C\u4E24\u7EC4\u53C8\u6CA1\u6709\u5206\u9694\u3002\u6309\u8868\u5355\u7684\u5B57\u6BB5\u5B9A\u4E49\uFF0C\u5730\u5740\u6807\u7B7E\u4E0E\u5730\u5740\u8F93\u5165\u6846\u540C\u7EC4\u3002\u5F53\u524D\u7248\u9762\u66F4\u5BB9\u6613\u628A\u6807\u7B7E\u8BFB\u6210\u4ED8\u6B3E\u5B57\u6BB5\u7684\u8BF4"
+        },
+        {
+          id: "CR-01",
+          title: "\u5171\u540C\u533A\u57DF",
+          principle: "\u683C\u5F0F\u5854",
+          measure: "semantic",
+          threshold: "proposal",
+          citation: "\u8003\u592B\u5361\u300A\u683C\u5F0F\u5854\u5FC3\u7406\u5B66\u539F\u7406\u300B\uFF08Principles of Gestalt Psychology, 1935\uFF09 \u5171\u540C\u533A\u57DF\u539F\u7406\uFF1BWertheimer 1923 \u8BBA\u6587\u300ALaws of Organization in Perceptual Forms\u300B",
+          severity: "warn",
+          medium: [
+            "ui",
+            "print"
+          ],
+          metric: "cross_container_group_ratio",
+          unit: "ratio",
+          gate: {
+            warn: {
+              gt: 0.3
+            }
+          },
+          minSamples: 2,
+          requires: [
+            "boxes",
+            "groups"
+          ],
+          implemented: false,
+          violation: "\u5217\u8868\u9879\u7684\u6807\u9898\u5728\u8868\u683C\u5934\u5BB9\u5668\uFF0C\u5185\u5BB9\u5728\u8868\u4F53\u5BB9\u5668\uFF0C\u4E24\u8005\u5E94\u5C5E\u540C\u4E00\u7EC4\u3002",
+          note: "\u5171\u540C\u533A\u57DF\u6307\uFF1A\u540C\u4E00\u5BB9\u5668\u6216\u80CC\u666F\u5757\u5185\u7684\u5143\u7D20\u88AB\u89C6\u4E3A\u4E00\u7EC4\uFF0C\u4F18\u5148\u4E8E\u5355\u7EAF\u7684\u8DDD\u79BB\u5173\u7CFB\u3002\u5BB9\u5668\u8FB9\u754C\u9700\u53EF\u89C1\uFF08\u80CC\u666F\u3001\u63CF\u8FB9\u3001\u5206\u5272\u7EBF\u6216\u7559\u767D\u5757\uFF09\u3002\u65E0\u5BB9\u5668\u7684\u7EAF\u6392\u7248\u9875\u9762\u6309\u8BED\u4E49\u5206\u7EC4\u89C4\u5219\u5224\uFF0C\u672C\u89C4\u5219\u8BB0\u4E0D\u9002\u7528\u3002\u300C\u5E94\u8BE5\u540C\u7EC4\u300D\u9700\u8981\u4EFB\u52A1\u8BED\u4E49\uFF0C\u7F3A\u4EFB\u52A1\u4E0A\u4E0B\u6587\u65F6\u8BB0\u672A\u6D4B\u3002",
+          needsPreciseBoxes: true
+        },
+        {
+          id: "ML-01",
+          title: "\u5206\u5757\u4E0E\u5C42\u7EA7",
+          severity: "warn",
+          medium: [
+            "ui",
+            "print"
+          ],
+          metric: "chunk_count",
+          unit: "count",
+          gate: {
+            warn: {
+              gt: 9
+            }
+          },
+          minSamples: 1,
+          requires: [
+            "boxes",
+            "groups"
+          ],
+          note: "\u53EA\u7EDF\u8BA1\u540C\u4E00\u89C6\u53E3\u5185\u7684\u4E3B\u8981\u4FE1\u606F\u5757\u3002\u8868\u683C\u884C\u3001\u5217\u8868\u9879\u3001\u56FE\u4F8B\u6761\u76EE\u7B97\u5757\u5185\u5143\u7D20\uFF0C\u4E0D\u5355\u72EC\u8BA1\u5757\u3002\u4EEA\u8868\u76D8\u548C\u76D1\u63A7\u5899\u5929\u7136\u591A\u5757\uFF0C\u6709\u58F0\u660E\u65F6\u8BB0\u4E0D\u9002\u7528\u3002\u5224\u65AD\u300C\u4E3B\u8981\u300D\u9700\u8981\u4EFB\u52A1\u76EE\u6807\uFF0C\u7F3A\u4EFB\u52A1\u4E0A\u4E0B\u6587\u65F6\u8BB0\u672A\u6D4B\u3002",
+          measure: "semantic",
+          threshold: "proposal",
+          citation: "Miller 1956\u300AThe Magical Number Seven, Plus or Minus Two\u300B\uFF1BCowan 2001\u300AThe magical number 4 in short-term memory\u300B\uFF1BMorville & Rosenfeld \u7EC4\u7EC7\u7CFB\u7EDF",
+          principle: "\u4FE1\u606F\u7EC4\u7EC7",
+          violation: "\u4E00\u5C4F 11 \u4E2A\u4FE1\u606F\u5757\uFF0C\u89C6\u89C9\u6743\u91CD\u51E0\u4E4E\u76F8\u540C\uFF0C\u6807\u9898\u51FA\u73B0\u56DB\u7EA7\u3002"
+        },
+        {
+          id: "CT-02",
+          title: "\u524D\u666F\u5BF9\u6BD4\u5EA6",
+          severity: "blocker",
+          medium: [
+            "ui",
+            "print"
+          ],
+          metric: "wcag_contrast",
+          unit: "ratio",
+          gate: {
+            fail: {
+              lt: 4
+            },
+            warn: {
+              lt: 4.5
+            }
+          },
+          minSamples: 1,
+          gateLarge: {
+            fail: {
+              lt: 2.5
+            },
+            warn: {
+              lt: 3
+            }
+          },
+          requires: [
+            "rendered_frame",
+            "boxes"
+          ],
+          note: "\u5927\u5B57\u4E3A\u81F3\u5C11 18pt \u6216 14pt \u7C97\u4F53\uFF0CCJK \u7528\u7B49\u6548\u5C3A\u5BF8\u3002\u53EA\u68C0\u67E5\u9002\u7528\u7684\u6587\u5B57\u548C\u5FC5\u8981\u89C6\u89C9\u7EBF\u7D22\u3002\u6295\u653E\u80CC\u666F\u672A\u77E5\u65F6\u8BB0\u672A\u6D4B\u3002\u6587\u5B57\u548C\u56FE\u5F62\u5206\u522B\u6838\u9A8C\uFF0C\u6574\u6761\u89C4\u5219\u53D6\u6700\u5DEE\u5DF2\u786E\u8BA4\u7ED3\u679C\u3002",
+          measure: "exact",
+          threshold: "standard",
+          citation: "WCAG 2.2 SC 1.4.3\u3001SC 1.4.11",
+          principle: "\u5BF9\u6BD4",
+          violation: "\u5B9E\u9645 Web \u666E\u901A\u767D\u5B57\u7F6E\u4E8E #777 \u80CC\u666F\u4E0A\uFF0C\u5BF9\u6BD4\u5EA6\u7EA6 4.48:1\u3002\u767D\u5E95\u4E0A\u7528\u4E8E\u8BC6\u522B\u8F93\u5165\u6846\u7684\u5FC5\u8981\u8FB9\u754C\u4E3A #999\uFF0C\u5BF9\u6BD4\u5EA6\u7EA6 2.85:1\u3002\u4E24\u5904\u5747\u4F4E\u4E8E\u5404\u81EA\u95E8\u69DB\u3002"
+        },
+        {
+          id: "CORE-01",
+          title: "\u989C\u8272\u975E\u552F\u4E00\u7EBF\u7D22",
+          severity: "warn",
+          medium: [
+            "ui",
+            "print"
+          ],
+          metric: "unimplemented",
+          unit: "ratio",
+          gate: {
+            warn: {}
+          },
+          minSamples: 1,
+          note: "\u53EA\u6D4B\u4F20\u8FBE\u4FE1\u606F\u7684\u989C\u8272\u3002\u7EAF\u88C5\u9970\u7528\u8272\u4E0D\u9002\u7528\u3002\u94FE\u63A5\u5E26\u4E0B\u5212\u7EBF\u6216\u56FE\u6807\u65F6\u5408\u89C4\u3002\u7F3A\u4EFB\u52A1\u8BED\u4E49\u3001\u65E0\u6CD5\u5224\u65AD\u989C\u8272\u662F\u5426\u627F\u8F7D\u4FE1\u606F\u65F6\u8BB0\u672A\u6D4B\u3002",
+          measure: "semantic",
+          threshold: "proposal",
+          principle: "\u5BF9\u6BD4",
+          violation: "\u5FC5\u586B\u9879\u53EA\u7528\u7EA2\u8272\u533A\u5206\uFF0C\u6CA1\u6709\u56FE\u6807\u6216\u6587\u5B57\u8BF4\u660E\uFF1B\u9519\u8BEF\u6001\u53EA\u628A\u8FB9\u6846\u53D8\u7EA2\uFF0C\u4E0D\u663E\u793A\u56FE\u6807\u548C\u539F\u56E0\u3002",
+          citation: "WCAG 2.2 SC 1.4.1 Use of Color\uFF08Level A\uFF09"
+        },
+        {
+          id: "RP-01",
+          title: "\u540C\u7C7B\u7EC4\u4EF6\u4E0E\u6837\u5F0F\u4E00\u81F4\u6027",
+          severity: "warn",
+          medium: [
+            "ui",
+            "print"
+          ],
+          metric: "type_scale_levels",
+          unit: "count",
+          gate: {
+            warn: {
+              gt: 0
+            }
+          },
+          minSamples: 3,
+          requires: [
+            "boxes"
+          ],
+          note: "\u540C\u7EC4\u6307\u540C\u89D2\u8272\u3001\u540C\u72B6\u6001\u3001\u540C\u5BB9\u5668\u5185\u81F3\u5C11 2 \u4E2A\u5B9E\u4F8B\u3002\u72B6\u6001\u5DEE\u5F02\uFF08\u60AC\u505C\u3001\u7981\u7528\u3001\u9519\u8BEF\uFF09\u548C\u5DF2\u58F0\u660E\u7684\u5408\u6CD5\u53D8\u4F53\u4E0D\u7B97\u504F\u5DEE\u3002\u8BED\u4E49\u8272\u8DE8\u4F4D\u7F6E\u6F02\u79FB\u5355\u72EC\u8BB0\u5F55\uFF1A\u540C\u4E00\u8BED\u4E49\uFF08\u6210\u529F\u3001\u8B66\u544A\u3001\u9519\u8BEF\u3001\u94FE\u63A5\uFF09\u5728\u9875\u9762\u5185\u51FA\u73B0\u4E24\u79CD\u4EE5\u4E0A\u8272\u76F8\u5373\u8BA1\u5165 N\u3002\u7F3A\u58F0\u660E\u89C4\u683C\u65F6\u53EA\u62A5\u544A\u5B9E\u6D4B\u6837\u5F0F\u5206\u5E03\uFF0C\u4E0D\u5224 WARN\u3002",
+          measure: "exact",
+          threshold: "proposal",
+          citation: "Williams\u300A\u5199\u7ED9\u5927\u5BB6\u770B\u7684\u8BBE\u8BA1\u4E66\u300B\uFF08The Non-Designer's Design Book\uFF09 Repetition\uFF1B\u8003\u592B\u5361\u300A\u683C\u5F0F\u5854\u5FC3\u7406\u5B66\u539F\u7406\u300B\uFF08Principles of Gestalt Psychology, 1935\uFF09 \u76F8\u4F3C\u6027\u539F\u7406\uFF1B\u8BBE\u8BA1 token \u5316\uFF08Material 3\u3001Polaris\uFF09",
+          principle: "\u91CD\u590D",
+          violation: "\u540C\u4E00\u7EC4\u3001\u540C\u89D2\u8272\u7684\u5B9E\u4F8B\u957F\u5F97\u4E0D\u4E00\u6837\uFF0C\u8BFB\u8005\u4F1A\u4EE5\u4E3A\u5B83\u4EEC\u4E0D\u662F\u540C\u4E00\u79CD\u4E1C\u897F\u3002"
+        },
+        {
+          id: "SP-01",
+          title: "\u95F4\u8DDD\u8282\u594F\u4E00\u81F4\u6027",
+          principle: "\u91CD\u590D",
+          measure: "exact",
+          threshold: "proposal",
+          citation: "Material Design 8dp \u57FA\u7EBF\u7F51\u683C\uFF1B\u300C\u540C\u7EC4\u540C\u6863\u300D\u662F\u5728\u6B64\u4E4B\u4E0A\u7684\u63A8\u8BBA\uFF0C\u4E0D\u662F\u89C4\u8303\u6761\u6587",
+          severity: "warn",
+          medium: [
+            "ui",
+            "print"
+          ],
+          metric: "spacing_scale_levels",
+          unit: "count",
+          gate: {
+            warn: {
+              gt: 0
+            }
+          },
+          minSamples: 5,
+          requires: [
+            "boxes"
+          ],
+          violation: "\u540C\u7EC4 5 \u884C\u5217\u8868\uFF0C\u51C0\u8DDD 16\u300124\u300116\u300132\u300116 CSS px\u3002\u4F17\u6570\u6863\u4E3A 16\uFF0C24 \u4E0E 32 \u5404\u504F\u79BB\u4E00\u6B21\uFF0CK=2\u3002\u8BB0 WARN\uFF0C\u6307\u5411\u8FD9\u4E24\u5904\u3002CV \u2248 0.",
+          note: "\u540C\u7EC4\u81F3\u5C11 3 \u4E2A\u76F8\u90BB\u5BF9\uFF0C\u5143\u7D20\u4E3A\u540C\u89D2\u8272\u540C\u7EA7\uFF08\u540C tag\u3001\u540C\u5BB9\u5668\u3001\u5B57\u9AD8\u5DEE < 1.5 \u500D\uFF09\u3002\u8868\u683C\u884C\u5217\u3001\u7F51\u683C\u5E03\u5C40\u548C\u58F0\u660E\u4E3A\u4E0D\u7B49\u8DDD\u7684\u5206\u7EC4\uFF08\u65F6\u95F4\u8F74\u3001\u7011\u5E03\u6D41\uFF09\u8BB0\u4E0D\u9002\u7528\u3002\u7EC4\u95F4\u8DDD\u79BB\u4E0D\u53C2\u4E0E\u672C\u89C4\u5219\uFF0C\u5F52\u8BED\u4E49\u5206\u7EC4\u3002\u91CF\u53D6\u57FA\u51C6\uFF08\u8FB9\u754C\u6216\u4E2D\u7EBF\uFF09\u5FC5\u987B\u56FA\u5B9A\u4E00\u79CD\uFF0C\u62A5\u544A\u5199\u660E\u3002",
+          needsPreciseBoxes: true
+        },
+        {
+          id: "TY-01",
+          title: "\u6392\u7248\u6863\u4F4D\u9884\u7B97",
+          severity: "warn",
+          medium: [
+            "ui",
+            "print"
+          ],
+          metric: "family_count",
+          unit: "count",
+          gate: {
+            warn: {
+              gt: 0
+            }
+          },
+          minSamples: 1,
+          requires: [
+            "boxes"
+          ],
+          secondary: {
+            metric: "weight_count",
+            gate: {
+              warn: {
+                gt: 4
+              }
+            }
+          },
+          note: '\u53EA\u7EDF\u8BA1\u540C\u4E00\u89C6\u53E3\u5185\u7684\u53EF\u89C1\u6587\u5B57\u3002\u5C55\u793A\u578B\u9875\u9762\u3001\u591A\u54C1\u724C\u5D4C\u5165\u548C\u4EE3\u7801\u5C55\u793A\u7C7B\u9875\u9762\u6309 Ant \u7684\u4F8B\u5916\u8BF4\u660E\u5904\u7406\u3002Ant \u7684 3\u20135 \u9488\u5BF9"\u4E00\u4E2A\u7CFB\u7EDF\u8BBE\u8BA1"\uFF0C\u672C\u89C4\u5219\u501F\u7528\u5B83\u4F5C\u5355\u9875\u7B5B\u67E5\u4E0A\u9650\uFF0C\u8D85\u51FA\u4E0D\u7B49\u4E8E\u9519\uFF0C\u53EA\u8BF4\u660E\u7CFB\u7EDF\u590D\u6742\u5EA6\u504F\u9AD8\u3002\u6863\u4F4D\u8BA1\u6570\u4E0D\u8BF4\u660E\u5C42\u7EA7\u662F\u5426\u6210\u6BD4\u4F8B\uFF1B\u6210\u6BD4\u4F8B\u4E0E\u5426\u8981\u770B\u76F8\u90BB\u6863\u4F4D\u6BD4\uFF0C\u4E0D\u5728\u672C\u89C4\u5219\u5185\u3002',
+          measure: "exact",
+          threshold: "convention",
+          citation: "Ant Design \u5B57\u4F53\u89C4\u8303",
+          principle: "\u91CD\u590D",
+          violation: "\u5B57\u53F7\u6863\u6216\u5B57\u91CD\u6863\u8D85\u51FA\u9884\u7B97\uFF0C\u5C42\u7EA7\u7CFB\u7EDF\u53D8\u590D\u6742\uFF0C\u8BFB\u8005\u5206\u4E0D\u6E05\u54EA\u4E9B\u4FE1\u606F\u540C\u7EA7\u3002"
+        },
+        {
+          id: "CL-01",
+          title: "\u8272\u5F69\u9884\u7B97",
+          severity: "warn",
+          medium: [
+            "ui",
+            "print"
+          ],
+          metric: "palette_count",
+          unit: "count",
+          gate: {
+            warn: {
+              gt: 4
+            }
+          },
+          minSamples: 1,
+          requires: [
+            "rendered_frame"
+          ],
+          secondary: {
+            metric: "dominant_share",
+            gate: {
+              warn: {
+                lt: 0.15
+              }
+            }
+          },
+          note: "\u5355\u5C4F\u6307\u4E00\u4E2A\u56FA\u5B9A\u89C6\u53E3\u3002\u72B6\u6001\u8272\uFF08\u6210\u529F\u3001\u8B66\u544A\u3001\u9519\u8BEF\uFF09\u6309\u89D2\u8272\u8BA1\uFF0C\u540C\u4E00\u89D2\u8272\u4E0D\u540C\u660E\u5EA6\u4E0D\u7B97\u65B0\u989C\u8272\u3002\u54C1\u724C\u6E10\u53D8\u6309 1 \u8272\u8BA1\u3002\u56FE\u7247\u3001\u89C6\u9891\u5185\u5BB9\u4E0D\u8BA1\u3002\u542B\u5B8C\u6574\u8BED\u4E49\u8272\u4F53\u7CFB\u7684\u754C\u9762\u901A\u5E38\u9700\u8981 5\u20137 \u8272\uFF0C4 \u662F\u57FA\u7EBF\u4E0D\u662F\u786C\u6027\u4E0A\u9650\uFF0C\u8D85\u51FA\u65F6\u5148\u786E\u8BA4\u6BCF\u4E2A\u989C\u8272\u80FD\u5426\u6620\u5C04\u5230\u58F0\u660E\u89D2\u8272\u3002\u540C\u4E00\u89D2\u8272\u5185\u90E8\u662F\u5426\u540C\u8272\u5F52\u540C\u7C7B\u7EC4\u4EF6\u89C4\u5219\uFF0C\u672C\u89C4\u5219\u53EA\u7BA1\u989C\u8272\u603B\u91CF\u4E0E\u662F\u5426\u6765\u81EA\u58F0\u660E\u8C03\u8272\u677F\u3002\u8425\u9500\u9875\u3001\u5C55\u793A\u578B\u9875\u9762\u53EF\u653E\u5BBD\u5230 7 \u8272\u5E76\u6CE8\u660E\u7406\u7531\uFF1B\u7167\u7247\u7C7B\u754C\u9762\u3001\u5730\u56FE\u548C\u56FE\u8868\u8BB0\u4E0D\u9002\u7528\u3002",
+          measure: "exact",
+          threshold: "proposal",
+          citation: "Shneiderman\u300ADesigning the User Interface\u300B\uFF1BMaterial 3 \u989C\u8272\u89D2\u8272",
+          principle: "\u91CD\u590D",
+          violation: "\u5355\u5C4F 7 \u79CD\u53EF\u8FA8\u989C\u8272\uFF1A\u80CC\u666F\u3001\u6B63\u6587\u3001\u4E3B\u8272\u3001\u6B21\u8272\u3001\u4E24\u79CD\u4E0D\u540C\u8272\u76F8\u7684\u4FC3\u9500\u8272\u3001\u4E00\u4E2A\u672A\u58F0\u660E\u7684\u56FE\u6807\u8272\u3002C\u5355=7\uFF0C\u8D85\u8FC7 4\uFF1B\u540E\u4E09\u79CD\u65E0\u6CD5\u6620\u5C04\u5230\u8C03\u8272\u677F\u3002\u6570\u91CF\u4E0E\u6620\u5C04\u4E24\u9879\u5404\u8BB0\u4E00\u6B21 WA"
+        },
+        {
+          id: "AL-01",
+          title: "\u5BF9\u9F50",
+          severity: "warn",
+          medium: [
+            "ui",
+            "print"
+          ],
+          metric: "align_dev_p90",
+          unit: "px@1080p",
+          gate: {
+            warn: {
+              gt: 2
+            }
+          },
+          minSamples: 4,
+          requires: [
+            "boxes",
+            "groups"
+          ],
+          note: "\u4EC5\u6D4B\u5DF2\u58F0\u660E\u6216\u6709\u660E\u786E\u4F9D\u636E\u7684\u540C\u5C42\u7EA7\u3001\u540C\u8F74\u951A\u70B9\u7EC4\u3002\u7EC4\u6216\u8F74\u65E0\u6CD5\u786E\u8BA4\u65F6\u8BB0\u672A\u6D4B\uFF1B\u5149\u5B66\u8865\u507F\u548C\u81EA\u7531\u6784\u56FE\u53EF\u6CE8\u660E\u4F8B\u5916\u3002\u5750\u6807\u4F7F\u7528\u6295\u653E\u5750\u6807\u7CFB\u3002\u8868\u683C\u5185\u7684\u5217\u5BF9\u9F50\u5355\u72EC\u6838\u5BF9\uFF1A\u540C\u4E00\u5217\u7684\u6570\u5B57\u53F3\u5BF9\u9F50\u6216\u5C0F\u6570\u70B9\u5BF9\u9F50\uFF0C\u6587\u5B57\u5217\u5DE6\u5BF9\u9F50\uFF1B\u6DF7\u6392\u65F6\u6309\u8BE5\u5217\u591A\u6570\u503C\u7684\u5BF9\u9F50\u65B9\u5F0F\u5224\u3002",
+          measure: "exact",
+          threshold: "proposal",
+          citation: "Williams\u300A\u5199\u7ED9\u5927\u5BB6\u770B\u7684\u8BBE\u8BA1\u4E66\u300B\uFF08The Non-Designer's Design Book\uFF09 Alignment\uFF1BM\xFCller-Brockmann\u300AGrid Systems in Graphic Design\u300B",
+          principle: "\u5BF9\u9F50",
+          violation: "\u9879\u76EE\u58F0\u660E\u540C\u5217\u8F93\u5165\u6846\u7684\u5DE6\u951A\u70B9\u4E3A x=24 CSS px\uFF0C\u5176\u4E2D\u4E00\u4E2A\u843D\u5728 x=28 CSS px\u3002\u5BF9\u58F0\u660E\u951A\u70B9\u7684\u504F\u5DEE\u4E3A 4 CSS px\uFF0C\u8D85\u8FC7 Web \u521D\u59CB\u9884\u8BBE 2 C",
+          needsPreciseBoxes: true
+        },
+        {
+          id: "GR-01",
+          title: "\u7F51\u683C\u5BF9\u9F50",
+          severity: "warn",
+          medium: [
+            "ui",
+            "print"
+          ],
+          metric: "grid_align_share",
+          unit: "ratio",
+          gate: {
+            warn: {
+              lt: 0.8
+            }
+          },
+          minSamples: 5,
+          requires: [
+            "boxes"
+          ],
+          note: "\u6309\u5404\u58F0\u660E\u8F74\u72EC\u7ACB\u91CF\u504F\u5DEE\uFF0C\u5143\u7D20\u5FC5\u987B\u6EE1\u8DB3\u6240\u6709\u9002\u7528\u8F74\u3002\u7F51\u683C\u5E94\u5B58\u5728\u4F46\u7F3A\u58F0\u660E\u65F6\u8BB0\u672A\u6D4B\uFF1B\u660E\u786E\u91C7\u7528\u81EA\u7531\u5E03\u5C40\u65F6\u8BB0\u4E0D\u9002\u7528\u3002",
+          measure: "exact",
+          threshold: "proposal",
+          citation: "M\xFCller-Brockmann\u300AGrid Systems in Graphic Design\u300B\uFF1BMaterial 3 8dp",
+          principle: "\u7F51\u683C",
+          violation: "\u58F0\u660E\u53CC\u8F74\u5747\u987B\u843D\u5728\u539F\u70B9 (0,0)\u3001\u6B65\u957F 8px \u7684\u7F51\u683C\u4E0A\u30026 \u4E2A\u5143\u7D20\u7684\u6A2A\u5750\u6807\u5747\u5728\u683C\u4E0A\uFF0C\u7EB5\u5750\u6807\u5747\u504F 1px\u3002\u53CC\u8F74\u5BB9\u5DEE\u4E3A 0.8px\uFF0C6 \u4E2A\u5143\u7D20\u5747\u672A\u540C\u65F6\u6EE1\u8DB3\u4E24\u8F74\uFF0C\u843D",
+          needsPreciseBoxes: true
+        },
+        {
+          id: "VH-01",
+          title: "\u4E3B\u6B21\u4E0E\u89C6\u89C9\u7126\u70B9",
+          severity: "warn",
+          medium: [
+            "ui",
+            "print"
+          ],
+          metric: "primary_rank",
+          unit: "rank",
+          gate: {
+            warn: {
+              gt: 1
+            }
+          },
+          minSamples: 2,
+          requires: [
+            "boxes",
+            "salience"
+          ],
+          note: "\u5B57\u53F7\u7EA7\u5DEE\u3001\u5F3A\u8C03\u6837\u5F0F\u548C\u88C5\u9970\u566A\u58F0\u5C5E\u4E8E\u8BCA\u65AD\u8BC1\u636E\u3002\u7F3A\u4EFB\u52A1\u76EE\u6807\u65F6\u8BB0\u672A\u6D4B\u3002\u9605\u8BFB\u6D41\u5355\u72EC\u6838\u5BF9\uFF1A\u91CD\u91CF\u5CF0\u503C\u662F\u5426\u843D\u5728\u6B64\u6B21\u4EFB\u52A1\u7684\u4E3B\u4FE1\u606F\u4E0A\uFF0C\u8DEF\u5F84\u662F\u5426\u88AB\u65E0\u5173\u9AD8\u5BF9\u6BD4\u5143\u7D20\u6253\u65AD\uFF1BRTL \u8BED\u8A00\u6309\u955C\u50CF\u65B9\u5411\u8BC4\u4F30\uFF0C\u81EA\u7531\u6784\u56FE\u548C\u827A\u672F\u6027\u6392\u7248\u53EF\u58F0\u660E\u4F8B\u5916\u3002",
+          measure: "semantic",
+          threshold: "proposal",
+          citation: "Williams\u300A\u5199\u7ED9\u5927\u5BB6\u770B\u7684\u8BBE\u8BA1\u4E66\u300B\uFF08The Non-Designer's Design Book\uFF09 Contrast\uFF1BNgo \u7B49 2003 \u754C\u9762\u7F8E\u5B66\u5EA6\u91CF\uFF08Sequence\uFF09",
+          principle: "\u89C6\u89C9\u5C42\u6B21",
+          violation: "\u5E93\u5B58\u76D1\u63A7\u9875\u5E94\u4F18\u5148\u4F20\u8FBE\u4E25\u91CD\u544A\u8B66\u3002\u9996\u5C4F\u6700\u5927\u3001\u5BF9\u6BD4\u6700\u9AD8\u7684\u662F\u4FC3\u9500\u6A2A\u5E45\uFF0C\u544A\u8B66\u5374\u7F29\u5728\u4F4E\u663E\u8457\u6027\u7684\u89D2\u843D\u3002\u6307\u51FA\u6A2A\u5E45\u4E0E\u544A\u8B66\u4F4D\u7F6E\uFF0C\u8BF4\u660E\u4E3B\u4EFB\u52A1\u4E3A\u4F55\u88AB\u62A2\u5360\u3002"
+        },
+        {
+          id: "SN-01",
+          title: "\u4FE1\u606F\u566A\u97F3\u6BD4",
+          severity: "warn",
+          medium: [
+            "ui"
+          ],
+          metric: "decor_ratio",
+          unit: "ratio",
+          gate: {
+            warn: {
+              gt: 0.3
+            }
+          },
+          minSamples: 1,
+          requires: [
+            "boxes",
+            "roles"
+          ],
+          note: "\u88C5\u9970\u6307\u4E0D\u627F\u8F7D\u4FE1\u606F\u4E0E\u64CD\u4F5C\u7684\u7EAF\u89C6\u89C9\u5143\u7D20\uFF1A\u80CC\u666F\u7EB9\u7406\u3001\u88C5\u9970\u7EBF\u6761\u3001\u63D2\u753B\u3001\u6C34\u5370\u3002\u56FE\u6807\u548C\u63D2\u56FE\u82E5\u627F\u62C5\u8BC6\u522B\u6216\u5F15\u5BFC\u529F\u80FD\uFF0C\u7B97\u4FE1\u606F\u4E0D\u7B97\u88C5\u9970\u3002\u88C5\u9970\u5BC6\u5EA6\u4F4E\u7684\u6781\u7B80\u754C\u9762\u548C\u6EE1\u7248\u4FE1\u606F\u56FE\u90FD\u4E0D\u9002\u7528\u3002\u89D2\u8272\u5F52\u5C5E\u6709\u6B67\u4E49\u65F6\u8BB0\u672A\u6D4B\u3002",
+          measure: "semantic",
+          threshold: "proposal",
+          citation: "Tufte\u300AThe Visual Display of Quantitative Information\u300B(1983) data-ink ratio\uFF1B\u4FE1\u53F7\u566A\u97F3\u6BD4\uFF08\u901A\u4FE1\u7406\u8BBA\uFF09",
+          principle: "\u89C6\u89C9\u5C42\u6B21",
+          violation: "\u9875\u9762\u7528\u5927\u9762\u79EF\u6E10\u53D8\u3001\u6C34\u5370\u548C\u88C5\u9970\u56FE\u6807\u94FA\u5E95\uFF0C\u4E3B\u64CD\u4F5C\u533A\u53CD\u800C\u5BF9\u6BD4\u6700\u4F4E\u3002"
+        },
+        {
+          id: "BL-01",
+          title: "\u89C6\u89C9\u91CD\u91CF\u4E0E\u7559\u767D",
+          severity: "warn",
+          medium: [
+            "ui",
+            "print"
+          ],
+          metric: "weight_delta_ratio",
+          unit: "ratio",
+          gate: {
+            warn: {
+              gt: 0.15
+            }
+          },
+          minSamples: 1,
+          requires: [
+            "salience"
+          ],
+          note: "\u5C40\u90E8\u5BC6\u5EA6\u3001\u5BF9\u79F0\u6027\u548C\u6BD4\u4F8B\u90FD\u53EF\u4F5C\u4E3A\u8BC1\u636E\uFF0C\u6BD4\u8F83\u65F6\u56FA\u5B9A\u533A\u57DF\u548C\u53E3\u5F84\u3002\u9608\u503C\u6309\u9879\u76EE\u58F0\u660E\u3002",
+          measure: "semantic",
+          threshold: "proposal",
+          citation: "Ngo \u7B49 2003\uFF0C14 \u9879\u754C\u9762\u7F8E\u5B66\u5EA6\u91CF\uFF08Balance\u3001Equilibrium\u3001Density\uFF09",
+          principle: "\u5E73\u8861\u4E0E\u6BD4\u4F8B",
+          violation: "\u4E09\u4E2A\u540C\u7528\u9014\u3001\u7B49\u9762\u79EF\u6458\u8981\u533A\u8981\u6C42\u5E03\u5C40\u5747\u8861\uFF0C\u5176\u4E2D\u4E00\u5757\u4E34\u65F6\u5806\u5165\u591A\u7EC4\u8BF4\u660E\uFF0C\u6807\u7B7E\u4E92\u76F8\u6324\u538B\u3002\u5360\u7528\u7387\u4E3A 34%\u300136%\u300168%\u3002\u7ED3\u5408\u6807\u7B7E\u95F4\u8DDD\u548C\u5185\u5BB9\u5F52\u5C5E\u786E\u8BA4\u7B2C\u4E09\u5757\u9700\u8981\u62C6\u5206\u3002"
+        },
+        {
+          id: "QL-03",
+          title: "\u5B57\u53F7\u4E0B\u9650",
+          severity: "blocker",
+          medium: [
+            "ui",
+            "print"
+          ],
+          metric: "font_size_ratio_short_side",
+          unit: "ratio",
+          gate: {
+            fail: {
+              lt: 0.022
+            },
+            warn: {
+              lt: 0.035
+            }
+          },
+          minSamples: 1,
+          requires: [
+            "boxes"
+          ],
+          gateUI: {
+            metric: "font_size_px",
+            gate: {
+              fail: {
+                lt: 12
+              },
+              warn: {
+                lt: 14
+              }
+            }
+          },
+          note: "\u6309\u76EE\u6807\u89C6\u53E3\u548C\u5B9E\u9645\u53D8\u6362\u91CF\u6295\u653E\u5B57\u53F7\u3002\u7F3A\u6295\u653E\u5C3A\u5BF8\u4E14\u65E0\u6CD5\u6362\u7B97 CSS px \u65F6\u8BB0\u672A\u6D4B\u3002",
+          measure: "exact",
+          threshold: "convention",
+          citation: "Carbon Design System type sets\uFF1BAnt Design",
+          principle: "\u53EF\u8BFB\u6027\u4E0E\u53EF\u8FA8\u8BC6\u6027",
+          violation: "\u9879\u76EE\u91C7\u7528 12 CSS px \u6B63\u6587\u5B57\u53F7\u4E0B\u9650\uFF0CWeb \u8868\u5355\u8F85\u52A9\u8BF4\u660E\u7528 11 CSS px\u3002\u6B63\u6587 11 CSS px\u3002FAIL\uFF1A\u4F4E\u4E8E\u8BE5\u9879\u76EE\u58F0\u660E\u7684 12 CSS px",
+          needsPreciseBoxes: true
+        },
+        {
+          id: "TY-02",
+          title: "\u884C\u957F",
+          severity: "warn",
+          medium: [
+            "ui",
+            "print"
+          ],
+          metric: "chars_per_line",
+          unit: "chars",
+          gate: {
+            warn: {
+              gt: 1
+            }
+          },
+          minSamples: 1,
+          requires: [
+            "boxes",
+            "font_metrics"
+          ],
+          note: "\u53EA\u6D4B\u8FDE\u7EED\u6B63\u6587\u6BB5\u843D\u3002\u6807\u9898\u3001\u6309\u94AE\u3001\u8868\u683C\u5355\u5143\u683C\u3001\u4EE3\u7801\u5757\u4E0D\u9002\u7528\u3002\u884C\u5BBD\u968F\u89C6\u53E3\u53D8\u5316\u65F6\u6309\u8BC4\u5BA1\u89C6\u53E3\u8BB0\u5F55\u5E76\u6CE8\u660E\u3002",
+          measure: "exact",
+          threshold: "convention",
+          citation: "WCAG 2.2 SC 1.4.8 Visual Presentation\uFF08Level AAA\uFF09\uFF1BBringhurst\u300AThe Elements of Typographic Style\u300B",
+          principle: "\u53EF\u8BFB\u6027\u4E0E\u53EF\u8FA8\u8BC6\u6027",
+          violation: "\u6B63\u6587\u6BCF\u884C\u5B57\u6570\u8D85\u51FA\u53EF\u8BFB\u4E0A\u9650\uFF0C\u6362\u884C\u65F6\u5BB9\u6613\u4E32\u884C\u3002"
+        },
+        {
+          id: "QL-04",
+          title: "\u6B63\u6587\u6392\u7248",
+          severity: "warn",
+          medium: [
+            "ui",
+            "print"
+          ],
+          metric: "line_height_ratio",
+          unit: "ratio",
+          gate: {
+            fail: {
+              lt: 1.4
+            },
+            warn: {
+              lt: 1.5
+            }
+          },
+          minSamples: 1,
+          requires: [
+            "boxes"
+          ],
+          gateDisplay: {
+            metric: "line_height_ratio_display",
+            gate: {
+              fail: {
+                lt: 1.02
+              },
+              warn: {
+                lt: 1.08
+              }
+            }
+          },
+          note: "\u6BB5\u843D\u5173\u7CFB\u5F52\u8BED\u4E49\u5206\u7EC4\uFF0C\u6587\u5B57\u662F\u5426\u8DB3\u591F\u5927\u5F52\u5B57\u53F7\u4E0B\u9650\u3002\u6BB5\u843D\u5C45\u4E2D\u3001\u5B64\u884C\u3001\u7EA4\u7EC6\u5B57\u91CD\u3001\u5B57\u8DDD\u548C\u6587\u672C\u5360\u6BD4\u53EF\u4F5C\u8BC1\u636E\u3002\u7F3A\u53EF\u8BFB\u539F\u6587\u6216\u65E0\u6CD5\u786E\u8BA4\u6B63\u6587\u89D2\u8272\u65F6\u8BB0\u672A\u6D4B\u3002",
+          measure: "semantic",
+          threshold: "convention",
+          citation: "Bringhurst\u300AThe Elements of Typographic Style\u300B\uFF1BAnt Design \u5B57\u4F53\u89C4\u8303",
+          principle: "\u53EF\u8BFB\u6027\u4E0E\u53EF\u8FA8\u8BC6\u6027",
+          violation: "\u8BF4\u660E\u6B63\u6587\u6BCF\u884C 52 \u4E2A\u6C49\u5B57\uFF0C16px \u5B57\u53F7\u914D 19px \u57FA\u7EBF\u95F4\u8DDD\uFF0C\u884C\u672B\u56DE\u5230\u4E0B\u4E00\u884C\u65F6\u5BB9\u6613\u4E32\u884C\u3002\u884C\u9AD8\u6BD4\u7EA6 1.19\u3002\u68C0\u67E5\u957F\u884C\u548C\u8FC7\u8FD1\u7684\u76F8\u90BB\u57FA\u7EBF\uFF0C\u5EFA\u8BAE\u7F29\u7A84\u6B63\u6587\u5217\u5E76\u589E\u52A0\u884C",
+          needsPreciseBoxes: true
+        },
+        {
+          id: "SG-01",
+          title: "\u56FE\u5F62\u548C\u6807\u7B7E\u7684\u542B\u4E49",
+          principle: "\u53EF\u8BFB\u6027\u4E0E\u53EF\u8FA8\u8BC6\u6027",
+          measure: "semantic",
+          threshold: "proposal",
+          citation: "Nielsen\u300AUsability Engineering\u300B\u53EF\u7528\u6027\u542F\u53D1\u5F0F\uFF08\u5339\u914D\u771F\u5B9E\u4E16\u754C\uFF09",
+          severity: "warn",
+          medium: [
+            "ui",
+            "print"
+          ],
+          metric: null,
+          gate: null,
+          minSamples: 0,
+          requires: [
+            "intent"
+          ],
+          violation: "\u63D0\u4EA4\u5165\u53E3\u53EA\u6709\u4E00\u4E2A\u62BD\u8C61\u7B26\u53F7\uFF0C\u9644\u8FD1\u6CA1\u6709\u6587\u5B57\u3002\u6309\u4EFB\u52A1\u5B9A\u4E49\uFF0C\u8BE5\u63A7\u4EF6\u8868\u793A\u63D0\u4EA4\u7533\u8BF7\uFF0C\u7B26\u53F7\u4E5F\u53EF\u7406\u89E3\u4E3A\u4FDD\u5B58\u8349\u7A3F\u3002\u6307\u51FA\u8BE5\u56FE\u5F62\u53CA\u5176\u6240\u5728\u533A\u57DF\uFF0C\u5EFA\u8BAE\u8865\u4E0A\u660E\u786E\u6807\u7B7E\u3002",
+          note: "\u53EA\u8BC4\u5BA1\u753B\u9762\u63D0\u4F9B\u7684\u8BED\u4E49\u7EBF\u7D22\u3002\u7F3A\u4EFB\u52A1\u4E0A\u4E0B\u6587\u65F6\u8BB0\u672A\u6D4B\u3002"
+        },
+        {
+          id: "CORE-02",
+          title: "\u56FE\u50CF\u6BD4\u4F8B\u5931\u771F",
+          severity: "warn",
+          medium: [
+            "ui",
+            "print"
+          ],
+          metric: "aspect_distortion",
+          unit: "ratio",
+          gate: {
+            warn: {
+              gt: 0.02
+            }
+          },
+          minSamples: 1,
+          note: "\u53EA\u6D4B\u6709\u539F\u59CB\u5C3A\u5BF8\u7684\u4F4D\u56FE\u3002SVG\u3001\u56FE\u6807\u5B57\u4F53\u3001\u6709\u610F\u88C1\u5207\uFF08object-fit: cover\uFF09\u548C\u88C5\u9970\u6027\u80CC\u666F\u4E0D\u9002\u7528\u3002\u7F3A\u539F\u56FE\u5C3A\u5BF8\u8BB0\u672A\u6D4B\u3002",
+          measure: "exact",
+          threshold: "proposal",
+          principle: "\u53EF\u8BFB\u6027\u4E0E\u53EF\u8FA8\u8BC6\u6027",
+          violation: "\u4F4D\u56FE\u88AB\u62C9\u4F38\u6216\u538B\u6241\uFF0C\u6BD4\u4F8B\u5931\u771F\uFF0C\u753B\u9762\u663E\u5F97\u4E1A\u4F59\u3002",
+          citation: "\u5B9A\u4E49\u6027\uFF1A\u5BBD\u9AD8\u6BD4\u6539\u53D8\u5373\u53D8\u5F62\uFF1BAUV-Bench graphics & imagery \u7EF4\u5EA6\u8981\u6C42 appropriately proportioned"
+        },
+        {
+          id: "QL-07",
+          title: "\u8D44\u6E90\u5931\u6548",
+          severity: "blocker",
+          medium: [
+            "ui",
+            "print"
+          ],
+          metric: "resource_status",
+          unit: "enum",
+          gate: {
+            fail: {
+              in: [
+                404,
+                "empty",
+                "decode_error"
+              ]
+            }
+          },
+          minSamples: 1,
+          requires: [
+            "asset_scan"
+          ],
+          note: "\u68C0\u67E5\u5B9E\u9645\u8BF7\u6C42\u548C\u89E3\u7801\u7ED3\u679C\uFF0C\u4E0D\u53EA\u68C0\u67E5 URL \u5B57\u7B26\u4E32\u3002\u68C0\u67E5\u52A0\u8F7D\u548C\u89E3\u7801\uFF0C\u4E0D\u5E94\u53EA\u4EE5 URL \u662F\u5426\u5B58\u5728\u5224\u5B9A\u3002\u7F3A\u6240\u9700\u8BC1\u636E\u65F6\u8BB0\u672A\u6D4B\uFF1B\u786E\u8BA4\u573A\u666F\u4E0D\u9002\u7528\u65F6\u8BB0\u4E0D\u9002\u7528\u3002",
+          measure: "exact",
+          threshold: "standard",
+          citation: "\u5B9A\u4E49\u6027\uFF1A\u8D44\u6E90\u4E0D\u53EF\u89E3\u7801\u5373\u4E0D\u5B58\u5728",
+          principle: "\u4EA4\u4ED8\u68C0\u67E5",
+          violation: "\u9996\u5C4F\u4EA7\u54C1\u56FE\u8BF7\u6C42\u8FD4\u56DE 404\uFF0C\u753B\u9762\u663E\u793A\u7834\u56FE\u3002\u8D44\u6E90\u52A0\u8F7D\u5931\u8D25\u6570=1\u3002FAIL\uFF1A\u81F3\u5C11\u4E00\u4E2A\u5931\u8D25\u8D44\u6E90\u3002"
+        },
+        {
+          id: "QL-01",
+          title: "\u6587\u672C\u6EA2\u51FA",
+          severity: "blocker",
+          medium: [
+            "ui",
+            "print"
+          ],
+          metric: "overflow_px_1080",
+          unit: "px@1080p",
+          gate: {
+            fail: {
+              gt: 0.5
+            }
+          },
+          minSamples: 1,
+          requires: [
+            "rendered_frame",
+            "boxes"
+          ],
+          note: "\u53EA\u6D4B\u5FC5\u987B\u5B8C\u6574\u663E\u793A\u7684\u6587\u5B57\u3002\u6709\u610F\u51FA\u8840\u3001\u5141\u8BB8\u7701\u7565\u7684\u6587\u672C\u3001\u88C5\u9970\u6027\u6587\u5B57\u4E0D\u9002\u7528\u3002\u7F3A\u6E32\u67D3\u540E\u58A8\u8FF9\u8FB9\u754C\u65F6\u8BB0\u672A\u6D4B\uFF0C\u4E0D\u80FD\u7528\u5B57\u53F7\u63A8\u7B97\u6587\u672C\u5BBD\u5EA6\u3002",
+          measure: "exact",
+          threshold: "convention",
+          citation: "\u5B9A\u4E49\u6027\uFF1A\u6587\u5B57\u8D85\u51FA\u5141\u8BB8\u533A\u57DF\u5373\u6EA2\u51FA\uFF1B0.5 CSS px \u4E3A\u6297\u952F\u9F7F\u5BB9\u5DEE",
+          principle: "\u4EA4\u4ED8\u68C0\u67E5",
+          violation: "\u6309\u94AE\u5185\u300C\u63D0\u4EA4\u7533\u8BF7\u300D\u6700\u540E\u4E00\u5B57\u8D85\u51FA\u5BB9\u5668\u5185\u5BB9\u533A 3 CSS px\uFF0C\u538B\u5230\u76F8\u90BB\u56FE\u6807\u4E0A\u3002",
+          needsPreciseBoxes: true,
+          needsExactWidth: true
+        },
+        {
+          id: "VS-01",
+          title: "\u5FC5\u8981\u5185\u5BB9\u88C1\u5207",
+          severity: "blocker",
+          medium: [
+            "ui",
+            "print"
+          ],
+          metric: "out_of_canvas_ratio",
+          unit: "ratio",
+          gate: {
+            fail: {
+              gt: 0
+            }
+          },
+          minSamples: 1,
+          requires: [
+            "boxes"
+          ],
+          secondary: {
+            metric: "out_of_safe_ratio",
+            gate: {
+              warn: {
+                gt: 0
+              }
+            }
+          },
+          note: "\u6587\u5B57\u6309\u6E32\u67D3\u58A8\u8FF9\u68C0\u67E5\u3002\u5141\u8BB8\u7684\u7701\u7565\u53CA\u6709\u610F\u51FA\u8840\u6309\u58F0\u660E\u6392\u9664\u3002\u76EE\u6807\u753B\u677F\u3001\u5FC5\u8981\u89D2\u8272\u6216\u88C1\u5207\u8BC1\u636E\u4E0D\u660E\u65F6\u8BB0\u672A\u6D4B\u3002",
+          measure: "exact",
+          threshold: "standard",
+          citation: "\u5B9A\u4E49\u6027\uFF1A\u5185\u5BB9\u88AB\u88C1\u5373\u4E0D\u53EF\u89C1",
+          principle: "\u4EA4\u4ED8\u68C0\u67E5",
+          violation: "\u7A84\u6309\u94AE\u7684\u5BB9\u5668\u88C1\u6389\u300C\u63D0\u4EA4\u7533\u8BF7\u300D\u6700\u540E\u4E00\u4E2A\u5B57\u7684\u4E00\u90E8\u5206\u3002\u6295\u653E\u5C3A\u5BF8\u4E0B\u5B9E\u9645\u88C1\u5207 3 CSS px\uFF0C\u8D85\u8FC7 0.5 px\uFF0C\u8BB0 FAIL\u3002",
+          needsPreciseBoxes: true
+        },
+        {
+          id: "QL-02",
+          title: "\u5FC5\u8981\u5185\u5BB9\u906E\u6321",
+          severity: "blocker",
+          medium: [
+            "ui",
+            "print"
+          ],
+          metric: "occlusion_ratio",
+          unit: "ratio",
+          gate: {
+            warn: {
+              gt: 0.03
+            }
+          },
+          minSamples: 1,
+          requires: [
+            "rendered_frame",
+            "boxes"
+          ],
+          note: "\u8FD9\u91CC\u68C0\u67E5\u56FE\u5C42\u8986\u76D6\u9020\u6210\u7684\u5185\u5BB9\u635F\u5931\u3002\u5BB9\u5668\u6216\u753B\u677F\u88C1\u5207\u5F52\u5FC5\u8981\u5185\u5BB9\u88C1\u5207\u3002\u6709\u610F\u91CD\u53E0\u4E14\u4E0D\u635F\u5BB3\u5FC5\u8981\u4FE1\u606F\u65F6\u4E0D\u9002\u7528\u3002",
+          measure: "exact",
+          threshold: "proposal",
+          citation: "\u5B9A\u4E49\u6027\uFF1A\u906E\u6321\u9020\u6210\u4FE1\u606F\u635F\u5931\uFF1B3% \u4E3A\u63D0\u6848\u503C",
+          principle: "\u4EA4\u4ED8\u68C0\u67E5",
+          violation: "\u5F39\u7A97\u7684\u5173\u95ED\u56FE\u6807\u8986\u76D6\u6807\u9898\u3002\u5BF9\u6BD4\u6709\u65E0\u8BE5\u56FE\u6807\u7684\u6E32\u67D3\u7ED3\u679C\uFF0C\u6807\u9898\u58A8\u8FF9\u88AB\u6321 8%\uFF0C\u8BB0 WARN\u3002",
+          needsExactWidth: true
+        }
+      ],
+      provenance: {
+        measure: {
+          exact: "\u5B9A\u4E49\u5373\u6570\u503C\uFF0C\u65E0\u53EF\u4E89\u53C2\u6570",
+          model: "\u4EE3\u7406\u6A21\u578B\u7684\u8F93\u51FA\uFF0C\u4EC5\u5E8F\u5173\u7CFB\u53EF\u4FE1",
+          semantic: "\u53EA\u80FD\u4EBA\u5224"
+        },
+        threshold: {
+          standard: "\u53EF\u5F15\u7528\u89C4\u8303\uFF0C\u6539\u52A8\u9700\u6362\u5F15\u6587",
+          convention: "\u884C\u4E1A\u60EF\u4F8B\uFF0C\u53EF\u8FA9\u62A4\u65E0\u5F3A\u5236\u529B",
+          proposal: "\u672C\u9879\u76EE\u63D0\u6848\uFF0C\u53EA\u4FDD\u8BC1\u5185\u90E8\u4E00\u81F4"
+        }
+      },
+      principles: {
+        \u4EB2\u5BC6\u6027: "\u683C\u5F0F\u5854\xB7\u63A5\u8FD1\uFF0C\u540C\u7EC4\u8981\u8FD1\u3001\u5F02\u7EC4\u8981\u8FDC",
+        \u5BF9\u6BD4: "\u8BE5\u8DF3\u51FA\u6765\u7684\u8981\u8DF3\u51FA\u6765\uFF0C\u5305\u62EC\u6587\u5B57\u4E0E\u5E95\u8272\u3001\u56FE\u5F62\u4E0E\u5E95\u8272",
+        \u91CD\u590D\u4E0E\u4E00\u81F4\u6027: "\u540C\u7C7B\u4E1C\u897F\u957F\u5F97\u4E00\u6837\uFF0C\u4F53\u73B0\u4E3A\u5B57\u4F53\u65CF/\u5B57\u53F7/\u5B57\u91CD/\u95F4\u8DDD\u7684\u6863\u4F4D\u6536\u655B",
+        \u5BF9\u9F50: "\u8FB9\u7F18\u843D\u5728\u540C\u4E00\u6839\u7EBF\u4E0A\uFF0C\u89C6\u7EBF\u4E0D\u7528\u91CD\u65B0\u627E\u8D77\u70B9",
+        \u7F51\u683C: "\u5143\u7D20\u5171\u4EAB\u540C\u4E00\u5957\u5750\u6807\u9AA8\u67B6",
+        "\u683C\u5F0F\u5854\xB7\u76F8\u4F3C": "\u5916\u89C2\u76F8\u4F3C\u5373\u540C\u7C7B",
+        "\u683C\u5F0F\u5854\xB7\u95ED\u5408": "\u8FB9\u754C\u80FD\u88AB\u8865\u5168\uFF0C\u5BB9\u5668\u624D\u6210\u7ACB",
+        "\u683C\u5F0F\u5854\xB7\u8FDE\u7EED": "\u89C6\u7EBF\u6CBF\u4E00\u6761\u8DEF\u5F84\u6D41\u52A8\uFF0C\u4E0D\u88AB\u6298\u65AD",
+        \u5171\u540C\u533A\u57DF: "\u5171\u4EAB\u5E95\u8272/\u5BB9\u5668\u7684\u5143\u7D20\u88AB\u8BFB\u6210\u4E00\u7EC4",
+        \u89C6\u89C9\u5C42\u6B21: "\u7B2C\u4E00\u773C\u843D\u5728\u6700\u91CD\u8981\u7684\u5730\u65B9\uFF0C\u4E14\u6709\u4E14\u53EA\u6709\u4E00\u4E2A\u7B2C\u4E00",
+        \u8D1F\u7A7A\u95F4: "\u7559\u767D\u662F\u4E3B\u52A8\u7684\uFF0C\u4E0D\u662F\u5269\u4E0B\u7684",
+        \u5E73\u8861: "\u89C6\u89C9\u91CD\u91CF\u4E0D\u5F80\u4E00\u8FB9\u5012",
+        \u6BD4\u4F8B: "\u5927\u5C0F\u5173\u7CFB\u6709\u4F9D\u636E",
+        \u7EDF\u4E00\u4E0E\u591A\u6837: "\u6574\u4F53\u6210\u7ACB\uFF0C\u5C40\u90E8\u6709\u53D8\u5316",
+        \u4FE1\u606F\u5BC6\u5EA6: "\u5355\u4F4D\u9762\u79EF\u7684\u8BA4\u77E5\u8D1F\u8377\u53EF\u63A7",
+        \u8FD0\u52A8\u4E0E\u8282\u594F: "\u52A8\u7684\u4F4D\u7F6E\u3001\u65B9\u5411\u3001\u5FEB\u6162\u6709\u7406\u7531",
+        \u610F\u4E49: "\u5F62\u5F0F\u670D\u52A1\u4E8E\u529F\u80FD\uFF0C\u6CA1\u6709\u88C5\u9970\u6027\u5197\u4F59",
+        \u53EF\u8BFB\u6027: "\u770B\u5F97\u6E05\u3001\u8BFB\u5F97\u5B8C\u3001\u4E0D\u4E32\u884C\uFF08\u5DE5\u7A0B\u515C\u5E95\uFF09",
+        \u53EF\u7528\u6027: "\u70B9\u5F97\u5230\u3001\u6709\u53CD\u9988\u3001\u8BB0\u5F97\u4F4F\uFF08\u5DE5\u7A0B\u515C\u5E95\uFF09",
+        \u4EA4\u4ED8\u5B8C\u6574\u6027: "\u8D44\u6E90\u5B8C\u597D\u3001\u6CA1\u6709\u88AB\u88C1\u3001\u6CA1\u6709\u7A7A\u5C4F\uFF08\u5DE5\u7A0B\u515C\u5E95\uFF09"
+      },
+      scope: {
+        in: [
+          "svg",
+          "html",
+          "png",
+          "jpg",
+          "design file export"
+        ],
+        out: [
+          "video"
+        ],
+        note: "\u89C6\u9891\u8BC4\u5BA1\uFF08\u65F6\u5E8F/\u62BD\u5E27/\u97F3\u753B\uFF09\u6574\u5757\u505C\u7528\uFF0C\u76F8\u5173\u89C4\u5219\u6807 outOfScope\uFF0C\u4E0D\u8FDB\u5224\u5B9A\u4E5F\u4E0D\u8BA1\u5165\u8986\u76D6\u7387"
+      }
+    };
   }
 });
 
@@ -3546,18 +4369,23 @@ function buildCoverage(args) {
     rules: rows
   };
 }
-var ruleset, LIBRARY_VERSION, RULES, IMPLEMENTED, IMPACT_ORDER, LEVEL_ORDER, IMPACT_LABELS, OPS;
+var ruleset, fullRuleset, LIBRARY_VERSION, RULES, ACTIVE_IDS, IMPLEMENTED, IMPACT_ORDER, LEVEL_ORDER, IMPACT_LABELS, OPS;
 var init_rules2 = __esm({
   "src/lib/review/rules.ts"() {
+    init_rules_core();
     init_rules();
-    ruleset = rules_default;
+    ruleset = rules_core_default;
+    fullRuleset = rules_default;
     LIBRARY_VERSION = ruleset.libraryVersion;
-    RULES = Object.fromEntries(ruleset.rules.map((r3) => [r3.id, r3]));
+    RULES = {
+      ...Object.fromEntries(fullRuleset.rules.map((r3) => [r3.id, r3])),
+      ...Object.fromEntries(ruleset.rules.map((r3) => [r3.id, r3]))
+    };
+    ACTIVE_IDS = new Set(ruleset.rules.map((r3) => r3.id));
     IMPLEMENTED = {
       "QL-01": /* @__PURE__ */ new Set(["layout"]),
       "QL-02": /* @__PURE__ */ new Set(["layout"]),
       "QL-03": /* @__PURE__ */ new Set(["layout"]),
-      "QL-04": /* @__PURE__ */ new Set(["layout"]),
       "QL-07": /* @__PURE__ */ new Set(["media"]),
       "VS-01": /* @__PURE__ */ new Set(["layout"]),
       // DE-01 需要多帧采样才能说「全程不可见」，单帧评审不做，留在未实现里
@@ -3570,6 +4398,8 @@ var init_rules2 = __esm({
       "GE-02": /* @__PURE__ */ new Set(["layout"]),
       "SP-01": /* @__PURE__ */ new Set(["layout"]),
       "TY-01": /* @__PURE__ */ new Set(["layout"]),
+      "TY-02": /* @__PURE__ */ new Set(["layout"]),
+      "CORE-02": /* @__PURE__ */ new Set(["layout"]),
       "TY-04": /* @__PURE__ */ new Set(["layout"]),
       "TY-05": /* @__PURE__ */ new Set(["layout"]),
       "TY-06": /* @__PURE__ */ new Set(["layout"]),
@@ -3601,6 +4431,40 @@ function toUser(ctx, r3) {
   const w2 = r3.width / ctx.scale;
   const h = r3.height / ctx.scale;
   return [round(x2), round(y2), round(w2), round(h)];
+}
+function dataUriImageSize(href) {
+  const m2 = /^data:image\/(png|jpe?g);base64,([\s\S]+)$/i.exec(href);
+  if (!m2) return null;
+  let bin;
+  try {
+    bin = atob(m2[2].slice(0, 8192));
+  } catch {
+    return null;
+  }
+  const bytes = new Uint8Array(bin.length);
+  for (let i3 = 0; i3 < bin.length; i3++) bytes[i3] = bin.charCodeAt(i3);
+  if (m2[1].toLowerCase() === "png") {
+    if (bytes.length < 24) return null;
+    const w2 = bytes[16] << 24 | bytes[17] << 16 | bytes[18] << 8 | bytes[19];
+    const h = bytes[20] << 24 | bytes[21] << 16 | bytes[22] << 8 | bytes[23];
+    return w2 > 0 && h > 0 ? { w: w2, h } : null;
+  }
+  let i2 = 2;
+  while (i2 + 9 < bytes.length) {
+    if (bytes[i2] !== 255) {
+      i2++;
+      continue;
+    }
+    const marker = bytes[i2 + 1];
+    if (marker >= 192 && marker <= 195) {
+      const h = bytes[i2 + 5] << 8 | bytes[i2 + 6];
+      const w2 = bytes[i2 + 7] << 8 | bytes[i2 + 8];
+      return w2 > 0 && h > 0 ? { w: w2, h } : null;
+    }
+    const len2 = bytes[i2 + 2] << 8 | bytes[i2 + 3];
+    i2 += 2 + len2;
+  }
+  return null;
 }
 function frameOf(el, textRect, ctx) {
   const parent = el.parentElement;
@@ -3723,10 +4587,12 @@ function extractBoxes(snap3) {
     const ownOpacity = Number.parseFloat(cs3.opacity || "1");
     const visible = isVisible(el, cs3);
     const kind = tag === "text" ? "text" : tag === "image" ? "image" : "shape";
+    let imgSize = null;
     if (tag === "image") {
       const href = el.getAttribute("href") || el.getAttribute("xlink:href") || el.href?.baseVal || "";
       if (!href.trim()) brokenImages.push(id2);
       else if (!/^data:/i.test(href)) unresolvedImages.push(href);
+      else imgSize = dataUriImageSize(href);
     }
     const out = {
       id: id2,
@@ -3762,6 +4628,10 @@ function extractBoxes(snap3) {
     }
     if (tag === "image") {
       out.text = "image";
+      if (imgSize) {
+        out.imgW = imgSize.w;
+        out.imgH = imgSize.h;
+      }
     }
     out.visible = visible;
     ctx.elements.push(out);
@@ -4222,6 +5092,40 @@ function measureLayout(input) {
       ruleId: "QL-01",
       reason: "\u6587\u5B57\u6CA1\u6709\u80FD\u88C5\u4E0B\u5B83\u7684\u5BB9\u5668\uFF08SVG \u4E0D\u4F1A\u81EA\u52A8\u88C1\u526A\uFF09\uFF0C\u6EA2\u51FA\u53EA\u4F1A\u53D1\u751F\u5728\u753B\u5E03\u5916\uFF0C\u5DF2\u7531 VS-01 \u5224"
     });
+  }
+  {
+    const imgs = els.filter((e2) => e2.kind === "image" && e2.imgW && e2.imgH);
+    if (!imgs.length) {
+      unmeasured.push({ ruleId: "CORE-02", reason: "\u6CA1\u6709\u53EF\u8BFB\u539F\u59CB\u5C3A\u5BF8\u7684\u4F4D\u56FE\uFF08\u53EA\u652F\u6301 data URI \u7684 PNG/JPEG\uFF09" });
+    } else {
+      let worst = 0;
+      let worstId = "";
+      for (const e2 of imgs) {
+        const b2 = bboxOf(e2);
+        if (!b2[2] || !b2[3]) continue;
+        const ratio = b2[2] / b2[3] / (e2.imgW / e2.imgH);
+        const d2 = Math.abs(ratio - 1);
+        if (d2 > worst) {
+          worst = d2;
+          worstId = e2.id;
+        }
+      }
+      out.push({
+        ruleId: "CORE-02",
+        element: worstId || "canvas",
+        measured: r2(worst),
+        unit: "ratio",
+        status: gateStatus(RULES["CORE-02"].gate, worst),
+        method: "image_aspect",
+        metric: "aspect_distortion",
+        evidence: {
+          worstId,
+          distortion: r2(worst),
+          samples: imgs.length,
+          note: worst ? `\u6700\u5927\u5931\u771F ${(worst * 100).toFixed(1)}%` : "\u6240\u6709\u4F4D\u56FE\u6BD4\u4F8B\u6B63\u5E38"
+        }
+      });
+    }
   }
   let occlusionSamples = 0;
   for (const el of texts) {
@@ -4685,20 +5589,47 @@ function measureLayout(input) {
     const gap = Math.round(bb[0] - (ba2[0] + ba2[2]));
     if (gap >= 1 && gap <= 400) gaps.push(gap);
   }
-  if (gaps.length < (RULES["SP-01"].minSamples || 5)) {
-    unmeasured.push({ ruleId: "SP-01", reason: `\u6A2A\u5411\u95F4\u8DDD\u6837\u672C ${gaps.length} < ${RULES["SP-01"].minSamples || 5}` });
-  } else {
-    const levels = [...new Set(gaps)].sort((a, b2) => a - b2);
-    out.push({
-      ruleId: "SP-01",
-      element: "spacing",
-      measured: levels.length,
-      unit: "count",
-      status: gateStatus(RULES["SP-01"].gate, levels.length),
-      method: "distinct_gaps",
-      metric: "spacing_levels",
-      evidence: { levels: levels.slice(0, 12), samples: gaps.length }
-    });
+  {
+    const groups2 = groupMembers(els, W3, H2, false);
+    let offBand = 0;
+    let samples = 0;
+    const detail = [];
+    for (const [gid, list] of groups2) {
+      if (list.length < 3) continue;
+      const sorted = [...list].sort((a, b2) => bboxOf(a)[0] - bboxOf(b2)[0]);
+      const local = [];
+      for (let i2 = 1; i2 < sorted.length; i2++) {
+        const ba2 = bboxOf(sorted[i2 - 1]);
+        const bb = bboxOf(sorted[i2]);
+        const g2 = Math.round(bb[0] - (ba2[0] + ba2[2]));
+        if (g2 >= 0 && g2 <= 400) local.push(g2);
+      }
+      if (local.length < 2) continue;
+      samples += local.length;
+      const bands = local.map((v2) => Math.max(0, Math.round(v2 / 8)));
+      const freq = /* @__PURE__ */ new Map();
+      for (const b2 of bands) freq.set(b2, (freq.get(b2) || 0) + 1);
+      const mode = [...freq.entries()].sort((a, b2) => b2[1] - a[1] || a[0] - b2[0])[0][0];
+      const k2 = bands.filter((b2) => b2 !== mode).length;
+      if (k2 > 0) {
+        offBand += k2;
+        detail.push({ group: gid, gaps: local.slice(0, 8), modePx: mode * 8 });
+      }
+    }
+    if (samples < 3) {
+      unmeasured.push({ ruleId: "SP-01", reason: `\u7EC4\u5185\u76F8\u90BB\u95F4\u8DDD\u6837\u672C ${samples} < 3` });
+    } else {
+      out.push({
+        ruleId: "SP-01",
+        element: "spacing",
+        measured: offBand,
+        unit: "count",
+        status: gateStatus(RULES["SP-01"].gate, offBand),
+        method: "group_gap_band",
+        metric: "spacing_off_band",
+        evidence: { offBand, samples, groups: detail.slice(0, 5) }
+      });
+    }
   }
   if (!texts.length) {
     for (const rid of ["TY-01", "TY-04", "TY-05", "TY-06", "TY-07", "TY-08", "RP-01", "TX-01"]) {
@@ -4712,14 +5643,122 @@ function measureLayout(input) {
     const pushCanvas = (ruleId, value, unit, method, evidence, gate = RULES[ruleId].gate) => {
       out.push({ ruleId, element: "canvas", measured: value, unit, status: gateStatus(gate, value), method, evidence });
     };
-    if (!fams.size) unmeasured.push({ ruleId: "TY-01", reason: "\u6587\u5B57\u5143\u7D20\u6CA1\u6709 font-family" });
-    else pushCanvas("TY-01", fams.size, "count", "font_families", { families: [...fams].sort() });
-    if (sizes.length > 1) pushCanvas("RP-01", sizes.length, "count", "type_scale_levels", { sizes });
-    else unmeasured.push({ ruleId: "RP-01", reason: "\u5B57\u53F7\u6863\u4F4D < 2" });
+    {
+      const sizeLevels = sizes.length;
+      const weightLevels = weights.size;
+      const famCount = fams.size;
+      const overSize = Math.max(0, sizeLevels - 5);
+      const overWeight = Math.max(0, weightLevels - 3);
+      const measured = Math.max(overSize, overWeight);
+      out.push({
+        ruleId: "TY-01",
+        element: "canvas",
+        measured,
+        unit: "count",
+        status: gateStatus(RULES["TY-01"].gate, measured),
+        method: "type_budget",
+        metric: "type_budget_over",
+        evidence: {
+          families: famCount,
+          familyList: [...fams].sort().slice(0, 6),
+          sizeLevels,
+          weightLevels,
+          overSize,
+          overWeight,
+          sizes,
+          weights: [...weights].sort((a, b2) => a - b2),
+          note: [
+            `\u5B57\u53F7 ${sizeLevels} \u6863${overSize ? `\uFF08\u8D85 ${overSize}\uFF09` : ""}\uFF1A${sizes.join(" / ")}`,
+            `\u5B57\u91CD ${weightLevels} \u6863${overWeight ? `\uFF08\u8D85 ${overWeight}\uFF09` : ""}\uFF1A${[...weights].sort((a, b2) => a - b2).join(" / ")}`,
+            `\u5B57\u65CF ${famCount}`
+          ].join(" \xB7 ")
+        }
+      });
+    }
+    {
+      const DEFAULT_ROLES = /* @__PURE__ */ new Set(["text", "shape", "image", "group", "other"]);
+      const roleOf = (e2) => e2.role && !DEFAULT_ROLES.has(e2.role) ? e2.role : "";
+      const peers = els.filter((e2) => roleOf(e2) && !isRuleLine(e2, W3, H2) && !isCanvasBg(e2, W3, H2));
+      if (peers.length < 2) {
+        unmeasured.push({ ruleId: "RP-01", reason: "\u5143\u7D20\u6CA1\u6709 class \u6216 role\uFF0C\u5206\u4E0D\u51FA\u300C\u540C\u7C7B\u300D\uFF0C\u4E0D\u5224\u5B9A" });
+      } else {
+        const byRole = /* @__PURE__ */ new Map();
+        for (const e2 of peers) {
+          const key = roleOf(e2);
+          const list = byRole.get(key) || [];
+          list.push(e2);
+          byRole.set(key, list);
+        }
+        let deviants = 0;
+        const detail = [];
+        for (const [role, arr] of byRole) {
+          if (arr.length < 2) continue;
+          const sig = (e2) => e2.kind === "text" ? [r2(e2.fontSize || 0), Math.round(e2.fontWeight || 400), String(e2.fill || "").toUpperCase()].join("|") : [Math.round(bboxOf(e2)[2]), Math.round(bboxOf(e2)[3]), String(e2.fill || "").toUpperCase()].join("|");
+          const counts = /* @__PURE__ */ new Map();
+          for (const e2 of arr) {
+            const key = sig(e2);
+            counts.set(key, (counts.get(key) || 0) + 1);
+          }
+          if (counts.size <= 1) continue;
+          deviants += arr.length - Math.max(...counts.values());
+          detail.push({ role, kind: arr[0].kind, variants: counts.size, size: arr.length });
+        }
+        out.push({
+          ruleId: "RP-01",
+          element: "canvas",
+          measured: deviants,
+          unit: "count",
+          status: gateStatus(RULES["RP-01"].gate, deviants),
+          method: "peer_signature",
+          metric: "peer_deviants",
+          evidence: { deviants, roles: detail.slice(0, 6) }
+        });
+      }
+    }
     const ratios = sizes.slice(1).map((v2, i2) => Math.round(v2 / sizes[i2] * 100) / 100);
     if (ratios.length) pushCanvas("TY-05", Math.min(...ratios), "ratio", "min_adjacent_ratio", { ratios });
     else unmeasured.push({ ruleId: "TY-05", reason: "\u5B57\u53F7\u6863\u4F4D < 2\uFF0C\u76F8\u90BB\u6BD4\u4E0D\u53EF\u7B97" });
     pushCanvas("TY-06", weights.size, "count", "weight_levels", { weights: [...weights].sort((a, b2) => a - b2) });
+    {
+      const rows = texts.filter((t2) => (t2.charCount || (t2.text || "").length) > 0);
+      if (!rows.length) {
+        unmeasured.push({ ruleId: "TY-02", reason: "\u6CA1\u6709\u53EF\u6D4B\u7684\u6587\u5B57\u5185\u5BB9" });
+      } else {
+        let worst = 0;
+        let worstId = "";
+        let worstChars = 0;
+        let worstLimit = 0;
+        for (const t2 of rows) {
+          const content = t2.text || "";
+          const cjkShare = (content.match(/[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/g) || []).length / Math.max(1, content.length);
+          const limit = cjkShare > 0.3 ? 40 : 80;
+          const chars = t2.charCount || content.length;
+          const ratio = chars / limit;
+          if (ratio > worst) {
+            worst = ratio;
+            worstId = t2.id;
+            worstChars = chars;
+            worstLimit = limit;
+          }
+        }
+        out.push({
+          ruleId: "TY-02",
+          element: worstId || "canvas",
+          measured: r2(worst),
+          unit: "ratio",
+          status: gateStatus(RULES["TY-02"].gate, worst),
+          method: "chars_per_line",
+          metric: "line_length_ratio",
+          evidence: {
+            worstId,
+            ratio: r2(worst),
+            chars: worstChars,
+            limit: worstLimit,
+            note: `\u6700\u957F\u4E00\u884C ${worstChars} \u5B57\uFF0C\u4E0A\u9650 ${worstLimit}\uFF08CJK 40 / \u5176\u4ED6 80\uFF09`
+          }
+        });
+      }
+    }
     const sat = (c) => {
       const m2 = /^#([0-9a-f]{6})$/i.exec(c);
       if (!m2) return 0;
@@ -5229,15 +6268,18 @@ function defaultFix(f2) {
     case "TY-08":
       return `\u628A ${f2.element} \u7684\u5B57\u91CD\u4ECE 300 \u4EE5\u4E0B\u63D0\u5230 400\uFF1A\u5B57\u53F7 ${n(ev.fontSize, 1)}px \u672C\u6765\u5C31\u5C0F`;
     case "SP-01":
-      return `\u628A\u95F4\u8DDD\u6536\u655B\u5230 4\u20136 \u6863\uFF1A\u5F53\u524D\u7528\u4E86 ${n(f2.measured, 0)} \u6863\uFF08${ev.levels?.slice(0, 8).join(", ") || ""}\uFF09`;
+      return `\u628A\u540C\u7EC4\u95F4\u8DDD\u6536\u5230\u540C\u4E00\u6863\uFF1A\u5F53\u524D\u6709 ${n(f2.measured, 0)} \u5904\u8DE8\u6863\uFF08${ev.groups?.slice(0, 2).map((g2) => `${g2.gaps.join("/")} \u2192 \u76EE\u6807 ${g2.modePx}`).join("\uFF1B") || ""}\uFF09`;
     case "TY-06":
       return `\u628A\u5B57\u91CD\u6863\u4F4D\u6536\u5230 3 \u6863\u4EE5\u5185\uFF1A\u5F53\u524D ${ev.weights?.join(", ") || ""}`;
-    case "RP-01":
-      return `\u628A\u5B57\u53F7\u6863\u4F4D\u4ECE ${n(f2.measured, 0)} \u6536\u5230 5 \u6863\u4EE5\u5185\uFF1A${ev.sizes?.join(" / ") || ""}`;
+    case "RP-01": {
+      const roles = ev.roles || [];
+      const first = roles[0];
+      return first ? `\u628A ${n(f2.measured, 0)} \u4E2A\u504F\u79BB\u5B9E\u4F8B\u5BF9\u9F50\u5230\u540C\u7C7B\uFF1A\u300C${first.role}\u300D\u8FD9\u4E00\u7EC4\u6709 ${first.variants} \u79CD\u5916\u89C2\uFF08\u5171 ${first.size} \u4E2A\uFF09` : `\u628A\u540C\u7C7B\u5B9E\u4F8B\u7684\u5916\u89C2\u7EDF\u4E00\uFF1A\u5F53\u524D\u6709 ${n(f2.measured, 0)} \u4E2A\u504F\u79BB`;
+    }
     case "TX-01":
       return `\u628A\u4E2D\u6027\u6587\u5B57\u8272\u6536\u5230 ${3} \u79CD\u4EE5\u5185\uFF1A\u5F53\u524D ${ev.colors?.join(", ") || ""}`;
     case "CL-01":
-      return `\u628A\u4E3B\u8272\u6536\u5230 6 \u4E2A\u4EE5\u5185\uFF1A\u5F53\u524D ${n(f2.measured, 0)} \u4E2A\uFF08${ev.palette?.slice(0, 6).join(", ") || ""}\uFF09`;
+      return `\u628A\u53EF\u8FA8\u989C\u8272\u6536\u5230 4 \u4E2A\u4EE5\u5185\uFF1A\u5F53\u524D ${n(f2.measured, 0)} \u4E2A\uFF08${ev.palette?.slice(0, 6).join(", ") || ""}\uFF09`;
     case "NS-01":
       return `\u7ED9\u5185\u5BB9\u7559\u51FA\u8FB9\u8DDD\uFF1A\u80CC\u666F\u5360\u6BD4 ${n(f2.measured, 2)}\uFF0C\u76EE\u6807 0.3 \u4EE5\u4E0A`;
     case "QL-07":
@@ -5270,6 +6312,37 @@ var init_findings = __esm({
       const num3 = Number(v2);
       return Number.isFinite(num3) ? Number(num3.toFixed(digits)) : null;
     };
+  }
+});
+
+// src/lib/review/hash.ts
+function reviewInputHash(asset, options = {}) {
+  const canonical = (value) => JSON.stringify(
+    value,
+    (_key, item) => item && typeof item === "object" && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map((key) => [key, item[key]])) : item
+  );
+  return hashOf([
+    "studio-frame-v2",
+    asset.svg,
+    String(asset.width),
+    String(asset.height),
+    canonical(asset.groups || []),
+    canonical(asset.layouts || {}),
+    canonical(asset.overrides || {}),
+    canonical(options)
+  ]);
+}
+function hashOf(parts) {
+  let h = 2166136261;
+  const text = parts.join("\0");
+  for (let i2 = 0; i2 < text.length; i2++) {
+    h ^= text.charCodeAt(i2);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(16).padStart(8, "0");
+}
+var init_hash = __esm({
+  "src/lib/review/hash.ts"() {
   }
 });
 
@@ -12753,26 +13826,24 @@ function solveLayout(items, specIn = {}) {
   for (const item of items) {
     const { w: w2, h } = size2(item);
     const mainSize = horizontal ? w2 : h;
-    const crossSize = horizontal ? h : w2;
     const nextMain = current.length ? mainUsed + gap + mainSize : mainSize;
-    if (spec.wrap && innerW && horizontal && nextMain > innerW && current.length) {
+    if (spec.wrap && spec.width && horizontal && nextMain > innerW && current.length) {
       lines.push(buildLine(current, mainUsed, size2, horizontal));
       current = [];
       mainUsed = 0;
     }
     current.push(item);
     mainUsed = current.length === 1 ? mainSize : mainUsed + gap + mainSize;
-    void crossSize;
   }
   if (current.length) lines.push(buildLine(current, mainUsed, size2, horizontal));
   const boxes = [];
   let crossPos = pad;
   for (const line of lines) {
     const lineMain = line.main;
-    const free = innerW ? innerW - lineMain : 0;
+    const free = horizontal ? innerW - lineMain : 0;
     let offset = 0;
     let extraGap = 0;
-    if (innerW > 0 && free > 0) {
+    if (free > 0) {
       if (spec.justify === "center") offset = free / 2;
       else if (spec.justify === "end") offset = free;
       else if (spec.justify === "between" && line.items.length > 1) extraGap = free / (line.items.length - 1);
@@ -12782,7 +13853,7 @@ function solveLayout(items, specIn = {}) {
       const { w: w2, h } = size2(item);
       const crossSize = horizontal ? h : w2;
       const mainSize = horizontal ? w2 : h;
-      const crossContainer = horizontal ? line.cross : innerW || line.cross;
+      const crossContainer = horizontal ? line.cross : Math.max(innerW, line.cross);
       const crossOffset = alignOffset(crossContainer, crossSize, spec[horizontal ? "alignY" : "alignX"]);
       if (horizontal) {
         boxes.push({ id: item.id, x: cursor, y: crossPos + crossOffset, width: w2, height: h });
@@ -12793,8 +13864,8 @@ function solveLayout(items, specIn = {}) {
     }
     crossPos += line.cross + rowGap;
   }
-  const contentW = innerW ? innerW + pad * 2 : Math.max(0, ...boxes.map((b2) => b2.x + b2.width)) + pad;
-  const contentH = lines.length ? crossPos - rowGap + pad : pad * 2;
+  const contentW = Math.max(spec.width ?? 0, Math.max(pad, ...boxes.map((b2) => b2.x + b2.width)) + pad);
+  const contentH = Math.max(pad, ...boxes.map((b2) => b2.y + b2.height)) + pad;
   return { boxes, width: contentW, height: contentH };
 }
 function buildLine(items, main2, size2, horizontal) {
@@ -12816,7 +13887,7 @@ function alignOffset(containerSize, itemSize, align2) {
 function solveGrid(items, spec, size2, pad, gap, rowGap, innerW) {
   const cols = Math.max(1, Math.floor(spec.cols || 1));
   const maxItemW = Math.max(1, ...items.map((i2) => size2(i2).w));
-  const colW = innerW ? Math.max(1, (innerW - gap * (cols - 1)) / cols) : maxItemW;
+  const colW = Math.max(maxItemW, (innerW - gap * (cols - 1)) / cols);
   const rows = Math.ceil(items.length / cols);
   const rowHeights = [];
   for (let r3 = 0; r3 < rows; r3++) {
@@ -12837,7 +13908,7 @@ function solveGrid(items, spec, size2, pad, gap, rowGap, innerW) {
       height: h
     };
   });
-  const width = innerW ? innerW + pad * 2 : pad * 2 + cols * colW + gap * (cols - 1);
+  const width = pad * 2 + cols * colW + gap * (cols - 1);
   const height = pad * 2 + rowHeights.reduce((s2, v2) => s2 + v2, 0) + rowGap * Math.max(0, rows - 1);
   return { boxes, width, height };
 }
@@ -12853,56 +13924,52 @@ var init_engine = __esm({
 });
 
 // src/lib/layout/apply.ts
-function baseBox(child) {
-  const { bbox, baseMatrix } = child;
+function measureChild(child) {
+  const bounds = child.wrapper.getBounds("box", "inner");
+  const matrix = child.overrideMatrix ?? child.baseMatrix;
   const corners = [
-    [bbox.x, bbox.y],
-    [bbox.x + bbox.width, bbox.y],
-    [bbox.x, bbox.y + bbox.height],
-    [bbox.x + bbox.width, bbox.y + bbox.height]
-  ].map(([x2, y2]) => apply(baseMatrix, x2, y2));
-  const xs2 = corners.map((p2) => p2.x);
-  const ys2 = corners.map((p2) => p2.y);
+    [bounds.x, bounds.y],
+    [bounds.x + bounds.width, bounds.y],
+    [bounds.x, bounds.y + bounds.height],
+    [bounds.x + bounds.width, bounds.y + bounds.height]
+  ].map(([x2, y2]) => apply(matrix, x2, y2));
+  const xs2 = corners.map((point) => point.x);
+  const ys2 = corners.map((point) => point.y);
   return {
+    id: child.el.id,
     x: Math.min(...xs2),
     y: Math.min(...ys2),
     width: Math.max(1, Math.max(...xs2) - Math.min(...xs2)),
     height: Math.max(1, Math.max(...ys2) - Math.min(...ys2))
   };
 }
-function measureChildren(container) {
-  const boxes = container.children.map((child) => {
-    if (child.el.kind === "group" && child.children.length) {
-      const b3 = child.wrapper.getBounds("box", container.node);
-      return { id: child.el.id, x: b3.x, y: b3.y, width: Math.max(1, b3.width), height: Math.max(1, b3.height) };
-    }
-    const b2 = baseBox(child);
-    return { id: child.el.id, x: b2.x, y: b2.y, width: b2.width, height: b2.height };
+function layoutContainer(container, spec) {
+  const measured = container.children.map(measureChild);
+  const x2 = Math.min(...measured.map((item) => item.x));
+  const y2 = Math.min(...measured.map((item) => item.y));
+  const items = measured.map((item) => ({ ...item, x: item.x - x2, y: item.y - y2 }));
+  const result = solveLayout(items, { ...spec, maxWidth: null });
+  result.boxes.forEach((box, index) => {
+    const child = container.children[index];
+    child.layoutOffset = { x: box.x - items[index].x, y: box.y - items[index].y };
+    child.wrapper.setTransform(elementBaseMatrix(child), false);
   });
-  if (!boxes.length) return { items: [], origin: { x: 0, y: 0 } };
-  return {
-    items: boxes,
-    origin: { x: Math.min(...boxes.map((b2) => b2.x)), y: Math.min(...boxes.map((b2) => b2.y)) }
-  };
+  return result;
 }
-function layoutContainer(container, specIn) {
-  const spec = { ...DEFAULT_LAYOUT, ...specIn };
-  const { items, origin } = measureChildren(container);
-  const solved = solveLayout(items, { ...spec, padding: spec.padding ?? 0 });
-  const boxes = solved.boxes.map((b2) => ({ ...b2, x: b2.x + origin.x, y: b2.y + origin.y }));
-  for (const box of boxes) {
-    const child = container.children.find((c) => c.el.id === box.id);
-    if (!child) continue;
-    const base = baseBox(child);
-    child.layoutOffset = { x: box.x - base.x, y: box.y - base.y };
+function applyAssetLayouts(converted, layouts) {
+  const results = /* @__PURE__ */ new Map();
+  if (!layouts || !Object.keys(layouts).length) return results;
+  for (const container of [...converted.order].reverse()) {
+    const spec = layouts[container.el.id];
+    if (spec && container.children.length) results.set(container.el.id, layoutContainer(container, spec));
   }
-  return { boxes, width: solved.width, height: solved.height, origin };
+  return results;
 }
 var init_apply = __esm({
   "src/lib/layout/apply.ts"() {
     init_matrix();
+    init_convert();
     init_engine();
-    init_types();
   }
 });
 
@@ -17682,12 +18749,7 @@ function applyStudioFrame(snap3, asset, ids, frame) {
       targets.set(id2, properties);
     }
   }
-  for (const [id2, spec] of Object.entries(asset.layouts || {})) {
-    const container = converted.elements.get(id2);
-    if (!container) continue;
-    layoutContainer(container, spec);
-    for (const child of container.children) child.wrapper.setTransform(elementBaseMatrix(child), false);
-  }
+  applyAssetLayouts(converted, asset.layouts);
   if (player.groups.length) player.render(Math.min(player.duration * frame, player.lastFrameTime));
   for (const element of [snap3.svg, ...Array.from(snap3.svg.querySelectorAll("*"))]) {
     element.style?.setProperty("animation", "none", "important");
@@ -17747,11 +18809,28 @@ var init_studioFrame = __esm({
 // src/lib/review/review.ts
 var review_exports = {};
 __export(review_exports, {
+  buildReviewFrameSvg: () => buildReviewFrameSvg,
   buildView: () => buildView,
   gateOf: () => gateOf,
   reviewInputHash: () => reviewInputHash,
   runReview: () => runReview
 });
+async function buildReviewFrameSvg(asset, options = {}) {
+  const frameRatio = clamp013(options.frame ?? 1);
+  const snap3 = await mountSnapshot(asset);
+  try {
+    const idMap = assignIds(snap3);
+    applyOverrides(snap3, asset.overrides, idMap);
+    if (asset.groups.length || Object.keys(asset.layouts || {}).length || Object.keys(asset.overrides || {}).length || snap3.animationCount || snap3.hasSmil) {
+      const { applyStudioFrame: applyStudioFrame2 } = await Promise.resolve().then(() => (init_studioFrame(), studioFrame_exports));
+      applyStudioFrame2(snap3, asset, idMap, frameRatio);
+    }
+    await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+    return bakeStatic(snap3);
+  } finally {
+    snap3.dispose();
+  }
+}
 async function runReview(asset, options = {}) {
   const started = performance.now();
   const medium = options.medium || "ui";
@@ -17845,7 +18924,7 @@ async function runReview(asset, options = {}) {
     if (bleed) notes.push(`${bleed} \u4E2A\u88C5\u9970\u56FE\u5F62\u6574\u5757\u5728\u753B\u5E03\u5916\uFF1A\u4E0D\u5F71\u54CD\u753B\u9762\uFF0C\u4F46\u7B49\u4E8E\u6CA1\u753B`);
     const partialBleed = layout.findings.filter((f2) => f2.ruleId === "VS-01" && f2.status === "PASS" && f2.evidence?.kind === "shape" && Number(f2.measured) > 0).length;
     if (partialBleed) notes.push(`${partialBleed} \u4E2A\u88C5\u9970\u56FE\u5F62\u51FA\u8840\u5230\u753B\u5916\uFF1A\u6309\u6709\u610F\u51FA\u8840\u5904\u7406\uFF0C\u4E0D\u8BA1\u88C1\u5207`);
-    const raws = [...layout.findings, ...contrast.findings, ...pixelFindings, ...mediaFindings];
+    const raws = [...layout.findings, ...contrast.findings, ...pixelFindings, ...mediaFindings].filter((r3) => ACTIVE_IDS.has(r3.ruleId) && RULES[r3.ruleId]?.measure !== "semantic");
     const unmeasured = [...layout.unmeasured, ...contrast.unmeasured];
     if (!raster?.image) unmeasured.push({ ruleId: "CL-01", reason: "\u5149\u6805\u5316\u5931\u8D25\uFF0C\u8C03\u8272\u677F\u65E0\u6CD5\u7EDF\u8BA1" });
     if (!raster?.image) unmeasured.push({ ruleId: "NS-01", reason: "\u5149\u6805\u5316\u5931\u8D25\uFF0C\u8D1F\u7A7A\u95F4\u65E0\u6CD5\u7EDF\u8BA1" });
@@ -18007,31 +19086,6 @@ function buildView(findings) {
     collapsed: { findings: collapsed, detail: "\u6298\u53E0\u9879\u4ECD\u5B8C\u6574\u4FDD\u7559\u5728 findings[]\uFF0C\u53EF\u6309 id \u56DE\u67E5\uFF0C\u4E0D\u5220\u9664" }
   };
 }
-function reviewInputHash(asset, options = {}) {
-  const canonical = (value) => JSON.stringify(
-    value,
-    (_key, item) => item && typeof item === "object" && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map((key) => [key, item[key]])) : item
-  );
-  return hashOf([
-    "studio-frame-v2",
-    asset.svg,
-    String(asset.width),
-    String(asset.height),
-    canonical(asset.groups || []),
-    canonical(asset.layouts || {}),
-    canonical(asset.overrides || {}),
-    canonical(options)
-  ]);
-}
-function hashOf(parts) {
-  let h = 2166136261;
-  const text = parts.join("\0");
-  for (let i2 = 0; i2 < text.length; i2++) {
-    h ^= text.charCodeAt(i2);
-    h = Math.imul(h, 16777619);
-  }
-  return (h >>> 0).toString(16).padStart(8, "0");
-}
 var clamp013, CARD_TITLES, byImpact, levelRank, round4;
 var init_review = __esm({
   "src/lib/review/review.ts"() {
@@ -18042,6 +19096,8 @@ var init_review = __esm({
     init_layout();
     init_pixels();
     init_findings();
+    init_hash();
+    init_hash();
     clamp013 = (v2) => Math.max(0, Math.min(1, Number.isFinite(v2) ? v2 : 1));
     CARD_TITLES = {
       out_of_canvas: "\u51FA\u753B\uFF08\u88AB\u753B\u5E03\u88C1\u6389\uFF09",
@@ -18057,6 +19113,48 @@ var init_review = __esm({
     });
     levelRank = (l2) => ({ FAIL: 0, WARN: 1, UNMEASURED: 2, PASS: 3 })[l2] ?? 9;
     round4 = (v2) => Math.round(v2 * 1e4) / 1e4;
+  }
+});
+
+// src/lib/review/agent.ts
+function agentReviewRules(rules) {
+  return rules.filter((rule) => !rule.outOfScope && (rule.measure === "semantic" || rule.severity === "human"));
+}
+function parseAgentReviewDocument(raw, validRuleIds, boxes) {
+  const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  const parsed = JSON.parse(cleaned);
+  const source = Array.isArray(parsed) ? parsed : parsed?.reviews;
+  if (!Array.isArray(source)) throw new Error("JSON \u9876\u5C42\u9700\u8981\u662F\u6570\u7EC4\uFF0C\u6216\u5305\u542B reviews \u6570\u7EC4");
+  const results = /* @__PURE__ */ new Map();
+  for (const row of source) {
+    const ruleId = String(row?.ruleId || "");
+    if (!validRuleIds.has(ruleId)) throw new Error(`\u7ED3\u679C\u5305\u542B\u672A\u77E5\u89C4\u5219\uFF1A${ruleId || "\u7F3A\u5C11 ruleId"}`);
+    if (results.has(ruleId)) throw new Error(`\u89C4\u5219 ${ruleId} \u91CD\u590D\u8FD4\u56DE`);
+    const rawResult = String(row?.result || "").toLowerCase();
+    const result = ["positive", "pass", "\u6B63\u4F8B", "\u901A\u8FC7"].includes(rawResult) ? "positive" : ["negative", "issue", "fail", "\u53CD\u4F8B", "\u95EE\u9898"].includes(rawResult) ? "negative" : ["unmeasured", "unknown", "\u672A\u6D4B"].includes(rawResult) ? "unmeasured" : null;
+    if (!result) throw new Error(`\u89C4\u5219 ${ruleId} \u7684 result \u65E0\u6548`);
+    const elementId = typeof row?.elementId === "string" && row.elementId.trim() ? row.elementId.trim() : void 0;
+    const candidate = row?.bbox;
+    const bbox = Array.isArray(candidate) && candidate.length === 4 && candidate.every((n3) => Number.isFinite(Number(n3))) && Number(candidate[2]) > 0 && Number(candidate[3]) > 0 ? candidate.map(Number) : elementId ? boxes[elementId] : void 0;
+    results.set(ruleId, {
+      ruleId,
+      result,
+      reason: String(row?.reason || "Agent \u672A\u63D0\u4F9B\u5224\u65AD\u4F9D\u636E\u3002"),
+      ...elementId ? { elementId } : {},
+      ...bbox ? { bbox } : {}
+    });
+  }
+  const missing = [...validRuleIds].filter((ruleId) => !results.has(ruleId));
+  if (missing.length) throw new Error(`\u7F3A\u5C11 ${missing.length} \u6761\u89C4\u5219\u7ED3\u8BBA\uFF1A${missing.slice(0, 6).join("\u3001")}${missing.length > 6 ? "\u2026" : ""}`);
+  return {
+    ...typeof parsed?.assetId === "string" ? { assetId: parsed.assetId } : {},
+    ...typeof parsed?.inputHash === "string" ? { inputHash: parsed.inputHash } : {},
+    ...parsed?.options && typeof parsed.options === "object" ? { options: parsed.options } : {},
+    reviews: [...results.values()]
+  };
+}
+var init_agent = __esm({
+  "src/lib/review/agent.ts"() {
   }
 });
 
@@ -18129,6 +19227,7 @@ var init_args = __esm({
       validate: {},
       apply: { ops: "value", "dry-run": "switch" },
       add: { svg: "value", name: "value", x: "value", y: "value", width: "value", height: "value", "dry-run": "switch" },
+      replace: { asset: "value", svg: "value", "dry-run": "switch" },
       style: { asset: "value", element: "value", set: "repeat", clear: "switch", "dry-run": "switch" },
       anim: { asset: "value", group: "value", set: "repeat", "dry-run": "switch" },
       layer: { asset: "value", group: "value", targets: "value", stagger: "value", "dry-run": "switch" },
@@ -18149,7 +19248,16 @@ var init_args = __esm({
         "no-wrap": "switch",
         "dry-run": "switch"
       },
-      review: { asset: "value", run: "switch", write: "switch", app: "value", "project-url": "value", "dry-run": "switch" },
+      review: {
+        asset: "value",
+        run: "switch",
+        write: "switch",
+        app: "value",
+        "project-url": "value",
+        "dry-run": "switch",
+        "agent-prompt": "switch",
+        "agent-result": "value"
+      },
       context: { bridge: "value", session: "value", wait: "value", after: "value" },
       live: {
         bridge: "value",
@@ -18161,8 +19269,12 @@ var init_args = __esm({
         clear: "switch",
         select: "value",
         save: "switch",
+        reload: "switch",
         review: "switch",
-        frame: "value"
+        frame: "value",
+        add: "value",
+        name: "value",
+        "variant-of": "value"
       },
       bridge: { port: "value" },
       mcp: { project: "value", bridge: "value" }
@@ -18196,6 +19308,7 @@ async function reviewInBrowser(opts) {
   url.searchParams.set("project", opts.projectUrl);
   url.searchParams.set("review", opts.target);
   url.searchParams.set("review-job", "1");
+  if (opts.mode && opts.mode !== "rules") url.searchParams.set("review-kind", opts.mode);
   const profile = fs3.mkdtempSync(path2.join(tmpdir(), "mgsvg-review-"));
   const portFile = path2.join(profile, "DevToolsActivePort");
   const chromeProcess = spawn(chrome, [
@@ -18300,9 +19413,20 @@ var init_reviewRunner = __esm({
 // src/cli/projectReview.ts
 var projectReview_exports = {};
 __export(projectReview_exports, {
-  reviewProjectFile: () => reviewProjectFile
+  agentPromptForProject: () => agentPromptForProject,
+  reviewProjectFile: () => reviewProjectFile,
+  saveAgentReviewResult: () => saveAgentReviewResult
 });
 import path3 from "node:path";
+function projectUrlForFile(file, supplied) {
+  if (supplied) return supplied;
+  const absolute = path3.resolve(file);
+  const relative = path3.relative(process.cwd(), absolute);
+  if (relative === ".." || relative.startsWith(".." + path3.sep) || path3.isAbsolute(relative)) {
+    throw new CliError("INVALID_ARGUMENT", "\u8BF7\u4ECE Studio \u9879\u76EE\u76EE\u5F55\u8FD0\u884C\uFF0C\u6216\u63D0\u4F9B --project-url");
+  }
+  return "/" + relative.split(path3.sep).map(encodeURIComponent).join("/");
+}
 async function reviewProjectFile({
   file,
   appUrl = "http://localhost:5188",
@@ -18313,16 +19437,11 @@ async function reviewProjectFile({
 }) {
   const { project, snapshot } = readProjectFile(file);
   const absolute = path3.resolve(file);
-  if (!projectUrl) {
-    const relative = path3.relative(process.cwd(), absolute);
-    if (relative === ".." || relative.startsWith(".." + path3.sep) || path3.isAbsolute(relative)) {
-      throw new CliError("INVALID_ARGUMENT", "\u8BF7\u4ECE Studio \u9879\u76EE\u76EE\u5F55\u8FD0\u884C\uFF0C\u6216\u63D0\u4F9B --project-url");
-    }
-    projectUrl = "/" + relative.split(path3.sep).map(encodeURIComponent).join("/");
-  }
+  projectUrl = projectUrlForFile(absolute, projectUrl);
   const assets = target ? [findAsset(project, target)] : project.assets;
   const targetId = target ? assets[0].id : "all";
   const result = await reviewInBrowser({ appUrl, projectUrl, target: targetId });
+  if (result.kind === "agent-prompt") throw new CliError("REVIEW_FAILED", "\u8BC4\u5BA1\u6D4F\u89C8\u5668\u8FD4\u56DE\u4E86 Agent \u63D0\u793A\u8BCD\uFF0C\u800C\u4E0D\u662F\u89C4\u5219\u7ED3\u679C");
   const failed = result.rows.filter((row) => row.error);
   if (failed.length) {
     throw new CliError("REVIEW_FAILED", "\u90E8\u5206\u7D20\u6750\u8BC4\u5BA1\u5931\u8D25", failed.map((row) => `${row.assetName}\uFF1A${row.error}`));
@@ -18346,10 +19465,71 @@ async function reviewProjectFile({
   }
   return { ...result, file: absolute, written: write && !dryRun };
 }
+async function agentPromptForProject({
+  file,
+  appUrl = "http://localhost:5188",
+  projectUrl,
+  target
+}) {
+  const { project } = readProjectFile(file);
+  const asset = findAsset(project, target);
+  const result = await reviewInBrowser({
+    appUrl,
+    projectUrl: projectUrlForFile(path3.resolve(file), projectUrl),
+    target: asset.id,
+    mode: "agent-prompt"
+  });
+  if (result.kind !== "agent-prompt") throw new CliError("REVIEW_FAILED", "\u6D4F\u89C8\u5668\u6CA1\u6709\u8FD4\u56DE Agent \u8BC4\u5BA1\u63D0\u793A\u8BCD");
+  if (result.assetId !== asset.id || result.inputHash !== reviewInputHash(asset, result.options)) {
+    throw new CliError("REVIEW_SOURCE_MISMATCH", `\u6D4F\u89C8\u5668\u4E0E\u672C\u5730\u9879\u76EE\u7684\u7D20\u6750\u7248\u672C\u4E0D\u4E00\u81F4\uFF1A${asset.name}\uFF08${asset.id}\uFF09`);
+  }
+  return { ...result, file: path3.resolve(file) };
+}
+function saveAgentReviewResult({
+  file,
+  target,
+  document: document2,
+  write = false,
+  dryRun = false
+}) {
+  const { project, snapshot } = readProjectFile(file);
+  const asset = findAsset(project, target);
+  const raw = typeof document2 === "string" ? document2 : JSON.stringify(document2);
+  const validRuleIds = new Set(agentReviewRules(ruleset.rules).map((rule) => rule.id));
+  const parsed = parseAgentReviewDocument(raw, validRuleIds, {});
+  if (parsed.assetId !== asset.id) throw new CliError("AGENT_ASSET_MISMATCH", `\u7ED3\u679C assetId \u4E0D\u5339\u914D\uFF1A\u9884\u671F ${asset.id}\uFF0C\u6536\u5230 ${parsed.assetId || "\u7F3A\u5931"}`);
+  if (!parsed.inputHash || !parsed.options) throw new CliError("AGENT_RESULT_METADATA_MISSING", "Agent JSON \u5FC5\u987B\u5E26\u56DE assetId\u3001inputHash \u548C options");
+  const options = parsed.options;
+  if (options.medium !== "ui" && options.medium !== "print") throw new CliError("AGENT_RESULT_INVALID", "Agent JSON \u7684 options.medium \u65E0\u6548");
+  if (!Number.isFinite(options.frame) || options.frame < 0 || options.frame > 1) {
+    throw new CliError("AGENT_RESULT_INVALID", "Agent JSON \u7684 options.frame \u5FC5\u987B\u5728 0\u20131");
+  }
+  if (!Number.isFinite(options.displayWidth) || options.displayWidth <= 0) {
+    throw new CliError("AGENT_RESULT_INVALID", "Agent JSON \u7684 options.displayWidth \u5FC5\u987B\u4E3A\u6B63\u6570");
+  }
+  if (options.scaleLadder !== void 0 && (!Array.isArray(options.scaleLadder) || options.scaleLadder.some((value) => !Number.isFinite(value) || value <= 0))) {
+    throw new CliError("AGENT_RESULT_INVALID", "Agent JSON \u7684 options.scaleLadder \u5FC5\u987B\u662F\u6B63\u6570\u6570\u7EC4");
+  }
+  const currentHash = reviewInputHash(asset, options);
+  if (parsed.inputHash !== currentHash) throw new CliError("AGENT_RESULT_STALE", "Agent \u7ED3\u679C\u5BF9\u5E94\u7684\u7D20\u6750\u6216\u8BC4\u5BA1\u53E3\u5F84\u5DF2\u53D8\u5316\uFF1B\u8BF7\u91CD\u65B0\u751F\u6210\u63D0\u793A\u8BCD\u5E76\u8BC4\u5BA1");
+  const agentReview = {
+    inputHash: currentHash,
+    options,
+    generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    results: parsed.reviews
+  };
+  asset.agentReview = agentReview;
+  const check = validateProject(project);
+  if (!check.ok) throw new CliError("VALIDATION_FAILED", "\u9879\u76EE\u6821\u9A8C\u672A\u901A\u8FC7", check.problems);
+  if (write && !dryRun) writeProject(file, project, snapshot);
+  return { assetId: asset.id, assetName: asset.name, agentReview, written: write && !dryRun, dryRun: !!dryRun };
+}
 var init_projectReview = __esm({
   "src/cli/projectReview.ts"() {
     init_project();
     init_review();
+    init_agent();
+    init_rules2();
     init_args();
     init_io();
     init_reviewRunner();
@@ -18403,14 +19583,18 @@ async function startBridge(port = 7350) {
     if (sessionId && (type === "style.set" || type === "style.clear") && (!payload.asset || !payload.element)) {
       throw new Error("\u6307\u5B9A\u4F1A\u8BDD\u65F6\uFF0C\u8BF7\u540C\u65F6\u63D0\u4F9B\u8BFB\u53D6\u9009\u533A\u65F6\u62FF\u5230\u7684\u7D20\u6750\u548C\u5143\u7D20 ID");
     }
-    const asset = payload.asset || context3.selection.assetId;
+    if (type === "asset.add" && (typeof payload.svg !== "string" || !payload.svg.trim() || typeof payload.name !== "string" || !payload.name.trim())) {
+      throw new Error("\u6DFB\u52A0\u7D20\u6750\u9700\u8981 SVG \u6E90\u7801\u548C\u540D\u79F0");
+    }
+    const noAsset = type === "asset.add" || type === "project.reload";
+    const asset = noAsset ? void 0 : payload.asset || context3.selection.assetId;
     const canUseSelection = !payload.asset || payload.asset === context3.asset?.id || payload.asset === context3.asset?.name;
-    const element = payload.element || (canUseSelection && type !== "select" ? context3.selection.elementId : void 0);
-    if (type !== "save" && !asset) throw new Error("\u8BF7\u5148\u9009\u4E2D\u7D20\u6750\uFF0C\u6216\u63D0\u4F9B\u7D20\u6750 ID");
+    const element = noAsset ? void 0 : payload.element || (canUseSelection && type !== "select" ? context3.selection.elementId : void 0);
+    if (type !== "save" && !noAsset && !asset) throw new Error("\u8BF7\u5148\u9009\u4E2D\u7D20\u6750\uFF0C\u6216\u63D0\u4F9B\u7D20\u6750 ID");
     if ((type === "style.set" || type === "style.clear") && !element) {
       throw new Error("\u8BF7\u5148\u9009\u4E2D\u5143\u7D20\uFF0C\u6216\u63D0\u4F9B\u7D20\u6750\u548C\u5143\u7D20 ID");
     }
-    if (!["style.set", "style.clear", "select", "save", "review"].includes(type)) throw new Error("\u4E0D\u652F\u6301\u7684\u5B9E\u65F6\u547D\u4EE4");
+    if (!["style.set", "style.clear", "select", "save", "review", "asset.add", "asset.variant", "project.reload"].includes(type)) throw new Error("\u4E0D\u652F\u6301\u7684\u5B9E\u65F6\u547D\u4EE4");
     if (type === "review" && payload.frame !== void 0 && (typeof payload.frame !== "number" || !Number.isFinite(payload.frame) || payload.frame < 0 || payload.frame > 1)) throw new Error("\u8BC4\u5BA1\u5E27\u5FC5\u987B\u5728 0 \u5230 1 \u4E4B\u95F4");
     const id2 = randomUUID();
     pending.set(id2, {
@@ -18568,7 +19752,7 @@ var init_bridge = __esm({
     init_bridge_protocol();
     SESSION_TTL = 3e4;
     RESULT_TTL = 3e4;
-    MAX_BODY = 2e6;
+    MAX_BODY = 1e7;
     BridgeError = class extends Error {
       constructor(code, message) {
         super(message);
@@ -18653,12 +19837,12 @@ async function startMcpServer(projectPath, bridgePort) {
     }
   );
   const bridge = bridgePort ? await Promise.resolve().then(() => (init_bridge(), bridge_exports)).then((m2) => m2.startBridge(bridgePort)) : null;
-  if (bridge) console.error(`[mg-svg] \u9009\u62E9\u6865\u5DF2\u5F00\u5728 http://127.0.0.1:${bridge.port}\uFF08Studio \u7528 ?bridge=${bridge.port} \u6253\u5F00\uFF09`);
+  if (bridge) console.error(`[mg-svg] \u9009\u62E9\u6865\u5DF2\u5F00\u5728 http://127.0.0.1:${bridge.port}\uFF08Studio \u9ED8\u8BA4\u8FDE\u63A5\u672C\u673A 7350 \u7AEF\u53E3\uFF09`);
   server.registerTool(
     "studio_context",
     {
       title: "\u8BFB\u53D6 Studio \u5F53\u524D\u7684\u9009\u4E2D\u9879",
-      description: "\u8FD4\u56DE\u4EBA\u5728 Studio \u91CC\u6B64\u523B\u9009\u4E2D\u7684\u7D20\u6750/\u5143\u7D20\uFF08id\u3001\u6807\u7B7E\u3001\u6587\u5B57\u3001\u4F4D\u7F6E\u3001\u8986\u76D6\u6837\u5F0F\uFF09\u4EE5\u53CA\u8FD9\u4E00\u7248\u8BC4\u5BA1\u5728\u8BE5\u5143\u7D20\u4E0A\u7684\u5224\u5B9A\u3002\u9700\u8981 Studio \u7528 ?bridge=<port> \u6253\u5F00\uFF0C\u4E14 MCP \u4EE5 --bridge \u542F\u52A8\u3002",
+      description: "\u8FD4\u56DE\u4EBA\u5728 Studio \u91CC\u6B64\u523B\u9009\u4E2D\u7684\u7D20\u6750/\u5143\u7D20\uFF08id\u3001\u6807\u7B7E\u3001\u6587\u5B57\u3001\u4F4D\u7F6E\u3001\u8986\u76D6\u6837\u5F0F\uFF09\u4EE5\u53CA\u8FD9\u4E00\u7248\u8BC4\u5BA1\u5728\u8BE5\u5143\u7D20\u4E0A\u7684\u5224\u5B9A\u3002\u9700\u8981\u672C\u673A 7350 \u6865\u5DF2\u542F\u52A8\uFF0CStudio \u9ED8\u8BA4\u8FDE\u63A5\u8BE5\u7AEF\u53E3\u3002",
       inputSchema: {
         waitSeconds: z4.number().positive().max(120).optional().describe("\u7B49\u4E00\u6B21\u65B0\u7684\u9009\u62E9\uFF0C\u6700\u591A\u7B49\u8FD9\u4E48\u591A\u79D2"),
         sessionId: z4.string().trim().min(1).optional().describe("\u53EA\u8BFB\u6216\u7B49\u5F85\u6307\u5B9A\u4F1A\u8BDD"),
@@ -18689,7 +19873,7 @@ async function startMcpServer(projectPath, bridgePort) {
     },
     async ({ sessionId, asset, element, style, clear, select }) => {
       try {
-        if (!bridge) throw new Error("\u8BF7\u7528 --bridge \u542F\u52A8 MCP\uFF0C\u5E76\u6253\u5F00\u5E26 ?bridge= \u7684 Studio");
+        if (!bridge) throw new Error("\u8BF7\u7528 --bridge 7350 \u542F\u52A8 MCP\uFF1BStudio \u4F1A\u81EA\u52A8\u8FDE\u63A5\u672C\u673A\u6865");
         if (Number(!!style) + Number(!!clear) + Number(!!select) !== 1) {
           throw new Error("\u8BF7\u63D0\u4F9B style\u3001clear \u6216 select \u4E2D\u7684\u4E00\u79CD\u64CD\u4F5C");
         }
@@ -18713,7 +19897,7 @@ async function startMcpServer(projectPath, bridgePort) {
     },
     async ({ sessionId }) => {
       try {
-        if (!bridge) throw new Error("\u8BF7\u7528 --bridge \u542F\u52A8 MCP\uFF0C\u5E76\u6253\u5F00\u5E26 ?bridge= \u7684 Studio");
+        if (!bridge) throw new Error("\u8BF7\u7528 --bridge 7350 \u542F\u52A8 MCP\uFF1BStudio \u4F1A\u81EA\u52A8\u8FDE\u63A5\u672C\u673A\u6865");
         const result = await bridge.runCommand("save", {}, sessionId);
         if (result.ok === false) throw new Error(result.error);
         return text(JSON.stringify(result.result, null, 2));
@@ -18735,7 +19919,7 @@ async function startMcpServer(projectPath, bridgePort) {
     },
     async ({ sessionId, asset, frame }) => {
       try {
-        if (!bridge) throw new Error("\u8BF7\u7528 --bridge \u542F\u52A8 MCP\uFF0C\u5E76\u6253\u5F00\u5E26 ?bridge= \u7684 Studio");
+        if (!bridge) throw new Error("\u8BF7\u7528 --bridge 7350 \u542F\u52A8 MCP\uFF1BStudio \u4F1A\u81EA\u52A8\u8FDE\u63A5\u672C\u673A\u6865");
         const result = await bridge.runCommand("review", { asset, frame }, sessionId);
         if (result.ok === false) throw new Error(result.error);
         return text(JSON.stringify(result.result, null, 2));
@@ -18748,7 +19932,7 @@ async function startMcpServer(projectPath, bridgePort) {
     "review_read",
     {
       title: "\u8BFB\u53D6\u89C6\u89C9\u8BC4\u5BA1\u7ED3\u679C",
-      description: "\u8FD4\u56DE\u9879\u76EE\u91CC\u6BCF\u5F20\u7D20\u6750\u6700\u8FD1\u4E00\u6B21\u89C6\u89C9\u8BC4\u5BA1\u7684\u7ED3\u679C\uFF08\u95F8\u95E8\u3001\u786C\u4F24/\u63D0\u793A\u6570\u3001\u975E PASS \u660E\u7EC6\uFF09\uFF0C\u5E76\u6807\u51FA\u753B\u9762\u6539\u8FC7\u4E4B\u540E\u8FC7\u671F\u7684\u90A3\u4E9B\u3002\u8BC4\u5BA1\u672C\u8EAB\u8981\u5728 Studio \u7684\u6D4F\u89C8\u5668\u91CC\u8DD1\uFF0C\u8FD9\u91CC\u53EA\u8BFB\u7ED3\u679C\u3002",
+      description: "\u5206\u522B\u8BFB\u53D6\u89C4\u5219\u8BC4\u5BA1\u4E0E Agent \u8BC4\u5BA1\u5FEB\u7167\u3002\u5305\u542B PASS/FAIL/WARN/\u672A\u6D4B\u89C4\u5219\u660E\u7EC6\u3001Agent \u7ED3\u8BBA\u53CA\u5404\u81EA\u7684\u8FC7\u671F\u72B6\u6001\uFF1B\u8FC7\u671F\u7ED3\u679C\u4E0D\u4F1A\u4F5C\u4E3A\u5F53\u524D\u7ED3\u8BBA\u8FD4\u56DE\u3002",
       inputSchema: {
         path: z4.string().optional(),
         asset: z4.string().optional().describe("\u53EA\u8BFB\u4E00\u5F20\uFF1A\u7D20\u6750 id \u6216\u540D\u79F0")
@@ -18761,25 +19945,25 @@ async function startMcpServer(projectPath, bridgePort) {
         const assets = asset ? [findAsset(project, asset)] : project.assets;
         const rows = assets.map((a) => {
           const snap3 = a.review;
-          if (!snap3) return { id: a.id, name: a.name, status: "none" };
-          const stale = snap3.inputHash !== reviewInputHash2(a, snap3.options || {});
+          const status = !snap3 ? "none" : snap3.inputHash !== reviewInputHash2(a, snap3.options || {}) ? "stale" : "ok";
+          const agentSnap = a.agentReview;
+          const agentReviewStatus = !agentSnap ? "none" : agentSnap.inputHash !== reviewInputHash2(a, agentSnap.options || {}) ? "stale" : "ok";
           return {
             id: a.id,
             name: a.name,
-            status: stale ? "stale" : "ok",
-            gate: snap3.gate,
-            counts: snap3.counts,
-            coverage: snap3.coverage,
-            generatedAt: snap3.generatedAt,
-            findings: (snap3.findings || []).map((f2) => ({
-              ruleId: f2.ruleId,
-              principle: f2.principle,
-              level: f2.level,
-              element: f2.element,
-              measured: f2.measured,
-              unit: f2.unit,
-              fix: f2.fix
-            }))
+            status,
+            review: status === "ok" ? {
+              inputHash: snap3.inputHash,
+              gate: snap3.gate,
+              counts: snap3.counts,
+              coverage: snap3.coverage,
+              generatedAt: snap3.generatedAt,
+              findings: snap3.findings || []
+            } : null,
+            lastReview: snap3 ? { generatedAt: snap3.generatedAt, gate: snap3.gate, findings: snap3.findings?.length || 0 } : null,
+            agentReviewStatus,
+            agentReview: agentReviewStatus === "ok" ? agentSnap : null,
+            lastAgentReview: agentSnap ? { generatedAt: agentSnap.generatedAt, results: agentSnap.results?.length || 0 } : null
           };
         });
         return text(JSON.stringify(rows, null, 2));
@@ -18806,6 +19990,51 @@ async function startMcpServer(projectPath, bridgePort) {
         const { reviewProjectFile: reviewProjectFile2 } = await Promise.resolve().then(() => (init_projectReview(), projectReview_exports));
         const result = await reviewProjectFile2({ file: resolvePath(p2), appUrl, projectUrl, target: asset, write });
         return text(JSON.stringify(result, null, 2));
+      } catch (err) {
+        return fail(err);
+      }
+    }
+  );
+  server.registerTool(
+    "agent_review_prompt",
+    {
+      title: "\u751F\u6210 Agent \u8BED\u4E49\u8BC4\u5BA1\u63D0\u793A\u8BCD",
+      description: "\u4E3A\u6307\u5B9A\u7D20\u6750\u751F\u6210\u7ED1\u5B9A assetId\u3001\u8F93\u5165\u6307\u7EB9\u4E0E\u8BC4\u5BA1\u53E3\u5F84\u7684 Agent \u8BC4\u5BA1\u63D0\u793A\u8BCD\uFF0C\u5305\u542B\u6D4F\u89C8\u5668\u6E32\u67D3\u7684\u52A8\u753B\u672B\u5E27 SVG \u548C\u65E0\u6CD5\u91CF\u5316\u7684\u89C4\u5219\u3002",
+      inputSchema: {
+        path: z4.string().optional(),
+        asset: z4.string().describe("\u7D20\u6750 id \u6216\u540D\u79F0"),
+        appUrl: z4.string().optional().describe("Studio \u5730\u5740\uFF0C\u9ED8\u8BA4 http://localhost:5188"),
+        projectUrl: z4.string().optional().describe("Studio \u53EF\u8BBF\u95EE\u7684\u9879\u76EE URL\uFF1B\u5199\u56DE\u524D\u4F1A\u6838\u5BF9\u7D20\u6750\u7248\u672C")
+      }
+    },
+    async ({ path: p2, asset, appUrl, projectUrl }) => {
+      try {
+        const { agentPromptForProject: agentPromptForProject2 } = await Promise.resolve().then(() => (init_projectReview(), projectReview_exports));
+        const result = await agentPromptForProject2({ file: resolvePath(p2), target: asset, appUrl, projectUrl });
+        return text(JSON.stringify(result, null, 2));
+      } catch (err) {
+        return fail(err);
+      }
+    }
+  );
+  server.registerTool(
+    "agent_review_submit",
+    {
+      title: "\u5BFC\u5165 Agent \u8BED\u4E49\u8BC4\u5BA1\u7ED3\u679C",
+      description: "\u9A8C\u8BC1 Agent JSON \u4E2D\u7684\u7D20\u6750 ID\u3001inputHash\u3001options \u548C\u5B8C\u6574\u89C4\u5219\u7ED3\u8BBA\uFF1B\u53EF\u5148 dryRun \u9884\u89C8\uFF0C\u8BBE\u7F6E write \u540E\u5199\u56DE .mgsvg\u3002",
+      inputSchema: {
+        path: z4.string().optional(),
+        asset: z4.string().describe("\u7D20\u6750 id \u6216\u540D\u79F0"),
+        result: z4.any().describe("Agent \u8FD4\u56DE\u7684 JSON \u6587\u672C\u6216\u5BF9\u8C61\uFF0C\u5FC5\u987B\u5E26 assetId\u3001inputHash\u3001options\u3001reviews"),
+        write: z4.boolean().optional().describe("\u9A8C\u8BC1\u540E\u5199\u56DE\u9879\u76EE\u6587\u4EF6"),
+        dryRun: z4.boolean().optional().describe("\u914D\u5408 write \u53EA\u6821\u9A8C\u548C\u9884\u89C8\uFF0C\u4E0D\u843D\u76D8")
+      }
+    },
+    async ({ path: p2, asset, result, write, dryRun }) => {
+      try {
+        const { saveAgentReviewResult: saveAgentReviewResult2 } = await Promise.resolve().then(() => (init_projectReview(), projectReview_exports));
+        const saved = saveAgentReviewResult2({ file: resolvePath(p2), target: asset, document: result, write, dryRun });
+        return text(JSON.stringify(saved, null, 2));
       } catch (err) {
         return fail(err);
       }
@@ -18946,6 +20175,7 @@ var init_server = __esm({
 - \u52A8\u753B\u8F68\u9053\uFF08groups\uFF09\u4F5C\u7528\u5728\u5143\u7D20\u4E0A\uFF1BtargetIds + stagger \u8868\u793A\u4E00\u6761\u300C\u5206\u5C42\u300D\uFF0C\u540C\u4E00\u7EC4\u5173\u952E\u5E27\u4F5C\u7528\u5728\u591A\u4E2A\u5143\u7D20\u4E0A\uFF0C\u9010\u4E2A\u5EF6\u8FDF\u3002
 - overrides \u662F\u5143\u7D20\u6837\u5F0F\u8986\u76D6\uFF08fill/stroke/strokeWidth/opacity/fontSize/...\uFF09\u3002
 - layouts \u662F\u5BB9\u5668\u5E03\u5C40 spec\uFF08mode: row|column|grid|free\uFF0Cgap/padding/cols/alignX/alignY/justify/wrap\uFF09\u3002
+- review \u4FDD\u5B58\u89C4\u5219\u8BC4\u5BA1\u7ED3\u679C\uFF08PASS \u6B63\u4F8B\u3001FAIL/WARN \u53CD\u4F8B\u3001\u672A\u6D4B\u9879\uFF09\u53CA inputHash\uFF1BagentReview \u5355\u72EC\u4FDD\u5B58 Agent \u8BED\u4E49\u7ED3\u679C\uFF0C\u4E0D\u6DF7\u5165\u89C4\u5219\u95F8\u95E8\u3002
 - \u5199\u6587\u4EF6\u524D\u5148\u8BFB\u6587\u4EF6\uFF1Bapply_ops \u4F1A\u505A\u6821\u9A8C\u5E76\u539F\u5B50\u66FF\u6362\u3002\u4E5F\u53EF\u4EE5\u76F4\u63A5\u7528\u6587\u672C\u7F16\u8F91\u5668\u6539\u8FD9\u4E2A JSON\u3002`;
   }
 });
@@ -18967,29 +20197,37 @@ var HELP = `mgsvg \u2014 MG SVG Studio \u9879\u76EE\u6587\u4EF6\u5DE5\u5177\uFF0
   mgsvg init    <project> [--name \u540D\u79F0] [--force]
   mgsvg outline <project> [--asset <id>] [--elements] [--json]
   mgsvg apply   <project> --ops <file|-> [--dry-run] [--json]
-  mgsvg add     <project> --svg <file> --name <name> [--x 0] [--y 0] [--width 0] [--height 0]
+  mgsvg add     <project> --svg <file> --name <name> [--x 0] [--y 0] [--width 0] [--height 0] [--dry-run]
+  mgsvg replace <project> --asset <id> --svg <file> [--dry-run]
   mgsvg style   <project> --asset <id> --element <id|label> --set fill=#f00 [--set opacity=0.5] [--clear]
   mgsvg anim    <project> --asset <id> --group <id|name> --set duration=1.2 [--set ease=power2.out]
   mgsvg layer   <project> --asset <id> --group <id|name> --targets a,b,c [--stagger 0.08]
   mgsvg layout  <project> --asset <id> --container <id|label> --mode row --gap 40 [--cols 3] [--padding 0]
   mgsvg review <project> [--asset <id|name>] [--json] [--run] [--write]
+  mgsvg review <project> --agent-prompt --asset <id|name> [--app <url>] [--project-url <path>]
+  mgsvg review <project> --agent-result <file|-> --asset <id|name> (--write | --dry-run)
   mgsvg bridge  [--port 7350]                  \u5F00\u672C\u5730\u9009\u62E9\u6865\uFF08Agent \u7528\u5B83\u770B\u4F60\u5728\u9009\u4EC0\u4E48\uFF09
   mgsvg context [--bridge 7350] [--session <id>] [--wait 30] [--after <selectionId>] [--json]
   mgsvg live    [--bridge 7350] (--session <id> | --current) [--asset <id>] [--element <id>]
-                --set fill=#f00 | --clear | --select <id|label> | --save | --review [--frame 0..1]
+                --set fill=#f00 | --clear | --select <id|label> | --add <svg> [--name \u540D\u79F0] [--variant-of <\u7D20\u6750id>] |
+                --asset <id> --variant-of <\u7D20\u6750id>\uFF08\u628A\u5DF2\u6709\u7D20\u6750\u5E76\u5230\u67D0\u4E2A\u7248\u672C\u65C1\uFF09 | --save | --reload | --review [--frame 0..1]
   mgsvg validate <project> [--json]
   mgsvg mcp     [--project <project>] [--bridge <port>]   \u542F\u52A8 MCP server\uFF08stdio\uFF0C\u53EF\u5E26\u9009\u62E9\u6865\uFF09
 
 context / bridge\uFF1A
-  bridge  \u5E38\u9A7B\u5F00\u4E00\u4E2A http://127.0.0.1:7350 \u7684\u6865\uFF1BStudio \u7528 ?bridge=7350 \u6253\u5F00\u540E\uFF0C
+  bridge  \u5E38\u9A7B\u5F00\u4E00\u4E2A http://127.0.0.1:7350 \u7684\u6865\uFF1BStudio \u9ED8\u8BA4\u8FDE\u63A5\u6B64\u7AEF\u53E3\uFF0C
           \u4F60\u9009\u4E2D\u4EC0\u4E48\u90FD\u4F1A\u63A8\u5230\u6865\u4E0A\uFF0CAgent \u8BFB context \u5C31\u80FD\u77E5\u9053\u662F\u54EA\u4E2A\u5143\u7D20\u3002
   context \u8BFB\u5F53\u524D\u9009\u533A\u3002--wait \u7B49\u9009\u533A\u53D8\u5316\uFF0C--after \u53EF\u6307\u5B9A\u4E4B\u524D\u7684 selectionId\u3002
-  live    \u5728 Studio \u4E2D\u5373\u65F6\u5E94\u7528\uFF1B--save \u4FDD\u5B58\u5DF2\u94FE\u63A5\u7684 .mgsvg\u3002--review \u8BC4\u5BA1\u672A\u4FDD\u5B58\u7684\u7D20\u6750\uFF0C\u9ED8\u8BA4\u672B\u5E27\u3002
+  live    \u5728 Studio \u4E2D\u5373\u65F6\u5E94\u7528\uFF1B--add \u76F4\u63A5\u52A0\u5165\u5F53\u524D\u7D20\u6750\u5E93\u5E76\u81EA\u52A8\u6392\u5E03\u3002--save \u4FDD\u5B58\u5DF2\u94FE\u63A5\u7684 .mgsvg\u3002
+          --reload \u4ECE\u5DF2\u94FE\u63A5\u6587\u4EF6\u91CD\u65B0\u8F7D\u5165\uFF1B--review \u8BC4\u5BA1\u672A\u4FDD\u5B58\u7684\u7D20\u6750\uFF0C\u9ED8\u8BA4\u672B\u5E27\u3002
+          \u591A\u4E2A\u9875\u9762\u8FDE\u63A5\u540C\u4E00\u6865\u65F6\u4F18\u5148\u7528 --session \u9501\u5B9A\u76EE\u6807\u3002
 
 review\uFF1A
   \u9ED8\u8BA4\u8BFB\u9879\u76EE\u6587\u4EF6\u91CC\u5B58\u7740\u7684\u8BC4\u5BA1\u5FEB\u7167\uFF08\u9762\u677F\u8DD1\u8FC7\u3001\u4FDD\u5B58\u8FC7\u5C31\u6709\uFF09\uFF0C\u5E76\u6807\u51FA\u8FC7\u671F\u3002
   --run      \u8D77\u65E0\u5934 Chrome \u6253\u5F00\u6B63\u5728\u8DD1\u7684 Studio \u73B0\u7B97\u4E00\u6B21\uFF08\u9700\u8981 --app\uFF0C\u9ED8\u8BA4 http://localhost:5188\uFF09
   --write    \u628A --run \u7684\u7ED3\u679C\u5199\u56DE\u9879\u76EE\u6587\u4EF6
+  --agent-prompt \u751F\u6210\u5E26\u5F53\u524D\u672B\u5E27 SVG \u548C\u89C4\u5219\u6307\u7EB9\u7684 Agent \u8BED\u4E49\u8BC4\u5BA1\u63D0\u793A\u8BCD
+  --agent-result  \u5BFC\u5165 Agent \u8FD4\u56DE\u7684 JSON\uFF1B--write \u4FDD\u5B58\uFF0C--dry-run \u53EA\u6821\u9A8C\uFF0C\u8DEF\u5F84\u4E3A - \u65F6\u4ECE stdin \u8BFB\u53D6
   --app <url>        Studio \u5730\u5740
   --project-url <p>  Studio \u4E0A\u9879\u76EE\u6587\u4EF6\u7684\u53EF\u8BBF\u95EE\u8DEF\u5F84\uFF08\u9ED8\u8BA4\u6309\u5F53\u524D\u76EE\u5F55\u63A8\u7B97\uFF09
 
@@ -19099,7 +20337,7 @@ async function readContext(flags) {
     }
     if (!context3 || context3.selectionId === baseline) throw new CliError("NO_NEW_SELECTION", "\u7B49\u5F85\u8D85\u65F6\uFF0C\u671F\u95F4\u6CA1\u6709\u65B0\u9009\u533A");
   }
-  if (!context3) throw new CliError(session ? "SESSION_NOT_FOUND" : "NO_CONTEXT", `\u672A\u6536\u5230 Studio \u9009\u533A\uFF0C\u8BF7\u68C0\u67E5\u9875\u9762\u662F\u5426\u5DF2\u8FDE\u63A5 ?bridge=${port}`);
+  if (!context3) throw new CliError(session ? "SESSION_NOT_FOUND" : "NO_CONTEXT", `\u672A\u6536\u5230 Studio \u9009\u533A\uFF0C\u8BF7\u786E\u8BA4\u672C\u673A 7350 \u7AEF\u53E3\u7684\u6865\u5DF2\u542F\u52A8\uFF0C\u5E76\u5237\u65B0 Studio \u9875\u9762`);
   success("read", context3, () => console.log(fmtContext(context3, false)));
 }
 async function runLive(flags) {
@@ -19112,17 +20350,29 @@ async function runLive(flags) {
   const set = Boolean(flags.set);
   const clear = flags.clear === true;
   const save = flags.save === true;
+  const reload = flags.reload === true;
   const review = flags.review === true;
-  if ([set, clear, save, review, Boolean(select)].filter(Boolean).length !== 1) {
-    usage("\u8BF7\u9009\u62E9\u4E00\u79CD\u64CD\u4F5C\uFF1A--set\u3001--clear\u3001--select\u3001--save \u6216 --review");
+  const add = str(flags, "add");
+  const name = str(flags, "name");
+  const variantOnly = Boolean(str(flags, "variant-of")) && Boolean(str(flags, "asset")) && !add;
+  if ([set, clear, save, reload, review, Boolean(select), Boolean(add), variantOnly].filter(Boolean).length !== 1) {
+    usage("\u8BF7\u9009\u62E9\u4E00\u79CD\u64CD\u4F5C\uFF1A--set\u3001--clear\u3001--select\u3001--add\u3001--save\u3001--reload\u3001--review\uFF0C\u6216 --asset \u914D --variant-of");
   }
   if (sessionId && (set || clear) && (!asset || !element)) usage("\u9501\u5B9A\u5B9E\u65F6\u4FEE\u6539\u65F6\u9700\u8981 --asset \u548C --element");
-  if (save && (asset || element) || (review || select) && element) usage("\u8BE5\u64CD\u4F5C\u4E0D\u63A5\u53D7\u6B64\u7D20\u6750\u6216\u5143\u7D20\u53C2\u6570");
+  if ((save || reload) && (asset || element) || (review || select) && element || add && (asset || element || select)) usage("\u8BE5\u64CD\u4F5C\u4E0D\u63A5\u53D7\u6B64\u7D20\u6750\u6216\u5143\u7D20\u53C2\u6570");
+  if (name && !add) usage("--name \u53EA\u7528\u4E8E --add");
+  const variantOf = str(flags, "variant-of");
+  if (variantOf && !add && !asset) usage("--variant-of \u8981\u4E48\u914D --add\uFF0C\u8981\u4E48\u914D --asset \u6307\u5B9A\u8981\u5F52\u5C5E\u7684\u7D20\u6750");
   const frame = num2(flags, "frame");
   if (frame !== void 0 && (!review || frame < 0 || frame > 1)) usage("--frame \u53EA\u7528\u4E8E --review\uFF0C\u8303\u56F4\u4E3A 0\u20131");
-  const type = save ? "save" : review ? "review" : select ? "select" : clear ? "style.clear" : "style.set";
+  const type = save ? "save" : reload ? "project.reload" : review ? "review" : select ? "select" : add ? "asset.add" : variantOf && asset ? "asset.variant" : clear ? "style.clear" : "style.set";
   const payload = { asset, element: select || element, frame };
   if (set) payload.patch = parseStylePatch(setPairs(flags, NUMERIC_STYLE, (value) => value));
+  if (add) {
+    payload.svg = fs5.readFileSync(path5.resolve(add), "utf8");
+    payload.name = name || path5.basename(add, path5.extname(add));
+    if (variantOf) payload.variantOf = variantOf;
+  }
   const port = portOf(flags, "bridge", 7350);
   const base = `http://127.0.0.1:${port}`;
   const queued = await bridgeFetch(`${base}/command`, {
@@ -19138,12 +20388,14 @@ async function runLive(flags) {
     if (response.status === 200) {
       const outcome = await response.json();
       if (outcome.ok === false) throw new CliError(outcome.code || "STUDIO_ERROR", outcome.error, { commandId: id2 });
-      const status = save ? "written" : review ? "reviewed" : select ? "selected" : "applied";
+      const status = save ? "written" : reload ? "reloaded" : review ? "reviewed" : select ? "selected" : add ? "added" : "applied";
       success(status, outcome.result, () => {
         const data = outcome.result;
         if (save) console.log(`\u2713 \u5DF2\u4FDD\u5B58 ${data.file}${data.dirty ? "\uFF0C\u4FDD\u5B58\u671F\u95F4\u6709\u65B0\u7684\u672A\u4FDD\u5B58\u6539\u52A8" : ""}`);
+        else if (reload) console.log(`\u2713 \u5DF2\u91CD\u65B0\u8F7D\u5165 ${data.file}\uFF08${data.assets} \u4E2A\u7D20\u6750\uFF09`);
         else if (review) console.log(`${data.assetName}\uFF1A${data.gate} \xB7 ${data.counts.FAIL} \u786C\u4F24 / ${data.counts.WARN} \u63D0\u793A`);
         else if (select) console.log(`\u2713 \u5DF2\u9009\u4E2D ${data.selection?.elementId || data.selection?.assetId || "\u7D20\u6750"}`);
+        else if (add) console.log(`\u2713 \u5DF2\u6DFB\u52A0 ${data.name} (${data.asset}) ${data.width}\xD7${data.height}`);
         else console.log(`\u2713 ${data.element} \u2190 ${JSON.stringify(data.overrides ?? null)}`);
       });
       return;
@@ -19169,7 +20421,7 @@ async function main() {
     const port = portOf(flags, "port", 7350);
     const bridge = await startBridge2(port);
     console.log(`\u9009\u62E9\u6865\u5DF2\u5F00\u5728 http://127.0.0.1:${port}
-\u5728 Studio \u5730\u5740\u4E2D\u6DFB\u52A0 ?bridge=${port}`);
+Studio \u9ED8\u8BA4\u8FDE\u63A5\u672C\u673A 7350 \u7AEF\u53E3\uFF1B\u5982\u679C\u521A\u542F\u52A8\u6865\uFF0C\u8BF7\u5237\u65B0 Studio \u9875\u9762`);
     console.log("\u9009\u4E2D\u5143\u7D20\u65F6\u8FD9\u91CC\u4F1A\u6253\u5370\u4E00\u884C\uFF1BCtrl-C \u9000\u51FA");
     let last = "";
     const timer = setInterval(() => {
@@ -19232,7 +20484,25 @@ async function main() {
   }
   if (cmd === "review") {
     const target = str(flags, "asset");
-    if (flags.run) {
+    const agentPrompt = !!flags["agent-prompt"];
+    const agentResultFile = str(flags, "agent-result");
+    if (agentPrompt && agentResultFile) usage("--agent-prompt \u4E0E --agent-result \u4E0D\u80FD\u540C\u65F6\u4F7F\u7528");
+    if ((agentPrompt || agentResultFile) && flags.run) usage("Agent \u63D0\u793A\u8BCD/\u7ED3\u679C\u5BFC\u5165\u4E0E --run \u4E0D\u80FD\u540C\u65F6\u4F7F\u7528");
+    if (agentPrompt) {
+      if (!target) usage("--agent-prompt \u9700\u8981 --asset \u6307\u5B9A\u5355\u4E2A\u7D20\u6750");
+      if (flags.write || flags["dry-run"]) usage("--agent-prompt \u4E0D\u63A5\u6536 --write \u6216 --dry-run");
+      const result = await agentPromptForProject({ file, target, appUrl: str(flags, "app"), projectUrl: str(flags, "project-url") });
+      success("agent_prompt", result, () => console.log(result.prompt));
+    } else if (agentResultFile) {
+      if (!target) usage("--agent-result \u9700\u8981 --asset \u6307\u5B9A\u5355\u4E2A\u7D20\u6750");
+      if (!flags.write && !flags["dry-run"]) usage("--agent-result \u9700\u8981 --write\uFF1B\u53EF\u52A0 --dry-run \u9884\u89C8");
+      if (str(flags, "app") || str(flags, "project-url")) usage("--app \u548C --project-url \u53EA\u7528\u4E8E --run \u6216 --agent-prompt");
+      const raw = agentResultFile === "-" ? await readStdin() : fs5.readFileSync(path5.resolve(agentResultFile), "utf8");
+      const result = saveAgentReviewResult({ file, target, document: raw, write: !!flags.write, dryRun: !!flags["dry-run"] });
+      success(result.written ? "agent_result_written" : "agent_result_dry_run", result, () => {
+        console.log(`${result.assetName}\uFF1A\u5BFC\u5165 Agent \u7ED3\u8BBA ${result.agentReview.results.length} \u6761${result.written ? "\uFF08\u5DF2\u4FDD\u5B58\uFF09" : "\uFF08\u672A\u5199\u5165\uFF09"}`);
+      });
+    } else if (flags.run) {
       const result = await reviewProjectFile({
         file,
         target,
@@ -19246,22 +20516,41 @@ async function main() {
         if (result.written) console.log(`\u2713 \u5DF2\u5199\u5165 ${result.file}`);
       });
     } else {
-      if (flags.write || flags.app || flags["project-url"] || flags["dry-run"]) usage("\u8FD9\u4E9B\u9009\u9879\u9700\u8981 --run");
+      if (flags.write || flags.app || flags["project-url"] || flags["dry-run"]) usage("\u8FD9\u4E9B\u9009\u9879\u9700\u8981 --run\u3001--agent-prompt \u6216 --agent-result");
       const project2 = readProject(file);
       const rows = (target ? [findAsset(project2, target)] : project2.assets).map((asset2) => {
         const snap3 = asset2.review;
         const status = !snap3 ? "none" : snap3.inputHash === reviewInputHash(asset2, snap3.options) ? "ok" : "stale";
+        const agentSnap = asset2.agentReview;
+        const agentStatus = !agentSnap ? "none" : agentSnap.inputHash === reviewInputHash(asset2, agentSnap.options) ? "ok" : "stale";
         return {
           id: asset2.id,
           name: asset2.name,
           status,
           review: status === "ok" ? snap3 : null,
-          lastReview: snap3 ? { gate: snap3.gate, counts: snap3.counts, generatedAt: snap3.generatedAt } : null
+          lastReview: snap3 ? { gate: snap3.gate, counts: snap3.counts, generatedAt: snap3.generatedAt } : null,
+          agentReviewStatus: agentStatus,
+          agentReview: agentStatus === "ok" ? agentSnap : null,
+          lastAgentReview: agentSnap ? { generatedAt: agentSnap.generatedAt, results: agentSnap.results.length } : null
         };
       });
       success("read", rows, () => {
         const labels = { ok: "\u5DF2\u8BC4\u5BA1", stale: "\u5DF2\u8FC7\u671F", none: "\u672A\u8BC4\u5BA1" };
-        for (const row of rows) console.log(`${row.name}\uFF1A${labels[row.status]}${row.lastReview ? ` \xB7 ${row.lastReview.gate}` : ""}`);
+        for (const row of rows) {
+          console.log(`${row.name}\uFF1A\u89C4\u5219 ${labels[row.status]}${row.lastReview ? ` \xB7 ${row.lastReview.gate}` : ""} \xB7 Agent ${labels[row.agentReviewStatus]}${row.lastAgentReview ? ` \xB7 ${row.lastAgentReview.results} \u6761` : ""}`);
+          if (row.status === "ok" && row.review) {
+            for (const finding of row.review.findings) {
+              const measured = finding.measured === null ? "\u672A\u6D4B" : `${finding.measured}${finding.unit ? ` ${finding.unit}` : ""}`;
+              console.log(`  ${finding.level.padEnd(10)} ${finding.ruleId} ${finding.title} \xB7 ${finding.element || "\u753B\u9762\u7EA7"} \xB7 ${measured}`);
+            }
+          }
+          if (row.agentReviewStatus === "ok" && row.agentReview) {
+            const agentLabels = { positive: "\u6B63\u4F8B", negative: "\u53CD\u4F8B", unmeasured: "\u672A\u6D4B" };
+            for (const result of row.agentReview.results) {
+              console.log(`  Agent ${agentLabels[result.result]} ${result.ruleId} \xB7 ${result.reason}${result.elementId ? ` \xB7 ${result.elementId}` : ""}`);
+            }
+          }
+        }
       });
     }
     return;
@@ -19295,6 +20584,13 @@ async function main() {
         x: num2(flags, "x"),
         y: num2(flags, "y")
       }];
+      break;
+    }
+    case "replace": {
+      const svgFile = str(flags, "svg");
+      if (!asset) usage("replace \u9700\u8981 --asset <id>");
+      if (!svgFile) usage("replace \u9700\u8981 --svg <file>");
+      ops = [{ op: "asset.update", asset, patch: { svg: fs5.readFileSync(path5.resolve(svgFile), "utf8") } }];
       break;
     }
     case "style":

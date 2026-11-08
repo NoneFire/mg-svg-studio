@@ -157,6 +157,42 @@ export function measureLayout(input: LayoutInput): LayoutOutput {
     })
   }
 
+  /* -------------------------------- CORE-02 图像比例失真 -------------------------------- */
+  {
+    const imgs = els.filter((e) => e.kind === 'image' && e.imgW && e.imgH)
+    if (!imgs.length) {
+      unmeasured.push({ ruleId: 'CORE-02', reason: '没有可读原始尺寸的位图（只支持 data URI 的 PNG/JPEG）' })
+    } else {
+      let worst = 0
+      let worstId = ''
+      for (const e of imgs) {
+        const b = bboxOf(e)
+        if (!b[2] || !b[3]) continue
+        const ratio = (b[2] / b[3]) / (e.imgW! / e.imgH!)
+        const d = Math.abs(ratio - 1)
+        if (d > worst) {
+          worst = d
+          worstId = e.id
+        }
+      }
+      out.push({
+        ruleId: 'CORE-02',
+        element: worstId || 'canvas',
+        measured: r2(worst),
+        unit: 'ratio',
+        status: gateStatus(RULES['CORE-02'].gate, worst),
+        method: 'image_aspect',
+        metric: 'aspect_distortion',
+        evidence: {
+          worstId,
+          distortion: r2(worst),
+          samples: imgs.length,
+          note: worst ? `最大失真 ${(worst * 100).toFixed(1)}%` : '所有位图比例正常',
+        },
+      })
+    }
+  }
+
   /* -------------------------------- QL-02 文本遮挡 -------------------------------- */
   let occlusionSamples = 0
   for (const el of texts) {
@@ -662,20 +698,48 @@ export function measureLayout(input: LayoutInput): LayoutOutput {
     const gap = Math.round(bb[0] - (ba[0] + ba[2]))
     if (gap >= 1 && gap <= 400) gaps.push(gap)
   }
-  if (gaps.length < (RULES['SP-01'].minSamples || 5)) {
-    unmeasured.push({ ruleId: 'SP-01', reason: `横向间距样本 ${gaps.length} < ${RULES['SP-01'].minSamples || 5}` })
-  } else {
-    const levels = [...new Set(gaps)].sort((a, b) => a - b)
-    out.push({
-      ruleId: 'SP-01',
-      element: 'spacing',
-      measured: levels.length,
-      unit: 'count',
-      status: gateStatus(RULES['SP-01'].gate, levels.length),
-      method: 'distinct_gaps',
-      metric: 'spacing_levels',
-      evidence: { levels: levels.slice(0, 12), samples: gaps.length },
-    })
+  {
+    // 判据：同组相邻元素的净距应落在同一档（8 的整数倍）。与组内众数档不同的个数即 K。
+    const groups = groupMembers(els, W, H, false)
+    let offBand = 0
+    let samples = 0
+    const detail: { group: string; gaps: number[]; modePx: number }[] = []
+    for (const [gid, list] of groups) {
+      if (list.length < 3) continue
+      const sorted = [...list].sort((a, b) => bboxOf(a)[0] - bboxOf(b)[0])
+      const local: number[] = []
+      for (let i = 1; i < sorted.length; i++) {
+        const ba = bboxOf(sorted[i - 1])
+        const bb = bboxOf(sorted[i])
+        const g = Math.round(bb[0] - (ba[0] + ba[2]))
+        if (g >= 0 && g <= 400) local.push(g)
+      }
+      if (local.length < 2) continue
+      samples += local.length
+      const bands = local.map((v) => Math.max(0, Math.round(v / 8)))
+      const freq = new Map<number, number>()
+      for (const b of bands) freq.set(b, (freq.get(b) || 0) + 1)
+      const mode = [...freq.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0][0]
+      const k = bands.filter((b) => b !== mode).length
+      if (k > 0) {
+        offBand += k
+        detail.push({ group: gid, gaps: local.slice(0, 8), modePx: mode * 8 })
+      }
+    }
+    if (samples < 3) {
+      unmeasured.push({ ruleId: 'SP-01', reason: `组内相邻间距样本 ${samples} < 3` })
+    } else {
+      out.push({
+        ruleId: 'SP-01',
+        element: 'spacing',
+        measured: offBand,
+        unit: 'count',
+        status: gateStatus(RULES['SP-01'].gate, offBand),
+        method: 'group_gap_band',
+        metric: 'spacing_off_band',
+        evidence: { offBand, samples, groups: detail.slice(0, 5) },
+      })
+    }
   }
 
   /* -------------------------------- 字体系统 -------------------------------- */
@@ -693,17 +757,133 @@ export function measureLayout(input: LayoutInput): LayoutOutput {
       out.push({ ruleId, element: 'canvas', measured: value, unit, status: gateStatus(gate, value), method, evidence })
     }
 
-    if (!fams.size) unmeasured.push({ ruleId: 'TY-01', reason: '文字元素没有 font-family' })
-    else pushCanvas('TY-01', fams.size, 'count', 'font_families', { families: [...fams].sort() })
+    // TY-01 排版档位预算：字号档 > 5 或字重档 > 3 时告警；字族数只报告，不参与判定。
+    {
+      const sizeLevels = sizes.length
+      const weightLevels = weights.size
+      const famCount = fams.size
+      const overSize = Math.max(0, sizeLevels - 5)
+      const overWeight = Math.max(0, weightLevels - 3)
+      const measured = Math.max(overSize, overWeight)
+      out.push({
+        ruleId: 'TY-01',
+        element: 'canvas',
+        measured,
+        unit: 'count',
+        status: gateStatus(RULES['TY-01'].gate, measured),
+        method: 'type_budget',
+        metric: 'type_budget_over',
+        evidence: {
+          families: famCount,
+          familyList: [...fams].sort().slice(0, 6),
+          sizeLevels,
+          weightLevels,
+          overSize,
+          overWeight,
+          sizes,
+          weights: [...weights].sort((a, b) => a - b),
+          note: [
+            `字号 ${sizeLevels} 档${overSize ? `（超 ${overSize}）` : ''}：${sizes.join(' / ')}`,
+            `字重 ${weightLevels} 档${overWeight ? `（超 ${overWeight}）` : ''}：${[...weights].sort((a, b) => a - b).join(' / ')}`,
+            `字族 ${famCount}`,
+          ].join(' · '),
+        },
+      })
+    }
 
-    if (sizes.length > 1) pushCanvas('RP-01', sizes.length, 'count', 'type_scale_levels', { sizes })
-    else unmeasured.push({ ruleId: 'RP-01', reason: '字号档位 < 2' })
+    {
+      // 判据：同组同角色的实例应长得一样。没有 class/role 的图分不出「同类」，记未测。
+      const DEFAULT_ROLES = new Set(['text', 'shape', 'image', 'group', 'other'])
+      const roleOf = (e: QvElement) => (e.role && !DEFAULT_ROLES.has(e.role) ? e.role : '')
+      const peers = els.filter((e) => roleOf(e) && !isRuleLine(e, W, H) && !isCanvasBg(e, W, H))
+      if (peers.length < 2) {
+        unmeasured.push({ ruleId: 'RP-01', reason: '元素没有 class 或 role，分不出「同类」，不判定' })
+      } else {
+        const byRole = new Map<string, QvElement[]>()
+        for (const e of peers) {
+          const key = roleOf(e)
+          const list = byRole.get(key) || []
+          list.push(e)
+          byRole.set(key, list)
+        }
+        let deviants = 0
+        const detail: { role: string; kind: string; variants: number; size: number }[] = []
+        for (const [role, arr] of byRole) {
+          if (arr.length < 2) continue
+          const sig = (e: QvElement) =>
+            e.kind === 'text'
+              ? [r2(e.fontSize || 0), Math.round(e.fontWeight || 400), String(e.fill || '').toUpperCase()].join('|')
+              : [Math.round(bboxOf(e)[2]), Math.round(bboxOf(e)[3]), String(e.fill || '').toUpperCase()].join('|')
+          const counts = new Map<string, number>()
+          for (const e of arr) {
+            const key = sig(e)
+            counts.set(key, (counts.get(key) || 0) + 1)
+          }
+          if (counts.size <= 1) continue
+          deviants += arr.length - Math.max(...counts.values())
+          detail.push({ role, kind: arr[0].kind, variants: counts.size, size: arr.length })
+        }
+        out.push({
+          ruleId: 'RP-01',
+          element: 'canvas',
+          measured: deviants,
+          unit: 'count',
+          status: gateStatus(RULES['RP-01'].gate, deviants),
+          method: 'peer_signature',
+          metric: 'peer_deviants',
+          evidence: { deviants, roles: detail.slice(0, 6) },
+        })
+      }
+    }
 
     const ratios = sizes.slice(1).map((v, i) => Math.round((v / sizes[i]) * 100) / 100)
     if (ratios.length) pushCanvas('TY-05', Math.min(...ratios), 'ratio', 'min_adjacent_ratio', { ratios })
     else unmeasured.push({ ruleId: 'TY-05', reason: '字号档位 < 2，相邻比不可算' })
 
     pushCanvas('TY-06', weights.size, 'count', 'weight_levels', { weights: [...weights].sort((a, b) => a - b) })
+
+    {
+      // TY-02 行长：每行字符数 ÷ 上限（CJK 40，其他 80）。比值 > 1 即超过 WCAG 1.4.8 的行宽建议。
+      const rows = texts.filter((t) => (t.charCount || (t.text || '').length) > 0)
+      if (!rows.length) {
+        unmeasured.push({ ruleId: 'TY-02', reason: '没有可测的文字内容' })
+      } else {
+        let worst = 0
+        let worstId = ''
+        let worstChars = 0
+        let worstLimit = 0
+        for (const t of rows) {
+          const content = t.text || ''
+          const cjkShare =
+            (content.match(/[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/g) || []).length / Math.max(1, content.length)
+          const limit = cjkShare > 0.3 ? 40 : 80
+          const chars = t.charCount || content.length
+          const ratio = chars / limit
+          if (ratio > worst) {
+            worst = ratio
+            worstId = t.id
+            worstChars = chars
+            worstLimit = limit
+          }
+        }
+        out.push({
+          ruleId: 'TY-02',
+          element: worstId || 'canvas',
+          measured: r2(worst),
+          unit: 'ratio',
+          status: gateStatus(RULES['TY-02'].gate, worst),
+          method: 'chars_per_line',
+          metric: 'line_length_ratio',
+          evidence: {
+            worstId,
+            ratio: r2(worst),
+            chars: worstChars,
+            limit: worstLimit,
+            note: `最长一行 ${worstChars} 字，上限 ${worstLimit}（CJK 40 / 其他 80）`,
+          },
+        })
+      }
+    }
 
     const sat = (c: string) => {
       const m = /^#([0-9a-f]{6})$/i.exec(c)

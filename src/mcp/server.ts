@@ -44,6 +44,7 @@ const FORMAT_DOC = `# MG SVG Studio 项目文件
 - 动画轨道（groups）作用在元素上；targetIds + stagger 表示一条「分层」，同一组关键帧作用在多个元素上，逐个延迟。
 - overrides 是元素样式覆盖（fill/stroke/strokeWidth/opacity/fontSize/...）。
 - layouts 是容器布局 spec（mode: row|column|grid|free，gap/padding/cols/alignX/alignY/justify/wrap）。
+- review 保存规则评审结果（PASS 正例、FAIL/WARN 反例、未测项）及 inputHash；agentReview 单独保存 Agent 语义结果，不混入规则闸门。
 - 写文件前先读文件；apply_ops 会做校验并原子替换。也可以直接用文本编辑器改这个 JSON。`
 
 export async function startMcpServer(projectPath?: string, bridgePort?: number) {
@@ -115,16 +116,16 @@ export async function startMcpServer(projectPath?: string, bridgePort?: number) 
     }
   )
 
-  /** 本地桥：Studio 在 ?bridge=<port> 打开时会把「人选中了什么」推过来 */
+  /** 本地桥：Studio 默认把「人选中了什么」推送到本机 7350 端口 */
   const bridge = bridgePort ? await import('../cli/bridge').then((m) => m.startBridge(bridgePort)) : null
-  if (bridge) console.error(`[mg-svg] 选择桥已开在 http://127.0.0.1:${bridge.port}（Studio 用 ?bridge=${bridge.port} 打开）`)
+  if (bridge) console.error(`[mg-svg] 选择桥已开在 http://127.0.0.1:${bridge.port}（Studio 默认连接本机 7350 端口）`)
 
   server.registerTool(
     'studio_context',
     {
       title: '读取 Studio 当前的选中项',
       description:
-        '返回人在 Studio 里此刻选中的素材/元素（id、标签、文字、位置、覆盖样式）以及这一版评审在该元素上的判定。需要 Studio 用 ?bridge=<port> 打开，且 MCP 以 --bridge 启动。',
+        '返回人在 Studio 里此刻选中的素材/元素（id、标签、文字、位置、覆盖样式）以及这一版评审在该元素上的判定。需要本机 7350 桥已启动，Studio 默认连接该端口。',
       inputSchema: {
         waitSeconds: z.number().positive().max(120).optional().describe('等一次新的选择，最多等这么多秒'),
         sessionId: z.string().trim().min(1).optional().describe('只读或等待指定会话'),
@@ -158,7 +159,7 @@ export async function startMcpServer(projectPath?: string, bridgePort?: number) 
     },
     async ({ sessionId, asset, element, style, clear, select }) => {
       try {
-        if (!bridge) throw new Error('请用 --bridge 启动 MCP，并打开带 ?bridge= 的 Studio')
+        if (!bridge) throw new Error('请用 --bridge 7350 启动 MCP；Studio 会自动连接本机桥')
         if (Number(!!style) + Number(!!clear) + Number(!!select) !== 1) {
           throw new Error('请提供 style、clear 或 select 中的一种操作')
         }
@@ -183,7 +184,7 @@ export async function startMcpServer(projectPath?: string, bridgePort?: number) 
     },
     async ({ sessionId }) => {
       try {
-        if (!bridge) throw new Error('请用 --bridge 启动 MCP，并打开带 ?bridge= 的 Studio')
+        if (!bridge) throw new Error('请用 --bridge 7350 启动 MCP；Studio 会自动连接本机桥')
         const result = await bridge.runCommand('save', {}, sessionId)
         if (result.ok === false) throw new Error(result.error)
         return text(JSON.stringify(result.result, null, 2))
@@ -206,7 +207,7 @@ export async function startMcpServer(projectPath?: string, bridgePort?: number) 
     },
     async ({ sessionId, asset, frame }) => {
       try {
-        if (!bridge) throw new Error('请用 --bridge 启动 MCP，并打开带 ?bridge= 的 Studio')
+        if (!bridge) throw new Error('请用 --bridge 7350 启动 MCP；Studio 会自动连接本机桥')
         const result = await bridge.runCommand('review', { asset, frame }, sessionId)
         if (result.ok === false) throw new Error(result.error)
         return text(JSON.stringify(result.result, null, 2))
@@ -221,7 +222,7 @@ export async function startMcpServer(projectPath?: string, bridgePort?: number) 
     {
       title: '读取视觉评审结果',
       description:
-        '返回项目里每张素材最近一次视觉评审的结果（闸门、硬伤/提示数、非 PASS 明细），并标出画面改过之后过期的那些。评审本身要在 Studio 的浏览器里跑，这里只读结果。',
+        '分别读取规则评审与 Agent 评审快照。包含 PASS/FAIL/WARN/未测规则明细、Agent 结论及各自的过期状态；过期结果不会作为当前结论返回。',
       inputSchema: {
         path: z.string().optional(),
         asset: z.string().optional().describe('只读一张：素材 id 或名称'),
@@ -234,25 +235,25 @@ export async function startMcpServer(projectPath?: string, bridgePort?: number) 
         const assets = asset ? [findAsset(project, asset)] : project.assets
         const rows = assets.map((a: any) => {
           const snap = a.review
-          if (!snap) return { id: a.id, name: a.name, status: 'none' as const }
-          const stale = snap.inputHash !== reviewInputHash(a, snap.options || {})
+          const status = !snap ? 'none' as const : snap.inputHash !== reviewInputHash(a, snap.options || {}) ? 'stale' as const : 'ok' as const
+          const agentSnap = a.agentReview
+          const agentReviewStatus = !agentSnap ? 'none' as const : agentSnap.inputHash !== reviewInputHash(a, agentSnap.options || {}) ? 'stale' as const : 'ok' as const
           return {
             id: a.id,
             name: a.name,
-            status: stale ? ('stale' as const) : ('ok' as const),
-            gate: snap.gate,
-            counts: snap.counts,
-            coverage: snap.coverage,
-            generatedAt: snap.generatedAt,
-            findings: (snap.findings || []).map((f: any) => ({
-              ruleId: f.ruleId,
-              principle: f.principle,
-              level: f.level,
-              element: f.element,
-              measured: f.measured,
-              unit: f.unit,
-              fix: f.fix,
-            })),
+            status,
+            review: status === 'ok' ? {
+              inputHash: snap.inputHash,
+              gate: snap.gate,
+              counts: snap.counts,
+              coverage: snap.coverage,
+              generatedAt: snap.generatedAt,
+              findings: snap.findings || [],
+            } : null,
+            lastReview: snap ? { generatedAt: snap.generatedAt, gate: snap.gate, findings: snap.findings?.length || 0 } : null,
+            agentReviewStatus,
+            agentReview: agentReviewStatus === 'ok' ? agentSnap : null,
+            lastAgentReview: agentSnap ? { generatedAt: agentSnap.generatedAt, results: agentSnap.results?.length || 0 } : null,
           }
         })
         return text(JSON.stringify(rows, null, 2))
@@ -281,6 +282,53 @@ export async function startMcpServer(projectPath?: string, bridgePort?: number) 
         const { reviewProjectFile } = await import('../cli/projectReview')
         const result = await reviewProjectFile({ file: resolvePath(p), appUrl, projectUrl, target: asset, write })
         return text(JSON.stringify(result, null, 2))
+      } catch (err) {
+        return fail(err)
+      }
+    }
+  )
+
+  server.registerTool(
+    'agent_review_prompt',
+    {
+      title: '生成 Agent 语义评审提示词',
+      description: '为指定素材生成绑定 assetId、输入指纹与评审口径的 Agent 评审提示词，包含浏览器渲染的动画末帧 SVG 和无法量化的规则。',
+      inputSchema: {
+        path: z.string().optional(),
+        asset: z.string().describe('素材 id 或名称'),
+        appUrl: z.string().optional().describe('Studio 地址，默认 http://localhost:5188'),
+        projectUrl: z.string().optional().describe('Studio 可访问的项目 URL；写回前会核对素材版本'),
+      },
+    },
+    async ({ path: p, asset, appUrl, projectUrl }) => {
+      try {
+        const { agentPromptForProject } = await import('../cli/projectReview')
+        const result = await agentPromptForProject({ file: resolvePath(p), target: asset, appUrl, projectUrl })
+        return text(JSON.stringify(result, null, 2))
+      } catch (err) {
+        return fail(err)
+      }
+    }
+  )
+
+  server.registerTool(
+    'agent_review_submit',
+    {
+      title: '导入 Agent 语义评审结果',
+      description: '验证 Agent JSON 中的素材 ID、inputHash、options 和完整规则结论；可先 dryRun 预览，设置 write 后写回 .mgsvg。',
+      inputSchema: {
+        path: z.string().optional(),
+        asset: z.string().describe('素材 id 或名称'),
+        result: z.any().describe('Agent 返回的 JSON 文本或对象，必须带 assetId、inputHash、options、reviews'),
+        write: z.boolean().optional().describe('验证后写回项目文件'),
+        dryRun: z.boolean().optional().describe('配合 write 只校验和预览，不落盘'),
+      },
+    },
+    async ({ path: p, asset, result, write, dryRun }) => {
+      try {
+        const { saveAgentReviewResult } = await import('../cli/projectReview')
+        const saved = saveAgentReviewResult({ file: resolvePath(p), target: asset, document: result, write, dryRun })
+        return text(JSON.stringify(saved, null, 2))
       } catch (err) {
         return fail(err)
       }

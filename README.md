@@ -24,6 +24,7 @@
    - 组件与图标沿用 `@tita-agent/ui`（shadcn/radix + lucide）：`src/ui/kit/` 与 `src/ui/Icon.tsx`，Tailwind 只取 theme/utilities 层，颜色映射到本项目的 CSS 变量。
    - 缩放 / 适应画布 / 网格只在右下角浮层出现一次；文件操作（打开 / 保存 / 重载）在左上角。
 8. **Agent 友好**：项目是本地 JSON 文件，提供 `mgsvg` CLI 与 MCP server，Agent 可直接读写。
+9. **文案与语音**：每个素材可以带一段视频文案和录音；卡片上画面和文案条分成两个区，时间轴里多一条带波形的语音轨，播放时和动画同步。
 
 ## 快速开始
 
@@ -73,7 +74,7 @@ solveLayout(items, {
 同一个内核被两处复用：
 
 - **画布排布**：「整理」按钮用 2 列网格的 spec 计算所有素材画板的坐标（`store.autoLayout`）。
-- **元素重排**：选中一个 `<g>`（例如 `#name`），在「布局」页签里选横向 / 纵向 / 网格、间距、内边距、对齐、换行。
+- **元素重排**：选中一个 `<g>`（例如 `#name`），在右侧「元素」页打开「重排子元素」，预览后应用。
   内核按子元素当前尺寸算目标矩形，只把**位移**写回元素，不动几何与样式，也不影响动画轨道。
 
 ![布局](docs/layout.png)
@@ -102,6 +103,29 @@ charIn ×7   0.80s · +0.95s · 交错 0.085s
 { name: 'charIn', targetIds: ['…赛', '…博', …], stagger: 0.085, duration: 0.8, delay: 0.95 }
 ```
 
+## 文案与语音：一张卡片，两段内容
+
+视频文案记在素材上，不另建对象。画布上的卡片因此只有一个选中框，但内部是两个区：
+
+```
+┌───────────────────────┐
+│        画面（SVG）     │
+├───────────────────────┤  ← 1px 分隔线
+│ ▎视频文案        31 字 │  ← 左侧色条 + 字数，说明这是文案区
+│ 捡垃圾：今晚…          │
+└───────────────────────┘
+```
+
+- 画面区随素材尺寸变化；文案条紧贴画面下沿、满宽，靠底色 + 分隔线 + 左侧色条和画面上分开，但仍是同一张卡片。
+- 文案条固定容纳三行（13px/18px），超出用省略号；完整内容在右侧「视频文案」里改。
+- 语音录在当前素材上（`voiceoverAudio`，data URL），不单独占素材位。
+
+有语音时，底部时间轴会多一条**语音轨**，和动画轨道同一条时间尺：
+
+- 波形按真实时长铺开，标签上标时长；语音比动画长时，波形在动画结束处截断并标 `+2.5s`。
+- 点时间轴的播放键，语音跟动画一起走；暂停、拖动定位、循环重播都会同步。打开项目时的自动播放保持安静，避免一进页面就出声。
+- 语音轨左侧可静音；点击轨道任何位置都能定位。
+
 ## 视觉评审：把「看着不对」变成可复核的数字
 
 侧边栏的「评审」页签给当前这一帧做量化体检。它不回答「好不好看」，只回答三件事：
@@ -121,19 +145,21 @@ charIn ×7   0.80s · +0.95s · 交错 0.085s
 属性只用来解释「为什么」，不用来当「是多少」：`fill="#888"` 不等于屏幕上的颜色，`font-size="48"` 也不等于渲染尺寸。
 所以字号、位置一律在渲染结果上量，颜色一律在像素上取样。
 
+正反例样本集中在 [quant-visual-review-正反例表.csv](output/2026-11-07/quant-visual-review-%E6%AD%A3%E5%8F%8D%E4%BE%8B%E8%A1%A8.csv)：每个案例单独一行，用「案例类型」标记正例或反例。Agent 评审提示词会按规则名称带入对应参考案例；这些参考只用于校准判断，不代表当前素材的结论。
+
 ### 定格一帧再量
 
 动画素材要先定格才可测：
 
 1. 把 SVG 挂进 shadow root，素材自带的 `<style>` 不会污染界面，界面样式也进不来；
-2. 用 Web Animations API 暂停每条动画并拨到同一时刻（默认末帧，可选入场/中段）；
+2. 检查器用 Studio 播放器定格素材的末帧，再把动画与布局写回用于测量的 SVG；
 3. 把 computed style 烘回内联样式，序列化成静态 SVG 再光栅化——带 `@keyframes` 的 SVG 直接光栅化只会得到 t=0，量到的就和画面对不上了。
 
 ### 把结论叠回画面
 
 评审结果不只是一列数字，它知道自己指的是哪一块画面：
 
-- 打开「画布标注」，这一版所有能定位到元素的判定都会画在素材上：色框圈住出问题的元素，角上挂 `规则号` 标签。
+- 打开「画布标注」，当前素材会定格到末帧。色框圈住出问题的元素，角上挂 `规则号` 标签。继续播放或离开末帧时，标注会收起。
 - 点面板里的卡片，画布上只留这张卡的标注，其余淡出；点画布上的标注，面板自动聚焦到那张卡片。
 - 没开「画布标注」时，选中一张卡也会把它的框画上去——**选中评审，图上就有**。
 - 标注画在根空间，不随缩放变大变小；字号小于 45% 时收起点上标签，只留框，避免糊成一片。
@@ -164,8 +190,8 @@ charIn ×7   0.80s · +0.95s · 交错 0.085s
 | | 单张 | 全部 |
 | --- | --- | --- |
 | 入口 | 选中素材 → 评审页签自动跑 | 评审卡片右上「全部」 |
-| 范围 | 当前这一帧，口径可调（媒介 / 投放宽度 / 定格帧 / 字号阶梯） | 每张素材各跑默认口径（屏幕 / 原尺寸 / 末帧） |
-| 产出 | 完整 findings + 覆盖率 + 画布标注 + 栅格 | 一张总表：每张的闸门、硬伤/提示、已测条数，点一行进单张 |
+| 范围 | 末帧，口径可调（媒介 / 投放宽度 / 字号阶梯） | 每张素材各跑默认口径（屏幕 / 原尺寸 / 末帧） |
+| 产出 | 完整 findings（正例、反例、未测）+ 覆盖率 + 画布标注 + 栅格 | 一张总表：每张的闸门、硬伤/提示、已测条数，点一行进单张 |
 | 用途 | 改之前先确认「这一处到底错在哪」 | 交付前确认「哪几张不能发」 |
 
 批量是串行跑的：每次都要挂一张 1920×1080 的临时画布，并发会顶到内存。
@@ -186,19 +212,19 @@ mgsvg review examples/demo.mgsvg --run --write       # 现算并写回项目文�
 mgsvg review examples/demo.mgsvg --asset 两条追责路径 --run --json
 ```
 
-`--run` 走的是同一个 `runReviewAll` / `runReview`，所以 CLI 的结论和面板完全一致。跑完的快照（非 PASS 明细 + 覆盖率 + 闸门）挂在 `assets[].review` 上，随项目保存：
+`--run` 走的是同一个 `runReviewAll` / `runReview`，所以 CLI 的结论和面板完全一致。跑完的规则评审快照（PASS 正例、FAIL/WARN 反例、未测项 + 覆盖率 + 闸门）挂在 `assets[].review` 上，随项目保存：
 
 ```json
 { "review": { "inputHash": "9f2c7a1b", "gate": "REVIEW_NEEDED",
               "counts": { "FAIL": 0, "WARN": 6 }, "coverage": { "measured": 19, "total": 60 },
-              "findings": [{ "ruleId": "VS-01", "principle": "交付完整性", "fix": "…" }] } }
+              "findings": [{ "ruleId": "VS-01", "level": "PASS", "principle": "交付完整性", "fix": "…" }] } }
 ```
 
-`inputHash` 是「素材 + 覆盖样式 + 口径」的指纹：改过任何一样，CLI 就会把那张标成**已过期**，Agent 就知道该不该重跑，而不是拿旧结论下判断。MCP 侧对应 `review_read` 与 `review_run` 两个工具。
+`inputHash` 是「素材 + 覆盖样式 + 口径」的指纹：改过任何一样，CLI 就会把那张标成**已过期**，Agent 就知道该不该重跑，而不是拿旧结论下判断。语义判断单独放在 `assets[].agentReview`，不混入规则评审闸门；两份结果各自带输入指纹。
 
 ### 在 Studio 选中元素后交给 Agent
 
-如果 Agent 客户端能运行本地命令，可以用 CLI。在项目目录启动桥，再给当前 Studio 地址加上 `?bridge=7350`。MCP 客户端可以使用仓库自带的配置启动同一个端口，两种启动方式选一种。
+如果 Agent 客户端能运行本地命令，可以用 CLI。在项目目录启动桥即可；Studio 默认连接本机 `7350` 端口，无需修改页面地址。MCP 客户端可以使用仓库自带的配置启动同一个端口，两种启动方式选一种。
 
 ```bash
 node bin/mgsvg.mjs bridge --port 7350
@@ -209,7 +235,9 @@ node bin/mgsvg.mjs context --json
 
 ```bash
 node bin/mgsvg.mjs live --session "$session_id" --asset "$asset_id" --element "$element_id" --set 'fill=#e11d48'
+node bin/mgsvg.mjs live --session "$session_id" --add ./art.svg --name '新素材'
 node bin/mgsvg.mjs live --session "$session_id" --save
+node bin/mgsvg.mjs live --session "$session_id" --reload
 ```
 
 MCP 用 `studio_context` 读取同一份上下文，再调用 `studio_apply`。上下文包含元素标签、文字、基础样式和覆盖值，可用于「把这个字号加 4」一类相对改动。
@@ -223,11 +251,11 @@ MCP 用 `studio_context` 读取同一份上下文，再调用 `studio_apply`。�
 }
 ```
 
-Agent 的实时样式改动和手动编辑进入同一份项目状态。确认效果后，按 `⌘S` 即可一并保存。也可以让 Agent 显式调用 `studio_save` 或 `live --save`，使用同一条保存路径。请先在 Studio 中打开本地项目并手动保存一次，以授予浏览器写入权限。
+Agent 的实时样式改动、`live --add` 导入的素材和手动编辑进入同一份项目状态。`live --add` 使用 Studio 的自动排布，保留界面改动。链接可写的本地 `.mgsvg` 后，修改会自动写回文件；首次写入需在 Studio 中按一次 `⌘S` 并授予浏览器写入权限。未链接文件时，修改会自动保存在本机工作区，可用 `⌘S` 另存为 `.mgsvg`。Agent 也可以显式调用 `studio_save` 或 `live --save`。
 
 保存会检查文件是否在打开后被外部改写。遇到冲突时，可先从「项目」菜单导出当前副本，再重新载入磁盘版本。直接写文件的 `mgsvg style`、`mgsvg apply` 和 `project_apply_ops` 适合项目关闭后的批处理。
 
-桥只监听 `127.0.0.1`。本机页面可直接接入，托管页面需在启动桥前用 `MGSVG_STUDIO_ORIGIN` 指定其完整来源。浏览器会记住桥端口，可用 `?bridge=0` 断开。
+桥只监听 `127.0.0.1:7350`。Studio 默认尝试连接本机桥；本机页面可直接接入，托管页面需在启动桥前用 `MGSVG_STUDIO_ORIGIN` 指定其完整来源。
 
 ### 按什么分类
 
@@ -282,7 +310,7 @@ Agent 的实时样式改动和手动编辑进入同一份项目状态。确认�
 
 - **投放宽度**：决定字号口径。有效字号 = 声明字号 × 投放宽 ÷ 画布宽。填 1920 就是按 1080p 原尺寸看，填 375 就是按手机看。
 - **媒介**：屏幕/视频帧用 UI 阈值，印刷/长图用短边比例。
-- **定格帧**：入场 0% / 中段 50% / 末帧 100%。
+- **定格帧**：检查器固定评审动画末帧。
 - **字号阶梯**：填了才判「阶梯外字号」（TY-04），不填就记未测。
 
 ### 已知取舍
@@ -356,15 +384,20 @@ node bin/mgsvg.mjs help
 mgsvg outline examples/demo.mgsvg --elements          # 概览：素材 / 动画 / 元素 id
 mgsvg apply   examples/demo.mgsvg --ops ops.json      # 批量改（先校验，再原子写）
 mgsvg apply   examples/demo.mgsvg --ops ops.json --dry-run
-mgsvg add     examples/demo.mgsvg --svg art.svg --name "新素材"
+mgsvg add     examples/demo.mgsvg --svg art.svg --name "新素材" --dry-run
+mgsvg replace examples/demo.mgsvg --asset a_xxx --svg art.svg --dry-run # 替换已有素材的 SVG
 mgsvg style   examples/demo.mgsvg --asset a_xxx --element '0.79.82.83' --set fill=#e11d48
 mgsvg anim    examples/demo.mgsvg --asset a_xxx --group charIn --set duration=1.2 --set stagger=0.06
 mgsvg layer   examples/demo.mgsvg --asset a_xxx --group charIn --targets '0.1,0.2,0.3' --stagger 0.08
 mgsvg layout  examples/demo.mgsvg --asset a_xxx --container '#name' --mode grid --cols 4 --gap 24
 mgsvg review  examples/demo.mgsvg --run --write      # 现算视觉评审并写回快照
+mgsvg review  examples/demo.mgsvg --agent-prompt --asset a_xxx --json # 生成语义评审提示词
+mgsvg review  examples/demo.mgsvg --agent-result result.json --asset a_xxx --write # 校验并写回 Agent 结论
+mgsvg review  examples/demo.mgsvg --agent-result - --asset a_xxx --dry-run < result.json # 只校验
 mgsvg bridge  --port 7350                            # 常驻桥：Agent 看你在选什么
 mgsvg context --wait 30                              # 读当前选中项（可等新选择）
-mgsvg live    --set fill=#e11d48                     # 改界面里选中的那个元素
+mgsvg live    --current --add art.svg --name "新素材"   # 导入当前 Studio 素材库
+mgsvg live    --current --set fill=#e11d48           # 改界面里选中的那个元素
 mgsvg validate examples/demo.mgsvg
 ```
 
@@ -374,7 +407,7 @@ mgsvg validate examples/demo.mgsvg
 
 | op | 作用 |
 | --- | --- |
-| `asset.add` / `asset.remove` / `asset.update` / `board.move` | 素材增删、改名、画布位置 |
+| `asset.add` / `asset.remove` / `asset.update` / `board.move` | 素材增删、改名、SVG 替换、画布位置 |
 | `anim.set` / `anim.update` / `anim.remove` | 整条动画替换 / 改时长·延迟·缓动·循环 / 删除 |
 | `anim.layer` | 把一条动画设为多目标分层（`targets` + `stagger`） |
 | `anim.keyframes` | 直接替换某个属性轨道的关键帧 |
@@ -389,7 +422,7 @@ mgsvg validate examples/demo.mgsvg
 node bin/mgsvg.mjs mcp --project examples/demo.mgsvg --bridge 7350
 ```
 
-仓库的 `.mcp.json` 指向 `examples/demo.mgsvg`，并启用 7350 端口的实时桥。打开带 `?bridge=7350` 的 Studio 即可接收实时命令。
+仓库的 `.mcp.json` 指向 `examples/demo.mgsvg`，并启用 7350 端口的实时桥。Studio 会自动连接并接收实时命令。
 Claude Desktop / Code 的 `mcpServers` 配置：
 
 ```json
@@ -413,15 +446,17 @@ Claude Desktop / Code 的 `mcpServers` 配置：
 | `project_apply_ops` | 批量应用操作并写回，支持 `dryRun` |
 | `project_add_asset` | 加一份 SVG（自动解析动画与元素索引） |
 | `project_validate` | 校验引用一致性 |
-| `review_read` | 读每张素材最近一次视觉评审（闸门 / 硬伤 / 非 PASS 明细），并标过期 |
+| `review_read` | 分别读规则和 Agent 快照；规则结果含正例/反例/未测，并标出过期状态 |
 | `review_run` | 起无头 Chrome 在正在跑的 Studio 里现算一次评审，可选写回 |
+| `agent_review_prompt` | 生成指定素材的末帧语义评审提示词，包含 SVG、规则、素材 ID 与输入指纹 |
+| `agent_review_submit` | 校验 Agent 返回的完整 JSON 结论；可预览或写入 `assets[].agentReview` |
 | `studio_context` | 读 Studio 里人此刻选中的素材/元素（含该元素的评审判定），可等新选择 |
 | `studio_apply` | 按会话、素材和元素 ID 实时改样式或清除覆盖 |
 | `studio_save` | 保存指定会话已链接的本地项目 |
 
 ### 和 Web 端的配合
 
-- 顶栏「项目」菜单：打开（⌘O）/ 保存（⌘S）/ 从文件重新载入，链接到文件后标题会显示文件名与未保存标记。
+- 顶栏「项目」菜单：打开（⌘O）/ 保存或另存为（⌘S）/ 从文件重新载入；链接到文件并授权后自动保存。
 - 也可以直接开 `http://localhost:5188/?project=/examples/demo.mgsvg`，刷新即读取最新文件。
 - 项目打开时用实时桥编辑和保存。离线批处理完成后，可用「从文件重新载入」查看磁盘版本。
 
@@ -438,7 +473,7 @@ src/
     studio.ts     画布：相机、网格、画板、命中测试、选择框、拖拽、布局应用
     layout/       布局内核（纯函数引擎 + Leafer 适配层）
     review/       视觉评审：定格快照、元素与像素测量、分类、覆盖率与闸门
-  ui/             顶栏 / 素材库 / 检查器（动画·元素·布局·素材·评审）/ 时间轴 / 画布 HUD
+  ui/             顶栏 / 素材库 / 检查器（动画·元素·素材·评审）/ 时间轴 / 画布 HUD
   store.ts        状态 + IndexedDB 持久化
 ```
 
@@ -472,19 +507,25 @@ pnpm deploy:unicloud   # 构建 + 同步 + 上传（需 HBuilderX 已打开并�
 
 细节与「替换站点根」的做法见 [docs/deploy-unicloud.md](docs/deploy-unicloud.md)。
 
+## 画布历史与素材版本
+
+- 在「项目 → 画布历史」中查看记录、撤销和重做。快捷键为 `⌘/Ctrl+Z` 和 `⌘/Ctrl+Shift+Z`，也可以用 `Ctrl+Y` 重做。
+- 右侧检查器的「素材」页提供素材版本，「元素」页显示所选元素的样式、布局和动画改动。素材可恢复完整版本，元素可单独恢复样式和布局。恢复会新增一条可撤销的画布操作。
+- 每个项目最近 100 条操作保存在当前浏览器，打开历史可查看时间、受影响的素材和已撤销的操作。新编辑后，原有的重做分支仍可在历史中查看。导出的 `.mgsvg` 保存当前项目状态。
+
 ## 已知限制
 
 - `<pattern>` 填充、`feTurbulence` 这类噪点/纹理滤镜、复杂 `<mask>` 会被忽略，并在「素材」面板里列成降级项。
 - `<use>` 引用不会展开；`<foreignObject>` 不支持。
 - 渐变的 `gradientTransform` 暂未完全还原（线性/径向的基本方向与 stop 正确）。
 - 文本按基线换算，多行只在 `<tspan>` 用绝对 `y` 时近似；字重/字体回退依赖系统字体。
-- 布局按元素**当前渲染尺寸**计算（不做自动换行/文本重排）；改了字号后需要点一次「重新计算」。
+- 布局按元素静态尺寸计算。横排可以换行，文本内部排版沿用素材设置。
 - 布局重排的是容器直接子元素；深层嵌套需要逐层应用。
 - 视觉评审只测单帧，且规则库 60 条生效规则里浏览器能测 20 条，其余在面板里逐条标未实现。
 
 ## 后续可以加
 
 - 导出：把修改后的动画 spec 反向生成 SVG（CSS keyframes）或 GSAP 代码。
-- 多选与成组、画板内拖拽元素、撤销/重做。
+- 多选与成组、画板内拖拽元素。
 - 素材版本与团队共享（当前是纯本地）。
 - 用 OffscreenCanvas / 视口剔除支撑上千个动画素材。

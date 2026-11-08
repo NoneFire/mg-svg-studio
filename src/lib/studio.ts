@@ -1,11 +1,16 @@
 import gsap from 'gsap'
-import { Box, Group, Leafer, Rect, Text } from 'leafer-ui'
+import { Box, DragEvent, Group, Leafer, Rect, Text } from 'leafer-ui'
 import type { Asset, StylePatch } from '../types'
-import { convertSvg, applyPatch, elementBaseMatrix, type ConvertedAsset, type ConvertedElement } from './convert'
-import { layoutContainer, clearContainerLayout } from './layout/apply'
-import type { LayoutSpec } from './layout/types'
+import { convertSvg, applyPatch, type ConvertedAsset, type ConvertedElement } from './convert'
+import { applyAssetLayouts } from './layout/apply'
 import { parseSvgDocument } from './svg-doc'
 import { AssetPlayer } from './runtime'
+import { sameValue } from './history'
+import {
+  assetCardHeight, countCopy, hasVideoCopy, VIDEO_COPY_BAND_HEIGHT,
+  COPY_BODY_TOP, COPY_HEADER_TOP, COPY_LINE_HEIGHT, COPY_LINES, COPY_SIDE, COPY_TEXT_LEFT,
+} from './asset-card'
+import { fitText } from './text-fit'
 
 export interface StudioSelection {
   assetId?: string
@@ -17,12 +22,13 @@ export interface StudioSelection {
 export interface ReviewMarker {
   id: string
   ruleId: string
-  level: 'FAIL' | 'WARN' | 'UNMEASURED'
+  level: 'FAIL' | 'WARN' | 'UNMEASURED' | 'PASS'
+  label?: string
   bbox: [number, number, number, number]
 }
 
 export interface StudioEvents {
-  onSelectionChange?: (sel: StudioSelection) => void
+  onSelectionChange?: (sel: StudioSelection, focusInspector?: boolean) => void
   onBoardMove?: (assetId: string, x: number, y: number) => void
   onZoom?: (zoom: number) => void
   onTime?: (assetId: string, time: number, duration: number) => void
@@ -36,12 +42,31 @@ interface Board {
   asset: Asset
   frame: Box
   label: Group
+  svgViewport: Box
   contentHolder: Group
+  copyBand: Rect
+  copyRule: Rect
+  copyAccent: Rect
+  copyHeading: Text
+  copyCount: Text
+  copyText: Text
   content: ConvertedAsset
   player: AssetPlayer
   fit: number
+  svgHeight: number
   cell: { x: number; y: number; w: number; h: number }
   ready: boolean
+}
+
+let measureCanvas: CanvasRenderingContext2D | null = null
+
+/** 和卡片正文同一套字体，用来判断三行放不放得下 */
+function measureVideoCopyText() {
+  if (!measureCanvas) measureCanvas = document.createElement('canvas').getContext('2d')
+  const context = measureCanvas
+  if (!context) return (value: string) => value.length * 13
+  context.font = '13px Inter, "PingFang SC", sans-serif'
+  return (value: string) => context.measureText(value).width
 }
 
 const BOARD_MAX_W = 560
@@ -57,12 +82,19 @@ const MARKER_COLOR: Record<string, string> = {
   FAIL: '#f87171',
   WARN: '#f59e0b',
   UNMEASURED: '#a78bfa',
+  PASS: '#34d399',
 }
 
 const THEMES = {
   dark: {
     bg: '#16161a',
     board: '#1b1b21',
+    copyBand: '#212129',
+    copyBandBorder: '#34343f',
+    copyAccent: '#3b82f6',
+    copyHeading: '#98a1b0',
+    copyCount: '#6f7889',
+    copyText: '#e9ebf0',
     boardStroke: '#2a2a33',
     boardStrokeActive: '#3a3a46',
     label: '#8f96a3',
@@ -74,6 +106,12 @@ const THEMES = {
   light: {
     bg: '#f0f1f4',
     board: '#ffffff',
+    copyBand: '#f1f3f8',
+    copyBandBorder: '#dde2ea',
+    copyAccent: '#2563eb',
+    copyHeading: '#556074',
+    copyCount: '#7a8598',
+    copyText: '#1f2937',
     boardStroke: '#e0e3e9',
     boardStrokeActive: '#c8cfda',
     label: '#5b6270',
@@ -97,8 +135,10 @@ export class Studio {
   selection: StudioSelection = {}
   private selectionBox: Rect
   private elementBox: Rect
-  private hitTarget?: HTMLElement
-  private dragging: null | { mode: 'pan' | 'move'; startX: number; startY: number; board?: Board; camX: number; camY: number; boardX: number; boardY: number } = null
+  private dragging: null | (
+    { pointerId: number; mode: 'pan'; startX: number; startY: number; camX: number; camY: number } |
+    { pointerId: number; mode: 'move'; board: Board }
+  ) = null
   private spaceDown = false
   private moved = false
   private zoom = 1
@@ -245,7 +285,7 @@ export class Studio {
     if (advanced || zoomed) {
       // Leafer 自带的 rAF 调度会把相邻两帧合并（实测 ~30fps），这里每帧同步渲染一次，跟满 60Hz
       this.leafer.forceRender(undefined, true)
-      if (zoomed || now - this.lastOverlaySync > 55) {
+      if (zoomed || ended || now - this.lastOverlaySync > 55) {
         this.lastOverlaySync = now
         this.syncSelectionOverlay()
       }
@@ -324,32 +364,76 @@ export class Studio {
     Array.from(this.boards.keys()).forEach((id) => {
       if (replace || !ids.has(id)) this.removeBoard(id)
     })
-    assets.forEach((asset) => {
-      const existing = this.boards.get(asset.id)
-      if (existing) {
-        existing.asset = asset
-        this.updateBoardPosition(existing)
-        if (!existing.ready) this.buildBoardContent(existing)
-      } else {
-        this.createBoard(asset)
-      }
+    assets.forEach((asset, index) => {
+      const board = this.boards.get(asset.id) ?? this.createBoard(asset)
+      if (this.boardsLayer.children[index] !== board.frame) this.boardsLayer.addAt(board.frame, index)
+      if (this.labelsLayer.children[index] !== board.label) this.labelsLayer.addAt(board.label, index)
+      if (board.asset !== asset) this.syncAsset(board, asset)
     })
     this.events.onBoardCount?.(this.boards.size)
     this.drawGrid()
     this.syncLabels()
+    this.syncSelectionOverlay()
+  }
+
+  private syncAsset(board: Board, asset: Asset) {
+    const previous = board.asset
+    if (previous.x !== asset.x || previous.y !== asset.y) {
+      if (this.dragging?.mode === 'move' && this.dragging.board === board) this.cancelPointer()
+      board.frame.set({ x: asset.x, y: asset.y })
+    }
+    board.asset = asset
+    if (previous.width !== asset.width || previous.height !== asset.height) {
+      board.fit = Math.min(BOARD_MAX_W / Math.max(1, asset.width), BOARD_MAX_H / Math.max(1, asset.height), 1)
+      board.cell.w = Math.max(80, asset.width * board.fit)
+      board.svgHeight = Math.max(60, asset.height * board.fit)
+      board.cell.h = assetCardHeight(board.svgHeight, asset.videoCopy)
+      board.frame.set({ width: board.cell.w, height: board.cell.h })
+      board.svgViewport.set({ width: board.cell.w, height: board.svgHeight })
+      board.contentHolder.set({ scaleX: board.fit, scaleY: board.fit })
+      this.updateVideoCopyLayout(board)
+    }
+    const styleChanged = !sameValue(previous.overrides, asset.overrides)
+    const changedStyles = styleChanged ? Object.entries(asset.overrides).filter(([id, patch]) => patch !== previous.overrides[id]) : []
+    const removedStyle = styleChanged && Object.entries(previous.overrides).some(([id, patch]) =>
+      Object.keys(patch).some((key) => asset.overrides[id]?.[key as keyof StylePatch] === undefined),
+    )
+    const layoutGeometryChanged = Object.keys(asset.layouts ?? {}).length > 0 && changedStyles.some(([id, patch]) =>
+      (['x', 'y', 'rotation', 'scale', 'width', 'height', 'fontSize', 'letterSpacing', 'text'] as const)
+        .some((key) => patch[key] !== previous.overrides[id]?.[key]),
+    )
+    const rebuild = previous.svg !== asset.svg || previous.width !== asset.width || previous.height !== asset.height ||
+      removedStyle || layoutGeometryChanged || !sameValue(previous.layouts ?? {}, asset.layouts ?? {})
+    if (rebuild || !sameValue(previous.groups, asset.groups)) this.refreshAsset(board, rebuild)
+    else if (board.player) board.player.asset = asset
+    if (!rebuild) changedStyles.forEach(([id, patch]) => this.applyStyle(asset.id, id, patch))
+    if (previous.kind !== asset.kind) {
+      board.frame.stroke = asset.kind === 'animated' ? THEMES[this.theme].boardStrokeActive : THEMES[this.theme].boardStroke
+    }
+    if (previous.kind !== asset.kind || previous.name !== asset.name) this.updateBoardLabel(board)
+    const copyVisibilityChanged = hasVideoCopy(previous.videoCopy) !== hasVideoCopy(asset.videoCopy)
+    if (copyVisibilityChanged) {
+      board.cell.h = assetCardHeight(board.svgHeight, asset.videoCopy)
+      board.frame.set({ height: board.cell.h })
+    }
+    if (previous.videoCopy !== asset.videoCopy || previous.width !== asset.width || previous.height !== asset.height) {
+      this.updateVideoCopy(board)
+    }
   }
 
   private createBoard(asset: Asset) {
     const fit = Math.min(BOARD_MAX_W / Math.max(1, asset.width), BOARD_MAX_H / Math.max(1, asset.height), 1)
     const w = Math.max(80, asset.width * fit)
     const h = Math.max(60, asset.height * fit)
+    const hasCopy = hasVideoCopy(asset.videoCopy)
+    const cardH = assetCardHeight(h, asset.videoCopy)
 
     const frame = new Box({
       name: `board:${asset.id}`,
       x: asset.x,
       y: asset.y,
       width: w,
-      height: h,
+      height: cardH,
       fill: THEMES[this.theme].board,
       shadow: this.theme === 'light' ? { x: 0, y: 10, blur: 26, color: 'rgba(15,23,42,0.10)' } : undefined,
       overflow: 'hide',
@@ -361,9 +445,103 @@ export class Studio {
     frame.hittable = true
     this.boardsLayer.add(frame)
 
+    const svgViewport = new Box({
+      name: `svg-viewport:${asset.id}`,
+      x: 0,
+      y: 0,
+      width: w,
+      height: h,
+      fill: THEMES[this.theme].board,
+      strokeWidth: 0,
+      overflow: 'hide',
+      hittable: false,
+    } as any)
     const contentHolder = new Group({ name: `content:${asset.id}` })
     contentHolder.setTransform({ a: fit, b: 0, c: 0, d: fit, e: 0, f: 0 } as any, false)
-    frame.add(contentHolder)
+    svgViewport.add(contentHolder)
+    frame.add(svgViewport)
+
+    // 文案条：紧贴画面、满宽，靠分隔线 + 底色 + 左侧色条和画面分区，但仍属于同一张卡片
+    const copyBand = new Rect({
+      name: `video-copy-band:${asset.id}`,
+      x: 0,
+      y: h,
+      width: w,
+      height: VIDEO_COPY_BAND_HEIGHT,
+      fill: THEMES[this.theme].copyBand,
+      visible: hasCopy,
+      hittable: false,
+    } as any)
+    const copyRule = new Rect({
+      name: `video-copy-rule:${asset.id}`,
+      x: 0,
+      y: h,
+      width: w,
+      height: 1,
+      fill: THEMES[this.theme].copyBandBorder,
+      visible: hasCopy,
+      hittable: false,
+    } as any)
+    const copyAccent = new Rect({
+      name: `video-copy-accent:${asset.id}`,
+      x: COPY_SIDE,
+      y: h + COPY_HEADER_TOP + 2,
+      width: 2,
+      height: 10,
+      cornerRadius: 1,
+      fill: THEMES[this.theme].copyAccent,
+      visible: hasCopy,
+      hittable: false,
+    } as any)
+    const copyHeading = new Text({
+      name: `video-copy-heading:${asset.id}`,
+      x: COPY_TEXT_LEFT,
+      y: h + COPY_HEADER_TOP,
+      text: '视频文案',
+      fontSize: 10,
+      fontWeight: 600,
+      letterSpacing: 0.2,
+      fill: THEMES[this.theme].copyHeading,
+      fontFamily: 'Inter, "PingFang SC", sans-serif',
+      visible: hasCopy,
+      hittable: false,
+    } as any)
+    const copyCount = new Text({
+      name: `video-copy-count:${asset.id}`,
+      x: Math.max(1, w - COPY_SIDE - 88),
+      y: h + COPY_HEADER_TOP,
+      width: 88,
+      text: '',
+      textAlign: 'right',
+      fontSize: 10,
+      fill: THEMES[this.theme].copyCount,
+      fontFamily: 'Inter, "PingFang SC", sans-serif',
+      visible: hasCopy,
+      hittable: false,
+    } as any)
+    const copyText = new Text({
+      name: `video-copy:${asset.id}`,
+      x: COPY_TEXT_LEFT,
+      y: h + COPY_BODY_TOP,
+      width: Math.max(1, w - COPY_TEXT_LEFT * 2),
+      height: COPY_LINES * COPY_LINE_HEIGHT,
+      text: hasCopy ? asset.videoCopy : '',
+      fontSize: 13,
+      lineHeight: COPY_LINE_HEIGHT,
+      textWrap: 'break',
+      textOverflow: 'ellipsis',
+      verticalAlign: 'top',
+      fill: THEMES[this.theme].copyText,
+      fontFamily: 'Inter, "PingFang SC", sans-serif',
+      visible: hasCopy,
+      hittable: false,
+    } as any)
+    frame.add(copyBand)
+    frame.add(copyRule)
+    frame.add(copyAccent)
+    frame.add(copyHeading)
+    frame.add(copyCount)
+    frame.add(copyText)
 
     const label = new Group({ name: `label:${asset.id}` })
     const dragStrip = new Rect({
@@ -402,16 +580,30 @@ export class Studio {
       asset,
       frame,
       label,
+      svgViewport,
       contentHolder,
+      copyBand,
+      copyRule,
+      copyAccent,
+      copyHeading,
+      copyCount,
+      copyText,
       content: { content: new Group(), width: 1, height: 1, elements: new Map(), order: [], unsupported: [] },
       player: null as any,
       fit,
-      cell: { x: asset.x, y: asset.y, w, h },
+      svgHeight: h,
+      cell: { x: asset.x, y: asset.y, w, h: cardH },
       ready: false,
     }
     this.boards.set(asset.id, board)
     this.updateBoardLabel(board)
+    this.updateVideoCopy(board)
     this.buildBoardContent(board)
+    for (const handle of [frame, dragStrip]) {
+      handle.on(DragEvent.DRAG, this.onBoardDrag)
+      handle.on(DragEvent.END, this.onBoardDragEnd)
+    }
+    return board
   }
 
   private buildBoardContent(board: Board) {
@@ -424,10 +616,7 @@ export class Studio {
       board.player = new AssetPlayer(converted, asset)
       board.player.loop = this.loopEnabled
       board.player.onTime = (t, d) => this.events.onTime?.(asset.id, t, d)
-      Object.entries(asset.layouts || {}).forEach(([elId, spec]) => {
-        const container = converted.elements.get(elId)
-        if (container) this.runLayout(container, spec as LayoutSpec)
-      })
+      applyAssetLayouts(converted, asset.layouts)
       board.player.render(0)
       board.ready = true
       board.frame.stroke = asset.kind === 'animated' ? THEMES[this.theme].boardStrokeActive : THEMES[this.theme].boardStroke
@@ -444,16 +633,10 @@ export class Studio {
   private removeBoard(id: string) {
     const board = this.boards.get(id)
     if (!board) return
-    board.frame.remove()
-    board.label.remove()
+    if (this.dragging?.mode === 'move' && this.dragging.board === board) this.cancelPointer()
+    board.frame.destroy()
+    board.label.destroy()
     this.boards.delete(id)
-  }
-
-  private updateBoardPosition(board: Board) {
-    const { asset } = board
-    board.frame.x = asset.x
-    board.frame.y = asset.y
-    this.syncLabels()
   }
 
   private updateBoardLabel(board: Board) {
@@ -465,26 +648,57 @@ export class Studio {
     this.syncLabels()
   }
 
+  private updateVideoCopy(board: Board) {
+    const text = board.asset.videoCopy ?? ''
+    const hasText = hasVideoCopy(text)
+    for (const part of [board.copyBand, board.copyRule, board.copyAccent, board.copyHeading, board.copyCount, board.copyText]) {
+      part.visible = hasText
+    }
+    // 卡片很窄时字数和标题会打架，只留标题
+    board.copyCount.visible = hasText && board.cell.w >= 260
+    board.copyText.text = hasText ? this.fitVideoCopy(board, text) : ''
+    board.copyText.fill = THEMES[this.theme].copyText
+    board.copyCount.text = hasText ? `${countCopy(text)} 字` : ''
+  }
+
+  /** 三行之外收成省略号；Leafer 自己的多行省略号会画在被裁掉的那一行上 */
+  private fitVideoCopy(board: Board, text: string) {
+    const width = Math.max(1, board.cell.w - COPY_TEXT_LEFT * 2) * 0.98
+    return fitText(text.trim(), width, COPY_LINES, measureVideoCopyText()).text
+  }
+
+  private updateVideoCopyLayout(board: Board) {
+    const { w } = board.cell
+    const top = board.svgHeight
+    board.copyBand.set({ x: 0, y: top, width: w, height: VIDEO_COPY_BAND_HEIGHT })
+    board.copyRule.set({ x: 0, y: top, width: w })
+    board.copyAccent.set({ x: COPY_SIDE, y: top + COPY_HEADER_TOP + 2 })
+    board.copyHeading.set({ x: COPY_TEXT_LEFT, y: top + COPY_HEADER_TOP })
+    board.copyCount.set({ x: Math.max(1, w - COPY_SIDE - 88), y: top + COPY_HEADER_TOP })
+    board.copyText.set({
+      x: COPY_TEXT_LEFT,
+      y: top + COPY_BODY_TOP,
+      width: Math.max(1, w - COPY_TEXT_LEFT * 2),
+      height: COPY_LINES * COPY_LINE_HEIGHT,
+    })
+  }
+
   /** 标签固定在屏幕空间，缩放时保持可读字号 */
   syncLabels() {
     const s = this.zoomValue
     this.boards.forEach((board) => {
-      const x = this.camera.x + board.asset.x * s
-      const y = this.camera.y + board.asset.y * s
+      const x = this.camera.x + board.frame.x * s
+      const y = this.camera.y + board.frame.y * s
       board.label.x = Math.round(x)
       board.label.y = Math.round(y - 22)
     })
   }
 
-  /** 重新提取/重建某个素材（动画轨道变化时） */
-  refreshAsset(asset: Asset | string, options: { rebuildContent?: boolean } = {}) {
-    const board = this.boards.get(typeof asset === 'string' ? asset : asset.id)
-    if (!board) return
-    if (typeof asset !== 'string') board.asset = asset
-    if (!board.asset.groups.some((group) => group.enabled !== false)) board.player.pause()
-    if (options.rebuildContent) {
-      const { time, playing } = board.player
-      board.content.content.remove()
+  private refreshAsset(board: Board, rebuildContent: boolean) {
+    if (!board.asset.groups.some((group) => group.enabled !== false)) board.player?.pause()
+    if (rebuildContent || !board.ready) {
+      const { time = 0, playing = false } = board.player ?? {}
+      board.contentHolder.removeAll(true)
       board.ready = false
       this.buildBoardContent(board)
       if (board.ready) {
@@ -496,47 +710,9 @@ export class Studio {
       board.player.rebuild()
       board.player.seek(board.player.time)
     }
-    this.updateBoardLabel(board)
   }
 
-  /** 用布局内核重排容器子元素，并立即刷新渲染 */
-  private runLayout(container: ConvertedElement, spec: LayoutSpec) {
-    const result = layoutContainer(container, spec)
-    this.leafer.updateLayout?.()
-    container.children.forEach((child) => {
-      child.wrapper.setTransform(elementBaseMatrix(child) as any, false)
-    })
-    return result
-  }
-
-  applyLayout(assetId: string, elementId: string, spec: LayoutSpec | null) {
-    const board = this.boards.get(assetId)
-    if (!board?.ready) return null
-    const container = board.content.elements.get(elementId)
-    if (!container) return null
-    if (!spec) {
-      clearContainerLayout(container)
-      this.leafer.updateLayout?.()
-      container.children.forEach((child) => {
-        child.wrapper.setTransform(elementBaseMatrix(child) as any, false)
-      })
-      board.player.invalidate()
-      board.player.render(board.player.time)
-      this.syncSelectionOverlay()
-      return null
-    }
-    const result = this.runLayout(container, spec)
-    board.player.invalidate()
-    board.player.render(board.player.time)
-    this.syncSelectionOverlay()
-    return result
-  }
-
-  clearLayout(assetId: string, elementId: string) {
-    this.applyLayout(assetId, elementId, null)
-  }
-
-  applyStyle(assetId: string, elementId: string, patch: StylePatch) {
+  private applyStyle(assetId: string, elementId: string, patch: StylePatch) {
     const board = this.boards.get(assetId)
     if (!board?.ready) return
     const el = board.content.elements.get(elementId)
@@ -556,6 +732,7 @@ export class Studio {
       if (restart) board.player.seek(0)
       board.player.play()
     }
+    this.syncReviewMarkers()
     this.events.onPlaybackChange?.()
   }
 
@@ -571,6 +748,7 @@ export class Studio {
     const wasPlaying = board.player.playing
     board.player.pause()
     board.player.seek(Math.min(time, board.player.lastFrameTime))
+    this.syncReviewMarkers()
     if (wasPlaying) this.events.onPlaybackChange?.()
   }
 
@@ -600,13 +778,13 @@ export class Studio {
 
   /* ----------------------------- selection ----------------------------- */
 
-  select(sel: StudioSelection, fromCanvas = false) {
+  select(sel: StudioSelection, fromCanvas = false, focusInspector = false) {
     this.selection = sel
     this.syncSelectionOverlay()
     if (!fromCanvas) {
       if (sel.assetId) this.focusBoard(sel.assetId, false)
     }
-    this.events.onSelectionChange?.(sel)
+    this.events.onSelectionChange?.(sel, focusInspector)
   }
 
   private syncSelectionOverlay() {
@@ -648,7 +826,7 @@ export class Studio {
       this.reviewState.assetId === assetId &&
       this.reviewState.focus === focus &&
       this.reviewState.markers.length === markers.length &&
-      this.reviewState.markers.every((m, i) => m.id === markers[i]?.id && m.level === markers[i]?.level)
+      this.reviewState.markers.every((m, i) => m.id === markers[i]?.id && m.level === markers[i]?.level && m.label === markers[i]?.label)
     this.reviewState = { assetId, markers, focus }
     if (!same) this.rebuildReviewLayer()
     this.syncReviewMarkers()
@@ -663,19 +841,20 @@ export class Studio {
         stroke: color,
         strokeWidth: m.level === 'FAIL' ? 1.5 : 1,
         // 不给内容上色：标注只描边，画面颜色保持作者原本的样子
-        fill: m.level === 'FAIL' ? 'rgba(248,113,113,0.07)' : undefined,
+        fill: m.level === 'FAIL' ? 'rgba(248,113,113,0.07)' : m.level === 'PASS' ? 'rgba(52,211,153,0.07)' : undefined,
         cornerRadius: 2,
         hittable: false,
       } as any)
-      const chipW = 7 + m.ruleId.length * 5.2
+      const labelText = m.label || m.ruleId
+      const chipW = 7 + labelText.length * 5.2
       const chip = new Group({ hittable: false })
       const bg = new Rect({ width: chipW, height: 13, cornerRadius: 3, fill: color, hittable: false } as any)
       const label = new Text({
         x: 3.5,
         y: 1.5,
-        text: m.ruleId,
+        text: labelText,
         fontSize: 8.5,
-        fill: m.level === 'WARN' ? '#1a1406' : '#ffffff',
+        fill: m.level === 'WARN' || m.level === 'PASS' ? '#102018' : '#ffffff',
         fontFamily: 'SF Mono, Menlo, monospace',
         hittable: false,
       } as any)
@@ -690,7 +869,10 @@ export class Studio {
   private syncReviewMarkers() {
     const { assetId, markers, focus } = this.reviewState
     const board = assetId ? this.boards.get(assetId) : undefined
-    if (!board || !markers.length) {
+    const player = board?.player
+    const awayFromLastFrame = player && player.groups.length > 0 &&
+      (player.playing || player.time !== player.lastFrameTime)
+    if (!board || !markers.length || awayFromLastFrame) {
       this.reviewLayer.visible = false
       this.reviewHits = []
       return
@@ -721,7 +903,7 @@ export class Studio {
       } as any)
 
       // 标签靠右对齐到框的右上角：不压住阅读起点，也不和右侧的框抢位置
-      const chipW = 7 + m.ruleId.length * 5.2
+      const chipW = 7 + (m.label || m.ruleId).length * 5.2
       let cx = Math.min(x + w, b.x + b.width) - chipW
       let cy = y - 15
       if (y + h > b.y + b.height - 20) {
@@ -936,10 +1118,17 @@ export class Studio {
     this.container.style.background = c.bg
     this.boards.forEach((board) => {
       board.frame.fill = c.board
+      board.svgViewport.fill = c.board
       board.frame.stroke = board.asset.kind === 'animated' ? c.boardStrokeActive : c.boardStroke
       ;(board.frame as any).shadow = theme === 'light' ? { x: 0, y: 10, blur: 26, color: 'rgba(15,23,42,0.10)' } : undefined
       const text = board.label.children[2] as any
       if (text) text.fill = c.label
+      board.copyBand.fill = c.copyBand
+      board.copyRule.fill = c.copyBandBorder
+      board.copyAccent.fill = c.copyAccent
+      board.copyHeading.fill = c.copyHeading
+      board.copyCount.fill = c.copyCount
+      this.updateVideoCopy(board)
     })
     this.drawGrid()
   }
@@ -1032,6 +1221,8 @@ export class Studio {
     el.addEventListener('dblclick', this.onDoubleClick)
     window.addEventListener('pointermove', this.onPointerMove)
     window.addEventListener('pointerup', this.onPointerUp)
+    window.addEventListener('pointercancel', this.onPointerCancel)
+    window.addEventListener('blur', this.onBlur)
     window.addEventListener('keydown', this.onKeyDown)
     window.addEventListener('keyup', this.onKeyUp)
   }
@@ -1106,111 +1297,105 @@ export class Studio {
   }
 
   private onPointerDown = (e: PointerEvent) => {
-    if (e.button === 2) return
+    if (!e.isPrimary || e.button === 2 || this.dragging) return
     const p = this.localPoint(e)
-    this.moved = false
     const wantsPan = e.button === 1 || this.spaceDown || e.altKey
     if (!wantsPan) {
       const marker = this.hitReviewMarker(p.x, p.y)
       if (marker) {
         this.events.onReviewMarkerClick?.(marker)
-        this.moved = true
         return
       }
     }
     const hit = this.pick(p.x, p.y)
-    if (hit?.dragHandle && !wantsPan) {
-      const board = this.boards.get(hit.assetId)!
-      this.dragging = {
-        mode: 'move',
-        startX: p.x,
-        startY: p.y,
-        camX: this.camera.x,
-        camY: this.camera.y,
-        board,
-        boardX: board.asset.x,
-        boardY: board.asset.y,
-      }
-      this.container.style.cursor = 'grabbing'
-      this.select({ assetId: hit.assetId }, true)
-      return
-    }
-    if (wantsPan || !hit) {
-      this.dragging = { mode: 'pan', startX: p.x, startY: p.y, camX: this.camera.x, camY: this.camera.y, boardX: 0, boardY: 0 }
-      this.container.style.cursor = 'grabbing'
-      return
-    }
-    if (!hit.elementId) {
-      const board = this.boards.get(hit.assetId)!
-      this.dragging = { mode: 'move', startX: p.x, startY: p.y, camX: this.camera.x, camY: this.camera.y, board, boardX: board.asset.x, boardY: board.asset.y }
-      this.container.style.cursor = 'grabbing'
-      this.select({ assetId: hit.assetId }, true)
+    const board = !wantsPan && hit && !hit.elementId ? this.boards.get(hit.assetId) : undefined
+    this.moved = false
+    if (board) {
+      this.dragging = { pointerId: e.pointerId, mode: 'move', board }
+      this.select({ assetId: board.asset.id }, true, true)
     } else {
-      this.dragging = { mode: 'pan', startX: p.x, startY: p.y, camX: this.camera.x, camY: this.camera.y, boardX: 0, boardY: 0 }
+      this.dragging = { pointerId: e.pointerId, mode: 'pan', startX: p.x, startY: p.y, camX: this.camera.x, camY: this.camera.y }
     }
-    try {
-      ;(e.target as HTMLElement)?.setPointerCapture?.(e.pointerId)
-    } catch {
-      /* 合成事件没有活动指针 */
+    if (board || wantsPan || !hit) this.container.style.cursor = 'grabbing'
+  }
+
+  private onBoardDrag = (event: DragEvent) => {
+    const drag = this.dragging
+    if (drag?.mode !== 'move') return
+    this.moved = true
+    this.zoomGesture = null
+    const { x, y } = event.getInnerTotal(this.boardsLayer)
+    drag.board.frame.set({ x: drag.board.asset.x + x, y: drag.board.asset.y + y })
+    this.syncSelectionOverlay()
+    this.syncLabels()
+  }
+
+  private onBoardDragEnd = (event: DragEvent & { isCancel?: boolean }) => {
+    const drag = this.dragging
+    if (drag?.mode !== 'move' || !this.moved) return
+    if (event.isCancel) {
+      this.cancelPointer()
+      return
     }
+    this.onBoardDrag(event)
+    const { board } = drag
+    this.dragging = null
+    this.container.style.cursor = this.spaceDown ? 'grab' : 'default'
+    this.events.onBoardMove?.(board.asset.id, board.frame.x, board.frame.y)
   }
 
   private onPointerMove = (e: PointerEvent) => {
-    if (!this.dragging) {
+    const drag = this.dragging
+    if (!drag) {
       const p = this.localPoint(e)
       const over = !!this.hitReviewMarker(p.x, p.y)
       if (over !== this.hoverMarker) {
         this.hoverMarker = over
-        if (over) this.container.style.cursor = 'pointer'
-        else this.container.style.cursor = this.spaceDown ? 'grab' : 'default'
+        this.container.style.cursor = over ? 'pointer' : this.spaceDown ? 'grab' : 'default'
       }
       return
     }
+    if (drag.pointerId !== e.pointerId || drag.mode !== 'pan') return
     const p = this.localPoint(e)
-    const dx = p.x - this.dragging.startX
-    const dy = p.y - this.dragging.startY
-    if (Math.abs(dx) + Math.abs(dy) > 2) this.moved = true
-    if (this.dragging.mode === 'pan') {
-      this.zoomGesture = null
-      this.camera.x = this.dragging.camX + dx
-      this.camera.y = this.dragging.camY + dy
-      this.afterCameraChange()
-    } else if (this.dragging.mode === 'move' && this.dragging.board) {
-      const s = this.zoomValue
-      const board = this.dragging.board
-      const nx = this.dragging.boardX + dx / s
-      const ny = this.dragging.boardY + dy / s
-      board.frame.x = nx
-      board.frame.y = ny
-      this.syncSelectionOverlay()
-      this.syncLabels()
-    }
+    const dx = p.x - drag.startX
+    const dy = p.y - drag.startY
+    if (Math.abs(dx) + Math.abs(dy) <= 2 && !this.moved) return
+    this.moved = true
+    this.zoomGesture = null
+    this.camera.x = drag.camX + dx
+    this.camera.y = drag.camY + dy
+    this.afterCameraChange()
   }
 
   private onPointerUp = (e: PointerEvent) => {
-    if (!this.dragging) return
-    const wasMove = this.dragging.mode === 'move' && this.dragging.board && this.moved
-    const board = this.dragging.board
+    if (this.dragging?.pointerId !== e.pointerId) return
+    const moved = this.moved
+    this.cancelPointer()
+    if (moved) return
     const p = this.localPoint(e)
     const hit = this.pick(p.x, p.y)
-    const moved = this.moved
+    this.select(hit ? { assetId: hit.assetId, elementId: hit.elementId } : {}, true, !!hit)
+  }
+
+  private cancelPointer() {
+    const drag = this.dragging
     this.dragging = null
+    if (drag?.mode === 'move' && this.moved) {
+      const { asset, frame } = drag.board
+      frame.set({ x: asset.x, y: asset.y })
+      this.syncSelectionOverlay()
+      this.syncLabels()
+    }
     this.container.style.cursor = this.spaceDown ? 'grab' : 'default'
-    if (wasMove && board) {
-      board.asset.x = board.frame.x
-      board.asset.y = board.frame.y
-      this.events.onBoardMove?.(board.asset.id, board.frame.x, board.frame.y)
-      return
-    }
-    if (!moved) {
-      if (hit?.elementId) {
-        this.select({ assetId: hit.assetId, elementId: hit.elementId }, true)
-      } else if (hit) {
-        this.select({ assetId: hit.assetId }, true)
-      } else {
-        this.select({}, true)
-      }
-    }
+  }
+
+  private onPointerCancel = (e: PointerEvent) => {
+    if (this.dragging?.pointerId === e.pointerId) this.cancelPointer()
+  }
+
+  private onBlur = () => {
+    this.spaceDown = false
+    this.cancelPointer()
   }
 
   private onKeyDown = (e: KeyboardEvent) => {
@@ -1278,6 +1463,19 @@ export class Studio {
   }
 
   destroy() {
+    const el = this.container
+    el.removeEventListener('wheel', this.onWheel)
+    el.removeEventListener('gesturestart', this.onGestureStart)
+    el.removeEventListener('gesturechange', this.onGestureChange)
+    el.removeEventListener('gestureend', this.onGestureEnd)
+    el.removeEventListener('pointerdown', this.onPointerDown)
+    el.removeEventListener('dblclick', this.onDoubleClick)
+    window.removeEventListener('pointermove', this.onPointerMove)
+    window.removeEventListener('pointerup', this.onPointerUp)
+    window.removeEventListener('pointercancel', this.onPointerCancel)
+    window.removeEventListener('blur', this.onBlur)
+    window.removeEventListener('keydown', this.onKeyDown)
+    window.removeEventListener('keyup', this.onKeyUp)
     gsap.ticker.remove(this.onTick)
     this.ro?.disconnect()
     this.leafer.destroy()

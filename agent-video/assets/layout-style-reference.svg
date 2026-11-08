@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" fill="none" font-family="Helvetica Neue, Heiti SC, sans-serif">
+  <title>画面版式标注 · 目录、字幕与间距</title>
+  <desc>统一样式参考板。左侧按 1920×1080 比例展示顶部目录、内容区与字幕落点；右侧标注目录、字幕字体颜色与间距数值。</desc>
+  <defs>
+    <marker id="measure" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10Z" fill="#2563EB"/>
+    </marker>
+  </defs>
+  <rect width="1920" height="1080" fill="#FAF6F0"/>
+
+  <text x="80" y="91" font-size="16" font-weight="800" letter-spacing="2" fill="#2563EB">STYLE REFERENCE · 02</text>
+  <text x="80" y="145" font-size="44" font-weight="800" fill="#1A1A1A">画面版式标注</text>
+  <text x="80" y="180" font-size="20" font-weight="500" fill="#6B6B6B">顶部目录 · 字幕样式 · 场景间距 · 1920 × 1080</text>
+
+  <!-- 16:9 composition preview (0.583333 scale of the source canvas) -->
+  <rect x="80" y="220" width="1120" height="630" rx="12" fill="#FFFFFF" stroke="#D6D3D1" stroke-width="2"/>
+  <rect x="82" y="222" width="1116" height="626" rx="10" fill="#FAF6F0"/>
+
+  <!-- Chapter tracker, scaled from x20 / y16 / 1880 × 8 -->
+  <rect x="91.667" y="229.333" width="1096.666" height="4.667" fill="#EBE9E4"/>
+  <rect x="91.667" y="229.333" width="496.79" height="4.667" fill="#2563EB"/>
+  <g fill="#2563EB">
+    <circle cx="91.667" cy="231.667" r="4.083"/>
+    <circle cx="589.207" cy="231.667" r="4.083"/>
+  </g>
+  <g fill="#D1D5DB">
+    <circle cx="163.52" cy="231.667" r="3.5"/><circle cx="265.203" cy="231.667" r="3.5"/>
+    <circle cx="344.997" cy="231.667" r="3.5"/><circle cx="834.11" cy="231.667" r="3.5"/>
+    <circle cx="1085.177" cy="231.667" r="3.5"/>
+  </g>
+  <g font-family="Helvetica Neue, Heiti SC, sans-serif" font-size="13" font-weight="600" text-anchor="middle" fill="#999999">
+    <text x="91.667" y="253.8">引入</text>
+    <text x="163.52" y="253.8">AI 定义</text>
+    <text x="265.203" y="253.8">Agent 定义</text>
+    <text x="344.997" y="253.8">记忆</text>
+    <text x="589.207" y="253.8" fill="#2563EB" font-weight="800">工具</text>
+    <text x="834.11" y="253.8">Agent Loop</text>
+    <text x="1085.177" y="253.8">总结</text>
+  </g>
+
+  <!-- Scene area starts at y=200, with 40px side padding -->
+  <line x1="103.333" y1="336.667" x2="1176.667" y2="336.667" stroke="#2563EB" stroke-opacity="0.34" stroke-width="1.5" stroke-dasharray="7 6"/>
+  <line x1="103.333" y1="336.667" x2="103.333" y2="735" stroke="#2563EB" stroke-opacity="0.25" stroke-width="1.5" stroke-dasharray="7 6"/>
+  <line x1="1176.667" y1="336.667" x2="1176.667" y2="735" stroke="#2563EB" stroke-opacity="0.25" stroke-width="1.5" stroke-dasharray="7 6"/>
+  <rect x="100" y="282" width="214" height="40" rx="10" fill="#DBEAFE"/>
+  <text x="112" y="307" font-size="16" font-weight="800" fill="#2563EB">内容区顶部：200 px</text>
+  <line x1="86" y1="220" x2="86" y2="336.667" stroke="#2563EB" stroke-width="1.5" marker-start="url(#measure)" marker-end="url(#measure)"/>
+
+  <!-- Three cards, scaled from the source 24px gap -->
+  <rect x="284.167" y="400.833" width="221.666" height="144.667" rx="11" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="1.5"/>
+  <rect x="519.833" y="400.833" width="221.667" height="144.667" rx="11" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="1.5"/>
+  <rect x="755.5" y="400.833" width="221.667" height="144.667" rx="11" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="1.5"/>
+  <g text-anchor="middle" fill="#1A1A1A">
+    <text x="395" y="467" font-size="20" font-weight="800">场景内容</text>
+    <text x="630.7" y="467" font-size="20" font-weight="800">卡片之间</text>
+    <text x="866.3" y="467" font-size="20" font-weight="800">保持留白</text>
+  </g>
+  <line x1="505.833" y1="568" x2="519.833" y2="568" stroke="#2563EB" stroke-width="1.7" marker-start="url(#measure)" marker-end="url(#measure)"/>
+  <rect x="492" y="582" width="170" height="36" rx="9" fill="#DBEAFE"/>
+  <text x="577" y="605" font-size="15" font-weight="800" text-anchor="middle" fill="#2563EB">卡片间距 24 px</text>
+
+  <!-- Actual caption pill, scaled from source coordinates: x-center / y=938.5 / bottom=56 -->
+  <rect x="525" y="767.46" width="229.25" height="49.875" rx="5.833" fill="#4A4A48" stroke="#000000" stroke-opacity="0.08" stroke-width="0.583"/>
+  <text x="639.625" y="808" text-anchor="middle" font-family="Helvetica Neue, Heiti SC, sans-serif" font-size="29.167" font-weight="500" letter-spacing="-0.292" fill="#FAFAFA">AI是没有记忆的</text>
+  <line x1="1134" y1="817.33" x2="1134" y2="850" stroke="#2563EB" stroke-width="1.5" marker-start="url(#measure)" marker-end="url(#measure)"/>
+  <text x="1122" y="840" text-anchor="end" font-size="13" font-weight="800" fill="#2563EB">底部 56 px</text>
+  <line x1="80" y1="500" x2="103.333" y2="500" stroke="#2563EB" stroke-width="1.5" marker-start="url(#measure)" marker-end="url(#measure)"/>
+  <text x="91.667" y="487" text-anchor="middle" font-size="12" font-weight="800" fill="#2563EB">40</text>
+
+  <!-- Annotation panel -->
+  <rect x="1240" y="220" width="600" height="630" rx="16" fill="#FFFFFF" stroke="#E7E5E4" stroke-width="2"/>
+
+  <text x="1280" y="264" font-size="25" font-weight="800" fill="#1A1A1A">01 · 顶部章节目录</text>
+  <rect x="1280" y="282" width="86" height="9" fill="#EBE9E4"/>
+  <rect x="1280" y="282" width="42" height="9" fill="#2563EB"/>
+  <text x="1384" y="292" font-size="17" font-weight="600" fill="#1A1A1A">轨道 #EBE9E4 · 进度 #2563EB</text>
+  <text x="1280" y="326" font-size="17" fill="#4B5563">位置：顶部 16 · 左右 20 · 尺寸 1880 × 8 px</text>
+  <text x="1280" y="354" font-size="17" fill="#4B5563">圆点：常态 12 px · 当前 14 px</text>
+  <text x="1280" y="382" font-size="17" fill="#4B5563">标签：22 px / 600 · 当前 #2563EB / 800</text>
+  <text x="1280" y="410" font-size="16" fill="#6B6B6B">标签位置：0 · 6.4 · 15.9 · 23.1 · 45.3 · 67.7 · 90.7 %</text>
+
+  <line x1="1280" y1="432" x2="1800" y2="432" stroke="#E7E5E4" stroke-width="1.5"/>
+  <text x="1280" y="470" font-size="25" font-weight="800" fill="#1A1A1A">02 · 字幕样式</text>
+  <rect x="1282" y="489" width="24" height="24" rx="5" fill="#4A4A48"/>
+  <text x="1318" y="508" font-size="17" font-weight="700" fill="#1A1A1A">底色 #4A4A48</text>
+  <rect x="1508" y="489" width="24" height="24" rx="5" fill="#FAFAFA" stroke="#D1D5DB"/>
+  <text x="1544" y="508" font-size="17" font-weight="700" fill="#1A1A1A">文字 #FAFAFA</text>
+  <text x="1280" y="548" font-size="16" font-weight="600" fill="#4B5563">原 CSS 字体栈：Plus Jakarta Sans / Noto Sans SC /</text>
+  <text x="1330" y="573" font-size="16" font-weight="600" fill="#4B5563">PingFang SC / sans-serif</text>
+  <text x="1280" y="598" font-size="16" font-weight="800" fill="#2563EB">Studio 实际字体：Helvetica Neue / Heiti SC</text>
+  <text x="1280" y="627" font-size="17" fill="#4B5563">字号 50 px · 字重 500 · 行高 1.35 · 字距 −0.01em</text>
+  <text x="1280" y="656" font-size="17" fill="#4B5563">内边距 8 × 24 px · 圆角 10 px · 描边 1 px</text>
+  <text x="1280" y="685" font-size="17" fill="#4B5563">描边 rgba(0,0,0,0.08) · 居中 · 不换行</text>
+  <text x="1280" y="714" font-size="17" font-weight="800" fill="#2563EB">字幕轨道距画面底部：56 px</text>
+
+  <line x1="1280" y1="740" x2="1800" y2="740" stroke="#E7E5E4" stroke-width="1.5"/>
+  <text x="1280" y="777" font-size="25" font-weight="800" fill="#1A1A1A">03 · 画面版式</text>
+  <text x="1280" y="808" font-size="17" fill="#4B5563">画布 1920 × 1080 · 内容区顶部 200 px</text>
+  <text x="1280" y="835" font-size="17" fill="#4B5563">实装左右内边距 40 px · 卡片间距 24 px</text>
+
+  <text x="80" y="902" font-size="17" font-weight="700" fill="#1A1A1A">设计说明中的安全区参考：水平 80 px · 垂直 60 px</text>
+  <text x="80" y="932" font-size="16" fill="#6B6B6B">实装值与设计说明分开标注；顶部目录标签距轨道底部 32 px。</text>
+</svg>

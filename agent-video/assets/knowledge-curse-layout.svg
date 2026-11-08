@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 560" width="800" height="560" style="max-width:100%;height:auto;background:#FAF6F0">
+  <defs>
+    <style>
+      text { font-family: "Helvetica Neue", "Heiti SC", sans-serif; }
+
+      .fade-in { opacity: 0; animation: fadeIn 0.6s ease forwards; }
+      @keyframes fadeIn { to { opacity: 1; } }
+
+      .pop-in {
+        opacity: 0;
+        transform-box: fill-box;
+        transform-origin: center;
+        animation: popIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+      }
+      @keyframes popIn {
+        from { opacity: 0; transform: scale(0.6); }
+        to   { opacity: 1; transform: scale(1); }
+      }
+
+      .pulse-red {
+        transform-box: fill-box;
+        transform-origin: center;
+        animation: pulseRed 1.6s ease-in-out 3s infinite;
+      }
+      @keyframes pulseRed {
+        0%, 100% { transform: scale(1); }
+        50%      { transform: scale(1.05); }
+      }
+
+      .slide-in {
+        opacity: 0;
+        transform: translateX(16px);
+        animation: slideIn 0.5s ease forwards;
+      }
+      @keyframes slideIn {
+        to { opacity: 1; transform: translateX(0); }
+      }
+    </style>
+  </defs>
+
+  <!-- 背景 -->
+  <rect width="800" height="560" fill="#FAF6F0"/>
+  <rect width="800" height="560" fill="none" opacity="0"/>
+
+  <!-- 标题 -->
+  <text x="400" y="54" text-anchor="middle" font-size="32" font-weight="800" fill="#1A1A1A"
+        class="fade-in" style="animation-delay:0.2s">知识的诅咒</text>
+  <text x="400" y="82" text-anchor="middle" font-size="14" fill="#6B6B6B"
+        class="fade-in" style="animation-delay:0.5s">为什么你讲清楚了，对方却没听懂？</text>
+
+  <!-- 列标题 -->
+  <g class="fade-in" style="animation-delay:2.5s">
+    <text x="297" y="128" text-anchor="middle" font-size="15" font-weight="600" fill="#6B6B6B">他知道</text>
+    <text x="503" y="128" text-anchor="middle" font-size="15" font-weight="600" fill="#6B6B6B">他不知道</text>
+  </g>
+
+  <!-- 行标题 -->
+  <g class="fade-in" style="animation-delay:2.7s">
+    <text x="185" y="224" text-anchor="end" font-size="15" font-weight="600" fill="#6B6B6B">我知道</text>
+    <text x="185" y="368" text-anchor="end" font-size="15" font-weight="600" fill="#6B6B6B">我不知道</text>
+  </g>
+
+  <!-- 象限1：共识区 -->
+  <g class="pop-in" style="animation-delay:1.0s">
+    <rect x="202" y="150" width="190" height="128" rx="14" fill="#DCFCE7"/>
+    <rect x="202" y="150" width="190" height="128" rx="14" fill="none" stroke="#1A1A1A" stroke-width="2"/>
+    <text x="297" y="216" text-anchor="middle" font-size="20" font-weight="800" fill="#1A1A1A">共识区</text>
+    <text x="297" y="242" text-anchor="middle" font-size="12" fill="#166534">我知道 · 他也知道</text>
+  </g>
+
+  <!-- 象限2：知识诅咒区（重点） -->
+  <g class="pop-in" style="animation-delay:1.3s">
+    <rect class="pulse-red" x="408" y="150" width="190" height="128" rx="14" fill="#FFE4E6" opacity="0.92"/>
+    <rect x="408" y="150" width="190" height="128" rx="14" fill="none" stroke="#E11D48" stroke-width="3"/>
+    <text x="503" y="216" text-anchor="middle" font-size="20" font-weight="800" fill="#E11D48">知识诅咒区</text>
+    <text x="503" y="242" text-anchor="middle" font-size="12" fill="#9F1239">我知道 · 他不知道</text>
+  </g>
+
+  <!-- 象限3：请教区 -->
+  <g class="pop-in" style="animation-delay:1.6s">
+    <rect x="202" y="294" width="190" height="128" rx="14" fill="#FEF3C7"/>
+    <rect x="202" y="294" width="190" height="128" rx="14" fill="none" stroke="#1A1A1A" stroke-width="2"/>
+    <text x="297" y="360" text-anchor="middle" font-size="20" font-weight="800" fill="#1A1A1A">请教区</text>
+    <text x="297" y="386" text-anchor="middle" font-size="12" fill="#92400E">我不知道 · 他知道</text>
+  </g>
+
+  <!-- 象限4：共同盲区 -->
+  <g class="pop-in" style="animation-delay:1.9s">
+    <rect x="408" y="294" width="190" height="128" rx="14" fill="#F1F5F9"/>
+    <rect x="408" y="294" width="190" height="128" rx="14" fill="none" stroke="#1A1A1A" stroke-width="2"/>
+    <text x="503" y="360" text-anchor="middle" font-size="20" font-weight="800" fill="#1A1A1A">共同盲区</text>
+    <text x="503" y="386" text-anchor="middle" font-size="12" fill="#475569">我不知道 · 他不知道</text>
+  </g>
+
+  <!-- 右侧标注：箭头 + 文字 -->
+  <g class="slide-in" style="animation-delay:3.6s">
+    <line x1="648" y1="220" x2="622" y2="220" stroke="#E11D48" stroke-width="2.5" stroke-linecap="round"/>
+    <polygon points="606,220 622,213 622,227" fill="#E11D48"/>
+    <text x="664" y="225" font-size="16" font-weight="800" fill="#E11D48">知识的诅咒</text>
+  </g>
+
+  <!-- 底部总结 -->
+  <g class="fade-in" style="animation-delay:5.8s">
+    <text x="400" y="494" text-anchor="middle" font-size="18" font-weight="600" fill="#6B6B6B">
+      不是对方笨，是你忘了「不知道」的感觉。
+    </text>
+    <text x="400" y="528" text-anchor="middle" font-size="18" font-weight="600" fill="#E11D48">
+      表达的目的，是让别人听懂。
+    </text>
+  </g>
+
+</svg>

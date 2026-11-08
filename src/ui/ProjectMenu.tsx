@@ -38,9 +38,12 @@ export default function ProjectMenu() {
   return (
     <div className="project-menu" ref={ref}>
       <button
+        id="project-menu-trigger"
+        aria-label="项目"
+        aria-expanded={open}
         className={`tool-btn ${open ? 'active' : ''}`}
         onClick={() => setOpen((v) => !v)}
-        title="项目文件：open / save / reload"
+        title="项目文件与画布历史"
       >
         <Icon name="folder" size={14} />
         <span className="project-label">{fileName || '项目'}</span>
@@ -55,7 +58,9 @@ export default function ProjectMenu() {
               <span>
                 {fileName
                   ? store.projectDirty
-                    ? store.projectHandle ? '有改动，⌘S 写回文件' : '有改动，⌘S 保存到本地'
+                    ? store.projectHandle
+                      ? store.fileSaveError ? `自动保存失败：${store.fileSaveError}` : '有改动，自动保存中…'
+                      : '有改动，已自动保存到本机工作区'
                     : store.projectUrl
                     ? '来自 URL · 重新载入读取最新'
                     : '与文件同步'
@@ -91,6 +96,16 @@ export default function ProjectMenu() {
             }}
           >
             <span>导出 JSON 副本</span>
+          </button>
+          <button
+            aria-haspopup="dialog"
+            onClick={() => {
+              setOpen(false)
+              store.showHistory()
+            }}
+          >
+            <span>画布历史</span>
+            <Icon name="history" size={14} />
           </button>
           <div className="project-pop-tip">
             本地桥送来的 Agent 改动会与界面改动一起保存。文件被外部改动时，可先导出当前副本，再重新载入。

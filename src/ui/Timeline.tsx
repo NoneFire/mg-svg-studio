@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
 import { store } from '../store'
 import type { Studio } from '../lib/studio'
+import { loadWaveform, waveformPath, type Waveform } from '../lib/waveform'
 import { Icon } from './Icon'
 import { ResizeHandle } from './controls'
 
@@ -23,8 +24,15 @@ export default function Timeline({ studio }: { studio: Studio | null }) {
   const timeRef = useRef<HTMLSpanElement>(null)
   const selectedLane = useRef<HTMLDivElement>(null)
   const dragPointer = useRef<number | null>(null)
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const mutedRef = useRef(false)
+  // 只有用户按时间轴的播放键之后才让语音出声：打开项目时的自动播放保持安静
+  const audioArmed = useRef(false)
   const [rulerWidth, setRulerWidth] = useState(0)
   const [collapsed, setCollapsed] = useState(false)
+  const [muted, setMuted] = useState(false)
+  const [voice, setVoice] = useState<Waveform | null>(null)
+  const [voiceFailed, setVoiceFailed] = useState(false)
   const [workspaceHeight, setWorkspaceHeight] = useState(() => window.innerHeight - 48)
   const [preferredHeight, setPreferredHeight] = useState<number | null>(() => {
     try {
@@ -35,16 +43,43 @@ export default function Timeline({ studio }: { studio: Studio | null }) {
   })
 
   const groups = asset?.groups ?? []
+  const voiceSrc = asset?.voiceoverAudio
   const playing = player?.playing ?? false
   const canPlay = !!player && groups.some((group) => group.enabled !== false)
   // 为画布留出可操作空间，同时扣除时间轴标题、把手和边距。
   const maxHeight = Math.max(MIN_TRACK_HEIGHT, workspaceHeight - 220)
-  const defaultHeight = Math.max(MIN_TRACK_HEIGHT, Math.min(178, 29 + groups.length * 26))
+  const rowCount = groups.length + (voiceSrc ? 1 : 0)
+  const defaultHeight = Math.max(MIN_TRACK_HEIGHT, Math.min(178 + (voiceSrc ? 26 : 0), 29 + rowCount * 26))
   const trackHeight = Math.min(maxHeight, preferredHeight ?? defaultHeight)
   const selectedId = groups.find((group) => group.id === store.selectedGroupId)?.id ?? groups[0]?.id
   const step = rulerStep(total, rulerWidth)
   const stepPercent = step / total * 100
   const ticks = Array.from({ length: Math.floor(total / step + 1e-8) + 1 }, (_, i) => i * step)
+  const voiceDuration = voice?.duration ?? 0
+  const voiceWidth = voiceDuration > 0 ? Math.min(1, voiceDuration / total) * 100 : 100
+  const voiceWavePath = useMemo(() => waveformPath(voice?.peaks ?? []), [voice])
+
+  useEffect(() => {
+    let active = true
+    setVoice(null)
+    setVoiceFailed(false)
+    if (!voiceSrc) return
+    void loadWaveform(voiceSrc).then((result) => {
+      if (!active) return
+      setVoice(result)
+      setVoiceFailed(!result)
+    })
+    return () => { active = false }
+  }, [voiceSrc])
+
+  useEffect(() => {
+    audioArmed.current = false
+    setMuted(false)
+  }, [assetId])
+
+  useEffect(() => {
+    mutedRef.current = muted
+  }, [muted])
 
   useEffect(() => {
     const workspace = panelRef.current?.parentElement
@@ -75,6 +110,7 @@ export default function Timeline({ studio }: { studio: Studio | null }) {
       const current = studio.getBoard(assetId)?.player
       if (current) {
         const { time, duration } = current
+        syncVoiceAudio(audioRef.current, time, current.playing, audioArmed, mutedRef)
         if (lastTime !== time || lastDuration !== duration) {
           const timecode = time.toFixed(2)
           if (timeRef.current) timeRef.current.textContent = timecode
@@ -88,8 +124,11 @@ export default function Timeline({ studio }: { studio: Studio | null }) {
       raf = requestAnimationFrame(sync)
     }
     sync()
-    return () => cancelAnimationFrame(raf)
-  }, [assetId, collapsed, studio])
+    return () => {
+      cancelAnimationFrame(raf)
+      audioRef.current?.pause()
+    }
+  }, [assetId, collapsed, studio, voiceSrc])
 
   useEffect(() => {
     const body = bodyRef.current
@@ -116,6 +155,7 @@ export default function Timeline({ studio }: { studio: Studio | null }) {
 
   return (
     <section ref={panelRef} className="timeline" aria-label="动画时间轴">
+      {voiceSrc && <audio ref={audioRef} className="timeline-audio" src={voiceSrc} preload="auto" />}
       {!collapsed && (
         <ResizeHandle
           axis="y"
@@ -144,11 +184,26 @@ export default function Timeline({ studio }: { studio: Studio | null }) {
             title={playing ? '暂停素材' : '播放素材'}
             disabled={!playing && !canPlay}
             onClick={() => {
-              if (studio?.isPlaying(assetId)) studio.pause(assetId)
-              else studio?.play(assetId)
+              if (studio?.isPlaying(assetId)) {
+                audioArmed.current = false
+                studio.pause(assetId)
+              } else {
+                // 从这里起播才带上语音；打开项目时的自动播放保持安静
+                audioArmed.current = true
+                studio?.play(assetId)
+              }
             }}
           >
             <Icon name={playing ? 'pause' : 'play'} size={14} />
+          </button>
+          <button
+            className="row-icon timeline-forward"
+            title="跳到末帧"
+            aria-label="跳到末帧"
+            disabled={!canPlay}
+            onClick={() => seek(player?.lastFrameTime ?? total)}
+          >
+            <Icon name="skipForward" size={14} />
           </button>
         </div>
         <div className="timeline-time mono">
@@ -159,7 +214,7 @@ export default function Timeline({ studio }: { studio: Studio | null }) {
           <h2>时间轴</h2>
           <span className="timeline-asset" title={asset.name}>{asset.name}</span>
         </div>
-        <span className="timeline-count">{groups.length} 条轨道</span>
+        <span className="timeline-count">{groups.length} 条轨道{voiceSrc ? ' · 语音' : ''}</span>
         <button
           className="row-icon"
           title={collapsed ? '展开时间轴' : '收起时间轴'}
@@ -197,7 +252,7 @@ export default function Timeline({ studio }: { studio: Studio | null }) {
           }}
         >
           <div className="timeline-scale">
-            <span className="timeline-scale-label">动画轨道</span>
+            <span className="timeline-scale-label">轨道</span>
             <div
               className="timeline-ruler"
               ref={rulerRef}
@@ -236,6 +291,52 @@ export default function Timeline({ studio }: { studio: Studio | null }) {
           </div>
 
           <div className="timeline-rows">
+            {voiceSrc && (
+              <div className="timeline-lane timeline-voice">
+                <div className="timeline-lane-label timeline-voice-label">
+                  <Icon name="mic" size={11} />
+                  <span className="timeline-lane-name">语音</span>
+                  {voiceDuration > 0 && (
+                    <span className="timeline-lane-detail">{formatSeconds(voiceDuration)}</span>
+                  )}
+                  <button
+                    className="timeline-voice-mute"
+                    aria-pressed={muted}
+                    aria-label={muted ? '取消语音静音' : '语音静音'}
+                    title={muted ? '取消静音' : '静音'}
+                    onClick={() => setMuted((value) => !value)}
+                  >
+                    <Icon name={muted ? 'volumeOff' : 'volume'} size={12} />
+                  </button>
+                </div>
+                <div
+                  className="timeline-lane-plot"
+                  title={`语音 ${voiceDuration > 0 ? formatSeconds(voiceDuration) : voiceFailed ? '波形不可用' : '解析中'} · 点击定位；按上面的播放键会与动画一起播放`}
+                >
+                  <div
+                    className={`timeline-voice-clip${voiceWavePath ? '' : ' pending'}`}
+                    style={{ width: `${voiceWidth}%` }}
+                    aria-hidden="true"
+                  >
+                    {voiceWavePath
+                      ? (
+                        <svg className="timeline-voice-wave" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true">
+                          <path d={voiceWavePath} />
+                        </svg>
+                      )
+                      : <span />}
+                  </div>
+                  {voiceDuration > total + 0.02 && (
+                    <span
+                      className="timeline-voice-out"
+                      title={`语音比动画长 ${(voiceDuration - total).toFixed(1)} 秒，波形在动画结束处截断`}
+                    >
+                      +{(voiceDuration - total).toFixed(1)}s
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
             {groups.map((group, index) => {
               const count = group.targetIds?.length || 1
               const iterations = group.iterations
@@ -297,4 +398,38 @@ function rulerStep(total: number, width: number) {
   const scale = 10 ** Math.floor(Math.log10(target))
   const step = [1, 2, 2.5, 5, 10].find((value) => value * scale >= target) ?? 10
   return step * scale
+}
+
+/** 语音跟随时间轴播放器：起播、暂停、拖动定位都保持同一时刻 */
+function syncVoiceAudio(
+  element: HTMLAudioElement | null,
+  time: number,
+  playing: boolean,
+  armed: { current: boolean },
+  muted: { current: boolean },
+) {
+  if (!element) return
+  element.muted = muted.current
+  const duration = element.duration
+  const known = Number.isFinite(duration) && duration > 0
+  const target = known ? Math.min(time, duration) : time
+  const shouldPlay = playing && armed.current && known
+  if (shouldPlay) {
+    // ended 也要对齐：循环播放时动画回到 0，语音得跟着从头开始
+    if (element.ended || Math.abs(element.currentTime - target) > (element.paused ? 0.02 : 0.16)) {
+      element.currentTime = target
+    }
+    if (element.paused) {
+      // 浏览器可能拒绝自动出声：失败就退回静默，等用户下一次显式播放
+      void element.play().catch(() => { armed.current = false })
+    }
+    return
+  }
+  if (!element.paused) element.pause()
+  if (!playing && known && Math.abs(element.currentTime - target) > 0.03) element.currentTime = target
+}
+
+function formatSeconds(seconds: number) {
+  const total = Math.max(0, Math.round(seconds))
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
 }

@@ -2,28 +2,165 @@ import type { AnimGroup, Asset, StylePatch } from './types'
 import type { LayoutSpec } from './lib/layout/types'
 import { parseSvgDocument } from './lib/svg-doc'
 import { solveLayout } from './lib/layout/engine'
-import { createProject, elementIndexOf, normalizeProject, type ProjectFile } from './lib/project'
+import { assetCardHeight } from './lib/asset-card'
+import { createProject, elementIndexOf, normalizeProject } from './lib/project'
 import { bitmapFileToSvg, cleanName, dataUrlToSvg, isBitmapFile, isSvgFile, looksLikeSvg } from './lib/import'
-import type { Studio, StudioSelection } from './lib/studio'
+import type { StudioSelection } from './lib/studio'
+import {
+  applyAssetChanges, assetChanges, emptyHistory, HISTORY_LIMIT, packHistoryState,
+  sameAsset, sameValue, unpackHistoryState, type AssetVersion, type StoredHistoryState,
+} from './lib/history'
 
 const DB_NAME = 'mg-svg-studio'
 const DB_STORE = 'assets'
-const DB_VERSION = 1
+const DB_META_STORE = 'meta'
+const DB_VERSION = 2
+const ACTIVE_PROJECT_KEY = 'active-project'
+const ACTIVE_WORKSPACE_KEY = 'active-workspace'
+const WORKSPACE_LINKS_KEY = 'workspace-links'
+const workspaceKey = (id: string) => `workspace:${id}`
+const workspaceStampKey = (id: string) => `workspace-stamp:${id}`
+
+type StoredProjectLink = {
+  fileName: string | null
+  projectName: string
+  handle: FileSystemFileHandle | null
+  url: string | null
+  fileSnapshot: string | null
+  projectDirty: boolean
+  fileKey?: string
+}
+
+type StoredWorkspace = StoredProjectLink & StoredHistoryState & { stamp?: string }
+type WorkspaceSession = { id: string; stamp: string | null }
+type WorkspaceLink = Pick<StoredProjectLink, 'handle' | 'url' | 'fileKey'>
 
 function uid(prefix = 'a') {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}${Date.now().toString(36).slice(-3)}`
 }
 
-function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
+let database: Promise<IDBDatabase> | undefined
+
+function openDB() {
+  database ??= new Promise<IDBDatabase>((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION)
     req.onupgradeneeded = () => {
       const db = req.result
       if (!db.objectStoreNames.contains(DB_STORE)) db.createObjectStore(DB_STORE, { keyPath: 'id' })
+      if (!db.objectStoreNames.contains(DB_META_STORE)) db.createObjectStore(DB_META_STORE)
     }
-    req.onsuccess = () => resolve(req.result)
+    req.onsuccess = () => {
+      const db = req.result
+      const reset = () => { database = undefined }
+      db.onversionchange = () => {
+        db.close()
+        reset()
+      }
+      db.onclose = reset
+      resolve(db)
+    }
     req.onerror = () => reject(req.error)
+  }).catch((error) => {
+    database = undefined
+    throw error
   })
+  return database
+}
+
+async function dbGetMeta<T>(key: string): Promise<T | null> {
+  try {
+    const db = await openDB()
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(DB_META_STORE, 'readonly')
+      const req = tx.objectStore(DB_META_STORE).get(key)
+      req.onsuccess = () => resolve((req.result || null) as T | null)
+      req.onerror = () => reject(req.error)
+    })
+  } catch (err) {
+    console.warn('读取项目关联失败', err)
+    return null
+  }
+}
+
+async function fingerprint(fileName: string | undefined, text: string) {
+  if (!fileName || !globalThis.crypto?.subtle) return undefined
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
+  const hash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
+  return `${fileName}:${hash}`
+}
+
+async function dbFindWorkspace({ handle, url, fileKey }: Partial<WorkspaceLink>) {
+  if (!handle && !url && !fileKey) return null
+  const links = await dbGetMeta<Record<string, WorkspaceLink>>(WORKSPACE_LINKS_KEY)
+  for (const [id, link] of Object.entries(links ?? {}).reverse()) {
+    if ((url && url === link.url) || (fileKey && fileKey === link.fileKey)) return id
+    if (handle && link.handle && await handle.isSameEntry(link.handle).catch(() => false)) return id
+  }
+  return null
+}
+
+async function dbPutWorkspace(id: string, workspace: StoredWorkspace, previousStamp: string | null) {
+  const db = await openDB()
+  return await new Promise<'saved' | 'conflict'>((resolve, reject) => {
+    const tx = db.transaction(DB_META_STORE, 'readwrite')
+    const meta = tx.objectStore(DB_META_STORE)
+    const stampKey = workspaceStampKey(id)
+    const current = meta.get(stampKey)
+    let result: 'saved' | 'conflict' = 'conflict'
+    let failure: unknown
+    const writeIfUnchanged = (stamp: string | null) => {
+      if (stamp !== previousStamp) return
+      const links = meta.get(WORKSPACE_LINKS_KEY)
+      links.onsuccess = () => {
+        try {
+          const index = (links.result ?? {}) as Record<string, WorkspaceLink>
+          const { handle, url, fileKey } = workspace
+          // 最新写入的同源草稿优先匹配，较早的草稿仍保留。
+          delete index[id]
+          if (handle || url || fileKey) index[id] = { handle, url, fileKey }
+          meta.put(index, WORKSPACE_LINKS_KEY)
+          meta.put(workspace, workspaceKey(id))
+          meta.put(workspace.stamp, stampKey)
+          meta.put(id, ACTIVE_WORKSPACE_KEY)
+          result = 'saved'
+        } catch (error) {
+          failure = error
+          tx.abort()
+        }
+      }
+    }
+    current.onsuccess = () => {
+      if (current.result != null) {
+        writeIfUnchanged(current.result)
+      } else {
+        // 早期记录只在项目快照中保存版本号。
+        const legacy = meta.get(workspaceKey(id))
+        legacy.onsuccess = () => writeIfUnchanged(legacy.result?.stamp ?? null)
+      }
+    }
+    tx.oncomplete = () => resolve(result)
+    tx.onabort = () => reject(failure ?? tx.error)
+  })
+}
+
+function workspaceErrorMessage(error: unknown) {
+  if ((error as DOMException)?.name === 'QuotaExceededError') {
+    return '本机存储空间不足。请先导出项目副本。'
+  }
+  return '本机存储写入失败。请重试保存，或导出项目副本。'
+}
+
+async function ensureFilePermission(handle: FileSystemFileHandle, mode: 'read' | 'readwrite', request = true) {
+  const permissionHandle = handle as FileSystemFileHandle & {
+    queryPermission?: (descriptor: { mode: 'read' | 'readwrite' }) => Promise<'granted' | 'denied' | 'prompt'>
+    requestPermission?: (descriptor: { mode: 'read' | 'readwrite' }) => Promise<'granted' | 'denied' | 'prompt'>
+  }
+  if (!permissionHandle.queryPermission || !permissionHandle.requestPermission) return
+  if (await permissionHandle.queryPermission({ mode }) === 'granted') return
+  if (!request) throw new Error('本地文件写入权限已失效，请按 Ctrl+S 重新授权')
+  if (await permissionHandle.requestPermission({ mode }) !== 'granted') {
+    throw new Error('浏览器尚未授予本地文件权限，请在保存时允许访问该文件')
+  }
 }
 
 async function dbAll(): Promise<Asset[]> {
@@ -41,30 +178,6 @@ async function dbAll(): Promise<Asset[]> {
   }
 }
 
-async function dbPut(asset: Asset) {
-  try {
-    const db = await openDB()
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(DB_STORE, 'readwrite')
-      tx.objectStore(DB_STORE).put(asset)
-      tx.oncomplete = () => resolve()
-      tx.onerror = () => reject(tx.error)
-    })
-  } catch (err) {
-    console.warn('写入本地库失败', err)
-  }
-}
-
-async function dbDelete(id: string) {
-  const db = await openDB()
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(DB_STORE, 'readwrite')
-    tx.objectStore(DB_STORE).delete(id)
-    tx.oncomplete = () => resolve()
-    tx.onerror = () => reject(tx.error)
-  })
-}
-
 const SAMPLE_META = [
   { file: 'cyber-pikachu.svg', name: '赛博搬砖 · 开场动效', desc: '逐字落位 / 画出 / 呼吸' },
   { file: 'grid-bg.svg', name: '深色网格 · 视频背景', desc: '静态 16:9 背景' },
@@ -76,33 +189,137 @@ export const BOARD_MAX_H = 380
 export const LABEL_H = 26
 export const GAP = 90
 
-export function cellSize(asset: Pick<Asset, 'width' | 'height'>) {
+export type ArrangeSettings = {
+  order: 'nearby' | 'top-left' | 'created'
+  mode: 'grid' | 'row' | 'column'
+  cols: number
+  gap: number
+}
+
+export const DEFAULT_ARRANGE_SETTINGS: ArrangeSettings = {
+  order: 'nearby', mode: 'grid', cols: 1, gap: GAP,
+}
+
+function readArrangeSettings(): ArrangeSettings {
+  try {
+    const saved = JSON.parse(localStorage.getItem('mg-arrange-settings') || 'null')
+    if (!saved || typeof saved !== 'object') return { ...DEFAULT_ARRANGE_SETTINGS }
+    return {
+      order: ['nearby', 'top-left', 'created'].includes(saved.order) ? saved.order : DEFAULT_ARRANGE_SETTINGS.order,
+      mode: ['grid', 'row', 'column'].includes(saved.mode) ? saved.mode : DEFAULT_ARRANGE_SETTINGS.mode,
+      cols: Math.max(1, Math.min(12, Math.round(Number(saved.cols) || DEFAULT_ARRANGE_SETTINGS.cols))),
+      gap: Math.max(0, Math.min(500, Number.isFinite(Number(saved.gap)) ? Number(saved.gap) : DEFAULT_ARRANGE_SETTINGS.gap)),
+    }
+  } catch {
+    return { ...DEFAULT_ARRANGE_SETTINGS }
+  }
+}
+
+export function cellSize(asset: Pick<Asset, 'width' | 'height' | 'videoCopy'>) {
   const fit = Math.min(BOARD_MAX_W / Math.max(1, asset.width), BOARD_MAX_H / Math.max(1, asset.height), 1)
-  return { w: Math.max(80, asset.width * fit), h: Math.max(60, asset.height * fit) }
+  return { w: Math.max(80, asset.width * fit), h: assetCardHeight(Math.max(60, asset.height * fit), asset.videoCopy) }
 }
 
 /**
  * 画布上的素材排布同样交给布局内核：
- * 这里只描述「2 列网格 + 间距」，坐标由 solveLayout 算出来。
+ * 变体先组成水平素材组，布局内核再排列各组；默认一列便于纵向浏览素材。
  */
-export function autoLayout(assets: Asset[]): Asset[] {
+function orderedAssets(assets: Asset[], order: ArrangeSettings['order']): Asset[] {
+  if (order === 'created') return [...assets].sort((a, b) => a.createdAt - b.createdAt)
+  const center = (asset: Asset) => {
+    const size = cellSize(asset)
+    return { x: asset.x + size.w / 2, y: asset.y + size.h / 2 }
+  }
+  const stable = (a: Asset, b: Asset) => a.createdAt - b.createdAt || a.id.localeCompare(b.id)
+  if (order === 'top-left') {
+    return [...assets].sort((a, b) => a.y - b.y || a.x - b.x || stable(a, b))
+  }
+  // Greedy nearest-neighbour walk preserves clusters from the current board.
+  const remaining = [...assets]
+  remaining.sort((a, b) => a.y - b.y || a.x - b.x || stable(a, b))
+  const result = [remaining.shift()!]
+  while (remaining.length) {
+    const from = center(result[result.length - 1])
+    let nearest = 0
+    let nearestDistance = Infinity
+    for (let i = 0; i < remaining.length; i++) {
+      const point = center(remaining[i])
+      const dx = point.x - from.x
+      const dy = point.y - from.y
+      const distance = dx * dx + dy * dy
+      if (distance < nearestDistance || (distance === nearestDistance && stable(remaining[i], remaining[nearest]) < 0)) {
+        nearest = i
+        nearestDistance = distance
+      }
+    }
+    result.push(remaining.splice(nearest, 1)[0])
+  }
+  return result
+}
+
+export function autoLayout(assets: Asset[], settings: ArrangeSettings = DEFAULT_ARRANGE_SETTINGS): Asset[] {
   if (!assets.length) return assets
-  const items = assets.map((asset) => {
-    const { w, h } = cellSize(asset)
-    return { id: asset.id, width: w, height: h }
+  const byId = new Map(assets.map((asset) => [asset.id, asset]))
+  const groups = new Map<string, Asset[]>()
+  for (const asset of assets) {
+    let current = asset
+    const visited = new Set<string>()
+    while (current.variantOf && !visited.has(current.id)) {
+      visited.add(current.id)
+      const parent = byId.get(current.variantOf)
+      if (!parent) break
+      current = parent
+    }
+    const rootId = current.variantOf && !byId.has(current.variantOf) ? current.variantOf : current.id
+    const members = groups.get(rootId) ?? []
+    members.push(asset)
+    groups.set(rootId, members)
+  }
+  const families = [...groups].map(([rootId, members]) => {
+    const root = byId.get(rootId)
+    const ordered = members.sort((a, b) => {
+      if (root && a.id === root.id) return -1
+      if (root && b.id === root.id) return 1
+      return a.createdAt - b.createdAt || a.id.localeCompare(b.id)
+    })
+    const sizes = ordered.map((asset) => cellSize(asset))
+    return {
+      root: root ?? ordered[0],
+      members: ordered,
+      width: sizes.reduce((sum, size) => sum + size.w, 0) + settings.gap * Math.max(0, ordered.length - 1),
+      height: Math.max(...sizes.map((size) => size.h)),
+    }
   })
+  const orderedFamilies = orderedAssets(families.map((family) => family.root), settings.order)
+    .map((root) => families.find((family) => family.root.id === root.id)!)
+  const items = orderedFamilies.map((family) => ({
+    id: family.root.id,
+    width: family.width,
+    height: family.height,
+  }))
   const { boxes } = solveLayout(items, {
-    mode: 'grid',
-    cols: 2,
-    gap: GAP,
-    rowGap: GAP + LABEL_H,
+    mode: settings.mode,
+    cols: settings.cols,
+    gap: settings.gap,
+    rowGap: settings.gap + LABEL_H,
+    wrap: settings.mode === 'row',
     alignX: 'start',
     alignY: 'start',
   })
-  const pos = new Map(boxes.map((b) => [b.id, b]))
+  const familyBoxes = new Map(boxes.map((box) => [box.id, box]))
+  const positions = new Map<string, { x: number; y: number }>()
+  for (const family of orderedFamilies) {
+    const box = familyBoxes.get(family.root.id)
+    if (!box) continue
+    let x = box.x
+    for (const asset of family.members) {
+      positions.set(asset.id, { x, y: box.y })
+      x += cellSize(asset).w + settings.gap
+    }
+  }
   return assets.map((asset) => {
-    const box = pos.get(asset.id)
-    return box ? { ...asset, x: box.x, y: box.y } : asset
+    const position = positions.get(asset.id)
+    return position ? { ...asset, ...position } : asset
   })
 }
 
@@ -113,15 +330,30 @@ export class Store {
   multiSelect: string[] = []
   zoom = 1
   grid = true
+  arrangeSettings: ArrangeSettings = readArrangeSettings()
   projectName = '未命名素材库'
   projectFileName: string | null = null
   projectHandle: FileSystemFileHandle | null = null
   projectUrl: string | null = null
   projectDirty = false
   projectVersion = 0
+  inspectorFocusVersion = 0
   private projectRevision = 0
   private fileSnapshot: string | null = null
+  private fileKey: string | undefined
   private fileTaskInProgress = false
+  private workspaceTimer: ReturnType<typeof setTimeout> | null = null
+  private autoSaveTimer: ReturnType<typeof setTimeout> | null = null
+  private workspace: WorkspaceSession = { id: uid('p'), stamp: null }
+  private workspaceWrite: Promise<void> = Promise.resolve()
+  private persistent = true
+  private savedAssets: Asset[] | null = null
+  private history = emptyHistory()
+  private historyEditKey: string | undefined
+  private historyEditTime = 0
+  historyScope: string | null = null
+  workspaceSaveError: string | null = null
+  fileSaveError: string | null = null
   lastAddedId: string | null = null
   leftOpen = typeof window === 'undefined' || window.innerWidth > 600
   rightOpen = false
@@ -141,11 +373,10 @@ export class Store {
   private listeners = new Set<() => void>()
   version = 0
   private initStarted = false
-  private saveTimers = new Map<string, any>()
 
   subscribe = (fn: () => void) => {
     this.listeners.add(fn)
-    return () => this.listeners.delete(fn)
+    return () => { this.listeners.delete(fn) }
   }
 
   getSnapshot = () => this.version
@@ -155,33 +386,42 @@ export class Store {
     this.listeners.forEach((l) => l())
   }
 
-  async init() {
+  async init({ persistent = true } = {}) {
     if (this.initStarted) return
     this.initStarted = true
-    const stored = await dbAll()
-    // ?project= 载入比 init 快时，别再用本地缓存 / 示例把项目盖掉
-    if (this.projectVersion > 0) {
+    this.persistent = persistent
+    if (!persistent) {
       this.ready = true
       this.emit()
       return
     }
-    if (stored.length) {
-      this.assets = stored.sort((a, b) => a.createdAt - b.createdAt)
-    } else {
-      const seeded = await this.seedSamples()
-      if (this.projectVersion > 0) {
-        this.ready = true
-        this.emit()
-        return
+    const activeId = await dbGetMeta<string>(ACTIVE_WORKSPACE_KEY)
+    const workspace = activeId && await dbGetMeta<StoredWorkspace>(workspaceKey(activeId))
+    const [stored, link] = workspace
+      ? [null, workspace] as const
+      : await Promise.all([dbAll(), dbGetMeta<StoredProjectLink>(ACTIVE_PROJECT_KEY)])
+    const state = workspace && unpackHistoryState(workspace)
+    const assets = state?.assets ?? (stored?.length ? stored.sort((a, b) => a.createdAt - b.createdAt) : await this.seedSamples())
+    // ?project= 载入比 init 快时，别再用本地缓存 / 示例把项目盖掉。
+    if (!this.projectVersion && !this.projectRevision) {
+      if (link) {
+        this.projectFileName = link.fileName
+        this.projectName = link.projectName || this.projectName
+        this.projectHandle = link.handle
+        this.projectUrl = link.url
+        this.fileSnapshot = link.fileSnapshot
+        this.fileKey = link.fileKey
+        this.projectDirty = link.projectDirty
       }
-      this.assets = seeded
+      this.assets = assets
+      this.history = state?.history ?? emptyHistory()
+      if (workspace && activeId) {
+        this.workspace = { id: activeId, stamp: workspace.stamp ?? null }
+      }
+      this.savedAssets = state ? state.savedAssets : this.projectDirty ? null : assets
+      if (assets.length) this.selection = { assetId: assets[0].id }
+      if (!workspace) this.scheduleWorkspaceSave()
     }
-    if (!this.assets.length) {
-      this.ready = true
-      this.emit()
-      return
-    }
-    this.selection = { assetId: this.assets[0].id }
     this.ready = true
     this.emit()
   }
@@ -199,9 +439,7 @@ export class Store {
         console.warn('载入示例失败', meta.file, err)
       }
     }
-    const laid = autoLayout(assets)
-    await Promise.all(laid.map((a) => dbPut(a)))
-    return laid
+    return autoLayout(assets)
   }
 
   buildAsset(svg: string, name: string, source: Asset['source'] = 'import'): Asset {
@@ -217,6 +455,7 @@ export class Store {
       kind: groups.length ? 'animated' : 'static',
       groups,
       elements: elementIndexOf(doc),
+      videoCopy: '',
       overrides: {},
       layouts: {},
       warnings: doc.warnings,
@@ -230,6 +469,7 @@ export class Store {
 
   /** 导入文件：SVG 原样解析，位图（PNG/JPEG/…）包成 SVG 后走同一条管线 */
   async importFiles(files: FileList | File[]) {
+    const projectVersion = this.projectVersion
     const list = Array.from(files)
     const created: Asset[] = []
     for (const file of list) {
@@ -247,14 +487,14 @@ export class Store {
       }
     }
     if (!created.length) return
-    const base = this.assets.length ? autoLayout([...this.assets, ...created]).slice(this.assets.length) : autoLayout(created)
-    const merged = [...this.assets, ...base]
-    this.assets = merged
-    this.markProjectDirty()
-    this.selection = { assetId: base[base.length - 1].id }
-    this.lastAddedId = base[base.length - 1].id
-    this.emit()
-    await Promise.all(base.map((asset) => dbPut(asset)))
+    if (this.projectVersion !== projectVersion) return
+    const base = autoLayout([...this.assets, ...created], this.arrangeSettings).slice(this.assets.length)
+    const last = base[base.length - 1]
+    this.selection = { assetId: last.id }
+    this.multiSelect = []
+    this.selectedGroupId = null
+    this.lastAddedId = last.id
+    this.commitAssets(base.length === 1 ? '导入素材' : '批量导入素材', [...this.assets, ...base])
   }
 
   /** 从剪贴板粘贴：图片文件 / image/svg+xml / SVG 源码文本 / data:image URL */
@@ -278,37 +518,39 @@ export class Store {
       return 1
     }
     if (text && /^data:image\//i.test(text)) {
+      const projectVersion = this.projectVersion
       const svg = await dataUrlToSvg(text)
+      if (projectVersion !== this.projectVersion) return 0
       await this.addSvgText(svg, '粘贴的图片')
       return 1
     }
     return 0
   }
 
-  async addSvgText(text: string, name: string) {
+  async addSvgText(text: string, name: string, variantOf?: string) {
     const asset = this.buildAsset(text, name, 'import')
-    const laid = autoLayout([...this.assets, asset]).slice(this.assets.length)
-    const next = laid[0]
-    this.assets = [...this.assets, next]
-    this.markProjectDirty()
-    this.selection = { assetId: next.id }
-    this.lastAddedId = next.id
-    this.emit()
-    await dbPut(next)
+    if (variantOf && this.assets.some((a) => a.id === variantOf)) asset.variantOf = variantOf
+    // 只给新素材找位置，不动已有素材：排在现有内容最右侧，顶对齐。
+    // 想要整板重排时，走「整理画布」显式触发。
+    if (this.assets.length) {
+      const right = Math.max(...this.assets.map((a) => a.x + cellSize(a).w))
+      const top = Math.min(...this.assets.map((a) => a.y))
+      asset.x = right + this.arrangeSettings.gap
+      asset.y = top
+    }
+    this.selection = { assetId: asset.id }
+    this.multiSelect = []
+    this.selectedGroupId = null
+    this.lastAddedId = asset.id
+    this.commitAssets('粘贴素材', [...this.assets, asset])
   }
 
   async removeAsset(id: string) {
-    this.assets = this.assets.filter((a) => a.id !== id)
-    if (this.selection.assetId === id) this.selection = {}
-    clearTimeout(this.saveTimers.get(id))
-    this.saveTimers.delete(id)
-    this.markProjectDirty()
-    this.emit()
-    await dbDelete(id)
+    this.commitAssets('删除素材', this.assets.filter((asset) => asset.id !== id))
   }
 
   async duplicateAsset(id: string) {
-    const src = this.assets.find((a) => a.id === id)
+    const src = this.assets.find((asset) => asset.id === id)
     if (!src) return
     const copy: Asset = {
       ...src,
@@ -318,41 +560,260 @@ export class Store {
       x: src.x + 40,
       y: src.y + 40,
     }
-    this.assets = [...this.assets, copy]
-    this.markProjectDirty()
     this.selection = { assetId: copy.id }
-    this.emit()
-    await dbPut(copy)
+    this.multiSelect = []
+    this.selectedGroupId = null
+    this.commitAssets('复制素材', [...this.assets, copy])
+  }
+
+  saveVariant(version: Asset) {
+    const original = this.assets.find((asset) => asset.id === version.id) ?? version
+    const byId = new Map(this.assets.map((asset) => [asset.id, asset]))
+    let root = original
+    const visited = new Set<string>()
+    while (root.variantOf && !visited.has(root.id)) {
+      visited.add(root.id)
+      const parent = byId.get(root.variantOf)
+      if (!parent) break
+      root = parent
+    }
+    const familyRootId = root.variantOf && !byId.has(root.variantOf) ? root.variantOf : root.id
+    const family = this.assets.filter((asset) => {
+      let current = asset
+      const seen = new Set<string>()
+      while (current.variantOf && !seen.has(current.id)) {
+        seen.add(current.id)
+        const parent = byId.get(current.variantOf)
+        if (!parent) break
+        current = parent
+      }
+      const candidateRootId = current.variantOf && !byId.has(current.variantOf) ? current.variantOf : current.id
+      return candidateRootId === familyRootId
+    })
+    const rootAsset = byId.get(familyRootId) ?? root
+    const nameBase = this.assets.find((asset) => asset.id === version.id)?.name ?? version.name
+    const variantName = (index: number) => `${nameBase} · 变体 ${index}`
+    let suffix = 1
+    while (this.assets.some((asset) => asset.name === variantName(suffix))) suffix++
+    const rootSize = cellSize(rootAsset)
+    const gap = this.arrangeSettings.gap
+    let x = Math.max(rootAsset.x + rootSize.w, ...family.map((asset) => asset.x + cellSize(asset).w)) + gap
+    const y = rootAsset.y
+    const size = cellSize(version)
+    while (true) {
+      const blockers = this.assets.filter((asset) => {
+        const other = cellSize(asset)
+        const overlapsX = x < asset.x + other.w && x + size.w > asset.x
+        const overlapsY = y - LABEL_H < asset.y + other.h && y + size.h > asset.y - LABEL_H
+        return overlapsX && overlapsY
+      })
+      if (!blockers.length) break
+      x = Math.max(...blockers.map((asset) => asset.x + cellSize(asset).w)) + gap
+    }
+    const copy: Asset = {
+      ...version,
+      id: uid(),
+      name: variantName(suffix),
+      createdAt: Date.now(),
+      x,
+      y,
+      review: undefined,
+      variantOf: version.id,
+      version: 1,
+    }
+    this.selection = { assetId: copy.id }
+    this.multiSelect = []
+    this.selectedGroupId = null
+    this.commitAssets('另存为变体', [...this.assets, copy])
   }
 
   async renameAsset(id: string, name: string) {
-    const asset = this.assets.find((a) => a.id === id)
+    this.editAsset(id, '重命名素材', () => ({ name }), `${id}:name`)
+  }
+
+  setVideoCopy(id: string, videoCopy: string) {
+    const current = this.assets.find((asset) => asset.id === id)
+    if (!current) return
+    const becameVisible = !current.videoCopy?.trim() && !!videoCopy.trim()
+    let assets = this.assets.map((asset) => asset.id === id ? { ...asset, videoCopy } : asset)
+    if (becameVisible) assets = this.pushDownVideoCopyOverlaps(assets, id)
+    this.commitAssets('编辑视频文案', assets, `${id}:video-copy`)
+  }
+
+  setVoiceoverAudio(id: string, voiceoverAudio?: string) {
+    this.editAsset(id, voiceoverAudio ? '保存视频录音' : '删除视频录音', () => ({ voiceoverAudio }), `${id}:voiceover`)
+  }
+
+  private pushDownVideoCopyOverlaps(assets: Asset[], expandedId: string) {
+    const next = new Map(assets.map((asset) => [asset.id, asset]))
+    const queue = [expandedId]
+    const checked = new Map<string, number>()
+    const labelHeight = LABEL_H
+    const labelGap = 8
+
+    while (queue.length) {
+      const blockerId = queue.shift()!
+      const blocker = next.get(blockerId)
+      if (!blocker) continue
+      if (checked.get(blockerId) === blocker.y) continue
+      checked.set(blockerId, blocker.y)
+      const blockerSize = cellSize(blocker)
+      for (const candidate of next.values()) {
+        if (candidate.id === blockerId || candidate.y < blocker.y) continue
+        const size = cellSize(candidate)
+        const overlapsX = candidate.x < blocker.x + blockerSize.w && candidate.x + size.w > blocker.x
+        const labelTop = candidate.y - labelHeight
+        const labelBottom = candidate.y + size.h
+        const blockerTop = blocker.y - labelHeight
+        const blockerBottom = blocker.y + blockerSize.h
+        const overlapsY = labelTop < blockerBottom + labelGap && labelBottom > blockerTop
+        if (!overlapsX || !overlapsY) continue
+        const y = blockerBottom + labelGap + labelHeight
+        if (y > candidate.y) {
+          next.set(candidate.id, { ...candidate, y })
+          queue.push(candidate.id)
+        }
+      }
+    }
+
+    return assets.map((asset) => next.get(asset.id)!)
+  }
+
+  private editAsset(id: string, label: string, update: (asset: Asset) => Partial<Asset>, editKey?: string) {
+    const asset = this.assets.find((item) => item.id === id)
     if (!asset) return
-    asset.name = name
-    this.scheduleSave(asset)
+    this.commitAssets(label, this.assets.map((item) => item === asset ? { ...asset, ...update(asset) } : item), editKey)
+  }
+
+  private commitAssets(label: string, assets: Asset[], editKey?: string) {
+    if (this.recordHistory(label, assets, editKey)) this.applyAssets(assets)
+  }
+
+  private recordHistory(label: string, assets: Asset[], editKey?: string) {
+    const changes = assetChanges(this.assets, assets)
+    if (!changes.length) return false
+    const { entries, undo, redo } = this.history
+    const previous = entries[entries.length - 1]
+    const time = Date.now()
+    const merge = editKey && editKey === this.historyEditKey && time - this.historyEditTime < 800 &&
+      previous?.id === undo[undo.length - 1] && !redo.length && changes.length === 1 &&
+      previous.changes.length === 1 && previous.changes[0].id === changes[0].id
+
+    if (merge) {
+      const [change] = changes
+      const before = previous.changes[0].before
+      if (before && change.after && sameAsset(before.asset, change.after.asset)) {
+        this.history = { entries: entries.slice(0, -1), undo: undo.slice(0, -1), redo: [] }
+      } else {
+        this.history = {
+          entries: [...entries.slice(0, -1), { ...previous, time, changes: [{ ...change, before }] }],
+          undo,
+          redo: [],
+        }
+      }
+    } else {
+      const id = uid('h')
+      const next = [...entries, { id, label, time, changes }]
+      const evicted = next.length > HISTORY_LIMIT ? next.shift() : undefined
+      this.history = { entries: next, undo: [...undo.filter((item) => item !== evicted?.id), id], redo: [] }
+    }
+    this.historyEditKey = editKey
+    this.historyEditTime = time
+    return true
+  }
+
+  private applyAssets(assets: Asset[]) {
+    this.assets = assets
+    const selected = this.selectedAsset
+    if (!selected) {
+      this.selection = {}
+      this.multiSelect = []
+    } else if (selected.elements?.length) {
+      const ids = new Set(selected.elements.map((element) => element.id))
+      if (this.selection.elementId && !ids.has(this.selection.elementId)) this.selection = { assetId: selected.id }
+      this.multiSelect = this.multiSelect.filter((id) => ids.has(id))
+    }
+    if (this.selectedGroupId && !selected?.groups.some((group) => group.id === this.selectedGroupId)) this.selectedGroupId = null
+    if (this.lastAddedId && !assets.some((asset) => asset.id === this.lastAddedId)) this.lastAddedId = null
+    this.markProjectDirty()
     this.emit()
   }
 
-  private scheduleSave(asset: Asset) {
-    this.markProjectDirty()
-    const existing = this.saveTimers.get(asset.id)
-    if (existing) clearTimeout(existing)
-    this.saveTimers.set(
-      asset.id,
-      setTimeout(() => {
-        this.saveTimers.delete(asset.id)
-        dbPut({ ...asset, version: 1 })
-      }, 220)
-    )
+  private isDirty(assets = this.savedAssets) {
+    return !assets || assets.length !== this.assets.length ||
+      this.assets.some((asset, i) => !sameAsset(asset, assets[i], true))
   }
 
   private markProjectDirty() {
-    this.projectDirty = true
+    this.projectDirty = this.isDirty()
     this.projectRevision++
+    this.scheduleWorkspaceSave()
   }
 
-  updateSelection(sel: StudioSelection) {
-    if (sel.elementId) this.rightOpen = true
+  get historyEntries() { return this.history.entries }
+  get undoEntries() { return this.history.undo }
+  get redoEntries() { return this.history.redo }
+  get canUndo() { return this.history.undo.length > 0 }
+  get canRedo() { return this.history.redo.length > 0 }
+
+  showHistory(assetId = '') {
+    this.endHistoryEdit()
+    this.historyScope = assetId
+    this.emit()
+  }
+
+  closeHistory() {
+    this.historyScope = null
+    this.emit()
+  }
+
+  endHistoryEdit() {
+    this.historyEditKey = undefined
+  }
+
+  undo() { this.stepHistory('undo') }
+  redo() { this.stepHistory('redo') }
+
+  private stepHistory(direction: 'undo' | 'redo') {
+    const source = this.history[direction]
+    const id = source[source.length - 1]
+    const entry = this.history.entries.find((item) => item.id === id)
+    if (!entry) return
+    const other = direction === 'undo' ? 'redo' : 'undo'
+    this.history = { ...this.history, [direction]: source.slice(0, -1), [other]: [...this.history[other], id] }
+    this.endHistoryEdit()
+    this.applyAssets(applyAssetChanges(this.assets, entry.changes, direction === 'undo' ? 'before' : 'after'))
+  }
+
+  restoreAssetVersion(version: AssetVersion) {
+    const { asset, index } = version
+    const current = this.assets.find((item) => item.id === asset.id)
+    const assets = current
+      ? this.assets.map((item) => item === current ? { ...asset, review: current.review } : item)
+      : [...this.assets.slice(0, index), asset, ...this.assets.slice(index)]
+    this.commitAssets('恢复素材版本', assets)
+  }
+
+  restoreElementVersion(assetId: string, elementId: string, version: Asset) {
+    this.editAsset(assetId, '恢复元素样式和布局', (asset) => {
+      if (asset.id !== version.id || asset.svg !== version.svg) return {}
+      const overrides = { ...asset.overrides }
+      const layouts = { ...asset.layouts }
+      const style = version.overrides[elementId]
+      const layout = version.layouts?.[elementId]
+      if (style) overrides[elementId] = style
+      else delete overrides[elementId]
+      if (layout) layouts[elementId] = layout
+      else delete layouts[elementId]
+      return { overrides, layouts }
+    })
+  }
+
+  updateSelection(sel: StudioSelection, focusInspector = false) {
+    if (sel.elementId || (focusInspector && sel.assetId)) {
+      this.rightOpen = true
+      this.inspectorFocusVersion++
+    }
     if (sel.assetId !== this.selection.assetId) {
       this.selectedGroupId = null
       this.multiSelect = []
@@ -369,6 +830,10 @@ export class Store {
 
   selectElement(assetId: string, elementId?: string) {
     this.selection = { assetId, elementId }
+    if (elementId) {
+      this.rightOpen = true
+      this.inspectorFocusVersion++
+    }
     this.emit()
   }
 
@@ -398,12 +863,7 @@ export class Store {
   }
 
   moveBoard(id: string, x: number, y: number) {
-    const asset = this.assets.find((a) => a.id === id)
-    if (!asset) return
-    asset.x = x
-    asset.y = y
-    this.scheduleSave(asset)
-    this.emit()
+    this.editAsset(id, '移动画板', () => ({ x, y }))
   }
 
   setZoom(z: number) {
@@ -479,39 +939,30 @@ export class Store {
 
   /** 评审跑完把快照挂到素材上：随项目保存，CLI 与 Agent 直接读 */
   setAssetReview(assetId: string, snapshot: import('./lib/review/types').ReviewSnapshot) {
-    const asset = this.assets.find((a) => a.id === assetId)
-    if (!asset) return
-    asset.review = snapshot
-    this.scheduleSave(asset)
-    this.emit()
+    const asset = this.assets.find((item) => item.id === assetId)
+    if (!asset || sameValue(asset.review, snapshot)) return
+    this.applyAssets(this.assets.map((item) => item === asset ? { ...asset, review: snapshot } : item))
+  }
+
+  setAssetAgentReview(assetId: string, snapshot?: import('./lib/review/types').AgentReviewSnapshot) {
+    const asset = this.assets.find((item) => item.id === assetId)
+    if (!asset || sameValue(asset.agentReview, snapshot)) return
+    this.applyAssets(this.assets.map((item) => item === asset ? { ...asset, agentReview: snapshot } : item))
   }
 
   async updateElementStyle(assetId: string, elementId: string, patch: StylePatch) {
-    const asset = this.assets.find((a) => a.id === assetId)
-    if (!asset) return
-    asset.overrides = { ...asset.overrides, [elementId]: { ...(asset.overrides[elementId] || {}), ...patch } }
-    this.scheduleSave(asset)
-    this.emit()
+    if (!Object.keys(patch).length) return
+    this.editAsset(assetId, '修改元素样式', (asset) => ({
+      overrides: { ...asset.overrides, [elementId]: { ...asset.overrides[elementId], ...patch } },
+    }), `${assetId}:${elementId}:style:${Object.keys(patch).sort().join(',')}`)
   }
 
   async resetElementStyle(assetId: string, elementId: string) {
-    const asset = this.assets.find((a) => a.id === assetId)
-    if (!asset) return
-    const next = { ...asset.overrides }
-    delete next[elementId]
-    asset.overrides = next
-    this.scheduleSave(asset)
-    this.emit()
-  }
-
-  editElementStyle(studio: Studio | null, asset: Asset, elementId: string, patch: StylePatch | null) {
-    if (patch) {
-      this.updateElementStyle(asset.id, elementId, patch)
-      studio?.applyStyle(asset.id, elementId, asset.overrides[elementId])
-    } else {
-      this.resetElementStyle(asset.id, elementId)
-      studio?.refreshAsset(asset, { rebuildContent: true })
-    }
+    this.editAsset(assetId, '重置元素样式', (asset) => {
+      const overrides = { ...asset.overrides }
+      delete overrides[elementId]
+      return { overrides }
+    })
   }
 
   /* ------------------------------ 项目文件 ------------------------------ */
@@ -520,27 +971,138 @@ export class Store {
     return JSON.stringify(createProject(this.assets, this.projectName), null, 2) + '\n'
   }
 
+  private projectLinkRecord(): StoredProjectLink {
+    return {
+      fileName: this.projectFileName,
+      projectName: this.projectName,
+      handle: this.projectHandle,
+      url: this.projectUrl,
+      fileSnapshot: this.fileSnapshot,
+      projectDirty: this.projectDirty,
+      fileKey: this.fileKey,
+    }
+  }
+
+  private scheduleWorkspaceSave() {
+    if (!this.persistent) return
+    if (this.workspaceTimer) clearTimeout(this.workspaceTimer)
+    this.workspaceTimer = setTimeout(() => void this.flushWorkspace(), 180)
+    this.scheduleFileSave()
+  }
+
+  private scheduleFileSave() {
+    if (this.autoSaveTimer) clearTimeout(this.autoSaveTimer)
+    this.autoSaveTimer = null
+    if (!this.persistent || !this.projectHandle || !this.projectDirty) return
+    this.autoSaveTimer = setTimeout(() => {
+      this.autoSaveTimer = null
+      if (!this.projectHandle || !this.projectDirty) return
+      void this.saveProject({ linkedOnly: true, automatic: true }).catch((error) => {
+        const message = (error as Error).message || String(error)
+        if (message === '项目文件正在读写，请稍后重试') {
+          this.scheduleFileSave()
+          return
+        }
+        this.fileSaveError = message
+        this.emit()
+      })
+    }, 700)
+  }
+
+  get workspaceSaveFailed() { return this.workspaceSaveError !== null }
+
+  async flushWorkspace({ retry = false } = {}) {
+    if (this.workspaceTimer || retry) {
+      if (this.workspaceTimer) clearTimeout(this.workspaceTimer)
+      this.workspaceTimer = null
+      await this.persistWorkspace()
+    } else {
+      await this.workspaceWrite
+    }
+  }
+
+  private async persistWorkspace() {
+    if (!this.persistent) return
+    const session = this.workspace
+    const link = this.projectLinkRecord()
+    const { assets, savedAssets, history } = this
+    const write = this.workspaceWrite.then(async () => {
+      let error: string | null = null
+      try {
+        const workspace = {
+          ...link,
+          ...packHistoryState(assets, savedAssets, history),
+          stamp: uid('v'),
+        }
+        const result = await dbPutWorkspace(session.id, workspace, session.stamp)
+        if (result === 'conflict') {
+          // 会话期间其他页面写入了同一项目，另存当前草稿，保留双方修改。
+          const forkId = uid('p')
+          if (await dbPutWorkspace(forkId, workspace, null) !== 'saved') {
+            throw new Error('无法另存当前本机草稿')
+          }
+          session.id = forkId
+        }
+        session.stamp = workspace.stamp
+      } catch (cause) {
+        console.warn('保存本地项目历史失败', cause)
+        error = workspaceErrorMessage(cause)
+      }
+      if (this.workspace === session && this.workspaceSaveError !== error) {
+        this.workspaceSaveError = error
+        this.emit()
+      }
+    })
+    this.workspaceWrite = write
+    await write
+  }
+
   async loadProjectJson(
     text: string,
-    meta: { fileName?: string; handle?: FileSystemFileHandle | null; url?: string | null } = {},
+    meta: { fileName?: string; handle?: FileSystemFileHandle | null; url?: string | null; reload?: boolean } = {},
   ) {
+    if (this.autoSaveTimer) clearTimeout(this.autoSaveTimer)
+    this.autoSaveTimer = null
     const project = normalizeProject(JSON.parse(text))
-    for (const timer of this.saveTimers.values()) clearTimeout(timer)
-    this.saveTimers.clear()
+    const fileKey = this.persistent && !meta.handle && !meta.url ? await fingerprint(meta.fileName, text) : undefined
+    const linkedId = !meta.reload && this.persistent ? await dbFindWorkspace({ ...meta, fileKey }) : null
+    const sameWorkspace = meta.reload || linkedId === this.workspace.id ||
+      (!!meta.url && meta.url === this.projectUrl) ||
+      (!!meta.handle && !!this.projectHandle && await meta.handle.isSameEntry(this.projectHandle).catch(() => false))
+    const linkedWorkspace = !sameWorkspace && linkedId
+      ? await dbGetMeta<StoredWorkspace>(workspaceKey(linkedId))
+      : null
+    this.endHistoryEdit()
+    if (!sameWorkspace) {
+      void this.flushWorkspace()
+      const previous = linkedWorkspace && unpackHistoryState(linkedWorkspace)
+      this.workspace = {
+        id: previous ? linkedId : uid('p'),
+        stamp: linkedWorkspace?.stamp ?? null,
+      }
+      this.workspaceSaveError = null
+      this.history = previous?.history ?? emptyHistory()
+      this.historyScope = null
+      this.assets = previous?.assets ?? project.assets
+    }
+    this.recordHistory('从文件重新载入', project.assets)
+    this.savedAssets = project.assets
     this.assets = project.assets
     this.projectName = project.name
     this.projectFileName = meta.fileName ?? null
     this.projectHandle = meta.handle ?? null
     this.projectUrl = meta.url ?? null
     this.fileSnapshot = this.projectHandle ? text : null
+    this.fileKey = fileKey
     this.selection = {}
     this.selectedGroupId = null
     this.multiSelect = []
     this.lastAddedId = null
     this.projectDirty = false
+    this.fileSaveError = null
     this.projectVersion++
     this.emit()
-    await Promise.all(this.assets.map((asset) => dbPut(asset)))
+    await this.persistWorkspace()
     return project
   }
 
@@ -554,7 +1116,7 @@ export class Store {
     }
   }
 
-  async saveProject({ linkedOnly = false } = {}) {
+  async saveProject({ linkedOnly = false, automatic = false } = {}) {
     return this.runFileTask(async () => {
       const picker = window as any
       const version = this.projectVersion
@@ -564,16 +1126,30 @@ export class Store {
         if (linkedOnly) throw new Error('请先在 Studio 中打开或保存一份可写的本地 .mgsvg 文件')
         if (!picker.showSaveFilePicker) {
           const name = this.projectFileName || `${this.projectName}.mgsvg`
-          downloadText(name, this.projectJson())
-          this.projectDirty = false
+          const savedAssets = this.assets
+          const json = this.projectJson()
+          downloadText(name, json)
+          this.endHistoryEdit()
+          const fileKey = await fingerprint(name, json)
+          if (version !== this.projectVersion) throw new Error('当前项目已切换，请重新保存')
+          this.fileKey = fileKey
+          this.savedAssets = savedAssets
+          this.projectDirty = this.isDirty()
           this.emit()
-          return { file: name, dirty: false }
+          await this.persistWorkspace()
+          return { file: name, dirty: this.projectDirty }
         }
         handle = await picker.showSaveFilePicker({
           suggestedName: this.projectFileName || `${this.projectName}.mgsvg`,
           types: [{ description: 'MG SVG Studio 项目', accept: { 'application/json': ['.mgsvg', '.json'] } }],
         }) as FileSystemFileHandle
         baseline = await (await handle.getFile()).text()
+      }
+      try {
+        await ensureFilePermission(handle, 'readwrite', !automatic)
+      } catch (error) {
+        if (linkedOnly) throw new Error('请在 Studio 的项目菜单中手动保存一次，并允许访问本地文件')
+        throw error
       }
       const assertUnchanged = async () => {
         if (version !== this.projectVersion) throw new Error('当前项目已切换，请重新保存')
@@ -583,7 +1159,8 @@ export class Store {
       }
       const write = async () => {
         await assertUnchanged()
-        const revision = this.projectRevision
+        const savedAssets = this.assets
+        this.endHistoryEdit()
         const json = this.projectJson()
         let writable: FileSystemWritableFileStream
         try {
@@ -602,8 +1179,12 @@ export class Store {
         this.projectFileName = handle.name
         this.projectUrl = null
         this.fileSnapshot = json
-        this.projectDirty = this.projectRevision !== revision
+        this.fileKey = undefined
+        this.savedAssets = savedAssets
+        this.projectDirty = this.isDirty()
+        this.fileSaveError = null
         this.emit()
+        await this.persistWorkspace()
         return { file: handle.name, dirty: this.projectDirty }
       }
       return navigator.locks ? navigator.locks.request(`mgsvg-file:${handle.name}`, write) : write()
@@ -647,6 +1228,7 @@ export class Store {
       let text: string
       let fileName: string
       if (handle) {
+        await ensureFilePermission(handle, 'read')
         const file = await handle.getFile()
         text = await file.text()
         fileName = file.name
@@ -657,79 +1239,76 @@ export class Store {
         fileName = url.split('/').pop()
       }
       if (this.projectDirty && !window.confirm('当前项目还有未保存的改动。放弃这些改动并从文件重新载入？')) return false
-      await this.loadProjectJson(text, { fileName, handle, url })
+      await this.loadProjectJson(text, { fileName, handle, url, reload: true })
       return true
     })
   }
 
-  async setLayout(assetId: string, elementId: string, spec: LayoutSpec | null) {
-    const asset = this.assets.find((a) => a.id === assetId)
-    if (!asset) return
-    const next = { ...(asset.layouts || {}) }
-    if (spec) next[elementId] = spec
-    else delete next[elementId]
-    asset.layouts = next
-    this.scheduleSave(asset)
-    this.emit()
+  async setLayout(assetId: string, elementId: string, spec: LayoutSpec | null, field?: string) {
+    this.editAsset(assetId, spec ? '修改容器布局' : '清除容器布局', (asset) => {
+      const layouts = { ...asset.layouts }
+      if (spec) layouts[elementId] = spec
+      else delete layouts[elementId]
+      return { layouts }
+    }, field && `${assetId}:${elementId}:layout:${field}`)
   }
 
-  async updateGroups(assetId: string, groups: AnimGroup[]) {
-    const asset = this.assets.find((a) => a.id === assetId)
-    if (!asset) return
-    asset.groups = groups
-    asset.kind = groups.length ? 'animated' : 'static'
-    this.scheduleSave(asset)
-    this.emit()
+  async updateGroups(assetId: string, groups: AnimGroup[], editKey?: string) {
+    this.editAsset(assetId, '修改动画轨道', () => ({
+      groups,
+      kind: groups.length ? 'animated' : 'static',
+    }), editKey && `${assetId}:${editKey}`)
   }
 
   async setGroupEnabled(assetId: string, groupId: string, enabled: boolean) {
-    const asset = this.assets.find((a) => a.id === assetId)
-    if (!asset) return
-    asset.groups = asset.groups.map((g) => (g.id === groupId ? { ...g, enabled } : g))
-    this.scheduleSave(asset)
-    this.emit()
+    this.editAsset(assetId, enabled ? '启用动画' : '停用动画', (asset) => ({
+      groups: asset.groups.map((group) => group.id === groupId ? { ...group, enabled } : group),
+    }))
   }
 
   /** 重新从 SVG 里抽取动画（保留手动添加的轨道） */
   async reextract(assetId: string) {
-    const asset = this.assets.find((a) => a.id === assetId)
-    if (!asset) return
     try {
-      const doc = parseSvgDocument(asset.svg)
-      const manual = asset.groups.filter((g) => g.origin === 'manual')
-      const extracted = doc.groups.map((g, i) => ({ ...g, id: `${asset.id}_g${i}` }))
-      asset.groups = [...extracted, ...manual]
-      asset.kind = asset.groups.length ? 'animated' : 'static'
-      asset.warnings = doc.warnings
-      this.scheduleSave(asset)
-      this.emit()
+      this.editAsset(assetId, '重新提取动画', (asset) => {
+        const doc = parseSvgDocument(asset.svg)
+        const manual = asset.groups.filter((g) => g.origin === 'manual')
+        const extracted = doc.groups.map((g, i) => ({ ...g, id: `${asset.id}_g${i}` }))
+        const groups = [...extracted, ...manual]
+        return { groups, kind: groups.length ? 'animated' : 'static', warnings: doc.warnings }
+      })
     } catch (err) {
       alert('重新提取失败：' + (err as Error).message)
     }
   }
 
   async addGroup(assetId: string, group: AnimGroup) {
-    const asset = this.assets.find((a) => a.id === assetId)
-    if (!asset) return
-    asset.groups = [...asset.groups, group]
-    asset.kind = 'animated'
-    this.scheduleSave(asset)
-    this.emit()
+    this.editAsset(assetId, '添加动画', (asset) => ({ groups: [...asset.groups, group], kind: 'animated' }))
   }
 
   async removeGroup(assetId: string, groupId: string) {
-    const asset = this.assets.find((a) => a.id === assetId)
-    if (!asset) return
-    asset.groups = asset.groups.filter((g) => g.id !== groupId)
-    if (!asset.groups.length) asset.kind = 'static'
-    this.scheduleSave(asset)
+    this.editAsset(assetId, '删除动画', (asset) => {
+      const groups = asset.groups.filter((group) => group.id !== groupId)
+      return { groups, kind: groups.length ? 'animated' : 'static' }
+    })
+  }
+
+  setArrangeSettings(settings: ArrangeSettings) {
+    this.arrangeSettings = { ...settings }
+    try { localStorage.setItem('mg-arrange-settings', JSON.stringify(this.arrangeSettings)) } catch {}
     this.emit()
   }
 
-  relayout() {
-    this.assets = autoLayout(this.assets)
-    this.assets.forEach((a) => this.scheduleSave(a))
-    this.emit()
+  /** 把一个素材标成另一张图的变体，然后重排；同族会横向并排 */
+  setVariantOf(id: string, variantOf: string | null) {
+    const asset = this.assets.find((a) => a.id === id)
+    if (!asset) return
+    asset.variantOf = variantOf && variantOf !== id ? variantOf : undefined
+    this.relayout()
+  }
+
+  relayout(settings = this.arrangeSettings) {
+    this.setArrangeSettings(settings)
+    this.commitAssets('整理画布', autoLayout(this.assets, settings))
   }
 
   get selectedAsset(): Asset | undefined {

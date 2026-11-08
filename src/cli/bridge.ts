@@ -5,7 +5,7 @@ import { bridgeCommandTimeout } from '../lib/bridge-protocol'
 
 const SESSION_TTL = 30_000
 const RESULT_TTL = 30_000
-const MAX_BODY = 2_000_000
+const MAX_BODY = 10_000_000
 
 type PendingCommand = {
   command: BridgeCommand
@@ -63,14 +63,18 @@ export async function startBridge(port = 7350) {
     if (sessionId && (type === 'style.set' || type === 'style.clear') && (!payload.asset || !payload.element)) {
       throw new Error('指定会话时，请同时提供读取选区时拿到的素材和元素 ID')
     }
-    const asset = payload.asset || context.selection.assetId
+    if (type === 'asset.add' && (typeof payload.svg !== 'string' || !payload.svg.trim() || typeof payload.name !== 'string' || !payload.name.trim())) {
+      throw new Error('添加素材需要 SVG 源码和名称')
+    }
+    const noAsset = type === 'asset.add' || type === 'project.reload'
+    const asset = noAsset ? undefined : payload.asset || context.selection.assetId
     const canUseSelection = !payload.asset || payload.asset === context.asset?.id || payload.asset === context.asset?.name
-    const element = payload.element || (canUseSelection && type !== 'select' ? context.selection.elementId : undefined)
-    if (type !== 'save' && !asset) throw new Error('请先选中素材，或提供素材 ID')
+    const element = noAsset ? undefined : payload.element || (canUseSelection && type !== 'select' ? context.selection.elementId : undefined)
+    if (type !== 'save' && !noAsset && !asset) throw new Error('请先选中素材，或提供素材 ID')
     if ((type === 'style.set' || type === 'style.clear') && !element) {
       throw new Error('请先选中元素，或提供素材和元素 ID')
     }
-    if (!['style.set', 'style.clear', 'select', 'save', 'review'].includes(type)) throw new Error('不支持的实时命令')
+    if (!['style.set', 'style.clear', 'select', 'save', 'review', 'asset.add', 'asset.variant', 'project.reload'].includes(type)) throw new Error('不支持的实时命令')
     if (type === 'review' && payload.frame !== undefined && (
       typeof payload.frame !== 'number' || !Number.isFinite(payload.frame) || payload.frame < 0 || payload.frame > 1
     )) throw new Error('评审帧必须在 0 到 1 之间')

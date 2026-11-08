@@ -1,21 +1,24 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { store } from './store'
-import { Studio } from './lib/studio'
+import type { Studio } from './lib/studio'
 import TopBar from './ui/TopBar'
 import LeftPanel from './ui/LeftPanel'
-import Inspector from './ui/Inspector'
 import Timeline from './ui/Timeline'
 import { Icon } from './ui/Icon'
-import { runReviewAll } from './lib/review'
-import { runReviewJob, type ReviewJob } from './lib/review/job'
+import type { ReviewJob } from './lib/review/job'
 import { findAsset } from './lib/project'
 import { startBridgePublisher } from './lib/bridge'
+
+const HistoryDialog = lazy(() => import('./ui/HistoryDialog'))
+const Inspector = lazy(() => import('./ui/Inspector'))
 
 export default function App() {
   useSyncExternalStore(store.subscribe, store.getSnapshot)
   const stageRef = useRef<HTMLDivElement>(null)
   const studioRef = useRef<Studio | null>(null)
   const [studioReady, setStudioReady] = useState(false)
+  const inspectorWasOpened = useRef(store.rightOpen)
+  if (store.rightOpen) inspectorWasOpened.current = true
   const [dropping, setDropping] = useState(false)
   const [toast, setToast] = useState('')
   const [projectLoad, setProjectLoad] = useState<{ loading: boolean; error?: string }>(() => ({
@@ -24,23 +27,31 @@ export default function App() {
 
   useEffect(() => {
     if (!stageRef.current) return
-    const studio = new Studio(stageRef.current, {
-      onSelectionChange: (sel) => {
-        store.updateSelection(sel)
-      },
-      onBoardMove: (id, x, y) => store.moveBoard(id, x, y),
-      onZoom: (z) => store.setZoom(z),
-      onPlaybackChange: () => store.emit(),
-      // 点画布上的评审标注 → 面板聚焦到对应卡片
-      onReviewMarkerClick: (ruleId) => store.focusReviewRule(ruleId),
+    let active = true
+    let studio: Studio | null = null
+    void import('./lib/studio').then(({ Studio: StudioEngine }) => {
+      if (!active || !stageRef.current) return
+      studio = new StudioEngine(stageRef.current, {
+        onSelectionChange: (sel, focusInspector) => {
+          store.updateSelection(sel, focusInspector)
+        },
+        onBoardMove: (id, x, y) => store.moveBoard(id, x, y),
+        onZoom: (z) => store.setZoom(z),
+        onPlaybackChange: () => store.emit(),
+        // 点画布上的评审标注 → 面板聚焦到对应卡片
+        onReviewMarkerClick: (ruleId) => store.focusReviewRule(ruleId),
+      })
+      studioRef.current = studio
+      // 调试/自动化入口：CLI 与 Agent 通过它读画布状态
+      ;(window as any).__studio = studio
+      ;(window as any).__store = store
+      setStudioReady(true)
+    }).catch((error) => {
+      if (active) setToast(`画布引擎加载失败：${(error as Error).message}`)
     })
-    studioRef.current = studio
-    // 调试/自动化入口：CLI 与 Agent 通过它读画布状态
-    ;(window as any).__studio = studio
-    ;(window as any).__store = store
-    setStudioReady(true)
     return () => {
-      studio.destroy()
+      active = false
+      studio?.destroy()
       studioRef.current = null
       setStudioReady(false)
     }
@@ -80,12 +91,19 @@ export default function App() {
   }, [store.lastAddedId])
 
   useEffect(() => {
-    void store.init()
-    const param = new URLSearchParams(location.search).get('project')
-    if (!param) return
+    const params = new URLSearchParams(location.search)
+    const param = params.get('project')
+    const automated = params.has('review-job')
     const controller = new AbortController()
     void (async () => {
       try {
+        await store.init({ persistent: !automated })
+        if (!param || controller.signal.aborted) return
+        // 先恢复同一项目的本机草稿，干净的工作区可以读取 URL 上的新版本。
+        if (store.projectUrl === param && store.projectDirty) {
+          setProjectLoad({ loading: false })
+          return
+        }
         const response = await fetch(param, { signal: controller.signal, cache: 'no-store' })
         if (!response.ok) throw new Error(`读取项目失败（HTTP ${response.status}）`)
         const data = await response.text()
@@ -95,6 +113,10 @@ export default function App() {
         if (!controller.signal.aborted) setProjectLoad({ loading: false })
       } catch (error) {
         if (controller.signal.aborted) return
+        if (!automated && store.projectUrl === param && param) {
+          setProjectLoad({ loading: false })
+          return
+        }
         const message = (error as Error).message
         setProjectLoad({ loading: false, error: message })
         if (!new URLSearchParams(location.search).has('review')) setToast(message)
@@ -104,25 +126,41 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    const flush = () => void store.flushWorkspace()
+    const onVisibilityChange = () => { if (document.hidden) flush() }
+    window.addEventListener('pagehide', flush)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      window.removeEventListener('pagehide', flush)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [])
+
+  useEffect(() => {
     document.documentElement.dataset.theme = store.theme
     document.documentElement.classList.toggle('dark', store.theme === 'dark')
     studioRef.current?.setTheme(store.theme)
   }, [store.theme, studioReady])
 
-  const signature = useMemo(
-    () => store.assets.map((a) => `${a.id}:${Math.round(a.x)}:${Math.round(a.y)}`).join('|') + `|${store.grid}`,
-    [store.version]
-  )
-
-  const renderedProject = useRef(0)
   useEffect(() => {
     const studio = studioRef.current
-    if (!studio || !store.ready) return
-    studio.setAssets(store.assets, renderedProject.current !== store.projectVersion)
-    renderedProject.current = store.projectVersion
-    studio.toggleGrid(store.grid)
-    studio.setLoop(store.loop)
-  }, [signature, store.projectVersion, store.ready, studioReady])
+    if (!studio) return
+    let assets: typeof store.assets | undefined
+    let project = store.projectVersion
+    const sync = () => {
+      if (!store.ready || (assets === store.assets && project === store.projectVersion)) return
+      const replace = project !== store.projectVersion
+      assets = store.assets
+      project = store.projectVersion
+      studio.setAssets(assets, replace)
+    }
+    sync()
+    return store.subscribe(sync)
+  }, [studioReady])
+
+  useEffect(() => {
+    studioRef.current?.toggleGrid(store.grid)
+  }, [store.grid, studioReady])
 
   useEffect(() => {
     const studio = studioRef.current
@@ -132,7 +170,7 @@ export default function App() {
     studio.select(store.selection, true)
   }, [store.selection, studioReady])
 
-  // ?bridge=<port>：把当前选中项推给本地桥，Agent 才知道人在指着哪个元素
+  // 默认把当前选中项推给本机 7350 端口的桥，Agent 可读取并实时修改。
   useEffect(() => {
     if (!studioReady) return
     return startBridgePublisher(studioRef.current)
@@ -141,6 +179,7 @@ export default function App() {
   useEffect(() => {
     const params = new URLSearchParams(location.search)
     const target = params.get('review')
+    const reviewMode = params.get('review-kind') === 'agent-prompt' ? 'agent-prompt' : 'rules'
     if (!target || projectLoad.loading) return
     const automated = params.has('review-job')
     const publish = (job: ReviewJob) => { (window as any).__mgsvgReviewJob = job }
@@ -153,7 +192,7 @@ export default function App() {
     if (!store.ready) return
     if (automated) {
       let active = true
-      void runReviewJob(structuredClone(store.assets), target).then(
+      void import('./lib/review/job').then(({ runReviewJob }) => runReviewJob(structuredClone(store.assets), target, reviewMode)).then(
         (result) => { if (active) publish({ ok: true, result }) },
         (error) => { if (active) publish({ ok: false, error: (error as Error).message }) },
       )
@@ -162,7 +201,8 @@ export default function App() {
 
     store.setRightOpen(true)
     if (target === 'all') {
-      void runReviewAll(store.assets).then((result) => { (window as any).__reviewAll = result })
+      void import('./lib/review').then(({ runReviewAll }) => runReviewAll(store.assets))
+        .then((result) => { (window as any).__reviewAll = result })
       return
     }
     try {
@@ -181,7 +221,6 @@ export default function App() {
     fitted.current = true
     const studio = studioRef.current
     if (!studio) return
-    studio.setAssets(store.assets)
     studio.fitAll()
     if (store.selection.assetId) studio.select(store.selection, true)
     studio.play()
@@ -197,24 +236,33 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
+      if (target?.closest?.('[data-asset-preview]')) return
       const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
       const meta = e.metaKey || e.ctrlKey
-      if (meta && e.key.toLowerCase() === 's') {
+      const key = e.key.toLowerCase()
+      if (meta && key === 's') {
         e.preventDefault()
         store.saveProject().catch((err) => {
           if (err?.name !== 'AbortError') alert('保存失败：' + (err?.message || err))
         })
         return
       }
-      if (meta && e.key.toLowerCase() === 'o') {
+      if (meta && key === 'o') {
         e.preventDefault()
         store.openProject().catch((err) => {
           if (err?.name !== 'AbortError') alert('打开失败：' + (err?.message || err))
         })
         return
       }
-      if (typing) return
-      if (meta && e.key.toLowerCase() === 'd') {
+      if (typing || e.defaultPrevented || e.isComposing) return
+      if (meta && !e.altKey && (key === 'z' || (key === 'y' && !e.shiftKey))) {
+        e.preventDefault()
+        if (key === 'y' || e.shiftKey) store.redo()
+        else store.undo()
+        return
+      }
+      if (store.historyScope !== null) return
+      if (meta && key === 'd') {
         e.preventDefault()
         if (store.selection.assetId) store.duplicateAsset(store.selection.assetId)
       } else if ((e.key === 'Backspace' || e.key === 'Delete') && store.selection.assetId && !store.selection.elementId) {
@@ -237,7 +285,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [store.selection, store.grid])
+  }, [])
 
   const onDrop = async (e: React.DragEvent) => {
     e.preventDefault()
@@ -250,6 +298,7 @@ export default function App() {
   return (
     <div
       className="app"
+      onBlurCapture={() => store.endHistoryEdit()}
       onDragOver={(e) => {
         e.preventDefault()
         setDropping(true)
@@ -258,6 +307,9 @@ export default function App() {
       onDrop={onDrop}
     >
       <TopBar studio={studioRef.current} />
+      <Suspense fallback={null}>
+        {store.historyScope !== null && <HistoryDialog />}
+      </Suspense>
       {toast && <div className="toast">{toast}</div>}
       <div className="main">
         <LeftPanel studio={studioRef.current} />
@@ -291,7 +343,11 @@ export default function App() {
                 <span>松开导入素材</span>
               </div>
             )}
-            <Inspector studio={studioRef.current} />
+            {inspectorWasOpened.current && (
+              <Suspense fallback={null}>
+                <Inspector studio={studioRef.current} />
+              </Suspense>
+            )}
           </div>
           {store.selectedAsset && store.selectedAsset.groups.length > 0 && <Timeline studio={studioRef.current} />}
         </div>

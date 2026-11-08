@@ -28,7 +28,7 @@ export default function CanvasViewControls({ studio }: { studio: Studio | null }
         <button onClick={fit} title="适应画布" disabled={!studio}>
           <Icon name="fit" size={15} />
         </button>
-        <button onClick={() => store.setGrid(!store.grid)} title="网格" aria-pressed={store.grid}>
+        <button onClick={() => store.setGrid(!store.grid)} title="显示或隐藏画布网格" aria-label="画布网格" aria-pressed={store.grid}>
           <Icon name="grid" size={14} />
         </button>
       </div>

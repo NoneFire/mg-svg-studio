@@ -1,28 +1,21 @@
-import { apply, mul, translate, type Mat } from '../matrix'
-import type { ConvertedElement } from '../convert'
+import { apply } from '../matrix'
+import { elementBaseMatrix, type ConvertedAsset, type ConvertedElement } from '../convert'
 import { solveLayout } from './engine'
-import type { LayoutBox, LayoutItem, LayoutSpec } from './types'
-import { DEFAULT_LAYOUT } from './types'
+import type { LayoutSpec } from './types'
 
-export interface LayoutApplyResult {
-  boxes: LayoutBox[]
-  width: number
-  height: number
-  origin: { x: number; y: number }
-}
-
-/** 元素在父容器局部坐标系里的轴对齐盒（不含布局偏移，可重复计算不漂移） */
-export function baseBox(child: ConvertedElement) {
-  const { bbox, baseMatrix } = child
+function measureChild(child: ConvertedElement) {
+  const bounds = child.wrapper.getBounds('box', 'inner')
+  const matrix = child.overrideMatrix ?? child.baseMatrix
   const corners = [
-    [bbox.x, bbox.y],
-    [bbox.x + bbox.width, bbox.y],
-    [bbox.x, bbox.y + bbox.height],
-    [bbox.x + bbox.width, bbox.y + bbox.height],
-  ].map(([x, y]) => apply(baseMatrix as Mat, x, y))
-  const xs = corners.map((p) => p.x)
-  const ys = corners.map((p) => p.y)
+    [bounds.x, bounds.y],
+    [bounds.x + bounds.width, bounds.y],
+    [bounds.x, bounds.y + bounds.height],
+    [bounds.x + bounds.width, bounds.y + bounds.height],
+  ].map(([x, y]) => apply(matrix, x, y))
+  const xs = corners.map((point) => point.x)
+  const ys = corners.map((point) => point.y)
   return {
+    id: child.el.id,
     x: Math.min(...xs),
     y: Math.min(...ys),
     width: Math.max(1, Math.max(...xs) - Math.min(...xs)),
@@ -30,44 +23,28 @@ export function baseBox(child: ConvertedElement) {
   }
 }
 
-export function measureChildren(container: ConvertedElement): { items: LayoutItem[]; origin: { x: number; y: number } } {
-  const boxes = container.children.map((child) => {
-    if (child.el.kind === 'group' && child.children.length) {
-      const b = child.wrapper.getBounds('box', container.node as any)
-      return { id: child.el.id, x: b.x, y: b.y, width: Math.max(1, b.width), height: Math.max(1, b.height) }
-    }
-    const b = baseBox(child)
-    return { id: child.el.id, x: b.x, y: b.y, width: b.width, height: b.height }
+function layoutContainer(container: ConvertedElement, spec: LayoutSpec) {
+  const measured = container.children.map(measureChild)
+  const x = Math.min(...measured.map((item) => item.x))
+  const y = Math.min(...measured.map((item) => item.y))
+  const items = measured.map((item) => ({ ...item, x: item.x - x, y: item.y - y }))
+  // SVG 排布只写位置，单项宽度按实际图形计算。
+  const result = solveLayout(items, { ...spec, maxWidth: null })
+  result.boxes.forEach((box, index) => {
+    const child = container.children[index]
+    child.layoutOffset = { x: box.x - items[index].x, y: box.y - items[index].y }
+    child.wrapper.setTransform(elementBaseMatrix(child), false)
   })
-  if (!boxes.length) return { items: [], origin: { x: 0, y: 0 } }
-  return {
-    items: boxes,
-    origin: { x: Math.min(...boxes.map((b) => b.x)), y: Math.min(...boxes.map((b) => b.y)) },
-  }
+  return result
 }
 
-/**
- * 用布局内核重排一个容器（<g>）的直接子元素。
- * 只写偏移，不动元素自身的 transform，也不影响动画轨道。
- */
-export function layoutContainer(container: ConvertedElement, specIn: Partial<LayoutSpec>): LayoutApplyResult {
-  const spec: LayoutSpec = { ...DEFAULT_LAYOUT, ...specIn }
-  const { items, origin } = measureChildren(container)
-  const solved = solveLayout(items, { ...spec, padding: spec.padding ?? 0 })
-  const boxes = solved.boxes.map((b) => ({ ...b, x: b.x + origin.x, y: b.y + origin.y }))
-
-  for (const box of boxes) {
-    const child = container.children.find((c) => c.el.id === box.id)
-    if (!child) continue
-    const base = baseBox(child)
-    child.layoutOffset = { x: box.x - base.x, y: box.y - base.y }
+/** 在动画取帧前计算布局，先摆放内层组，再用其尺寸计算外层组。 */
+export function applyAssetLayouts(converted: ConvertedAsset, layouts?: Record<string, LayoutSpec>) {
+  const results = new Map<string, ReturnType<typeof layoutContainer>>()
+  if (!layouts || !Object.keys(layouts).length) return results
+  for (const container of [...converted.order].reverse()) {
+    const spec = layouts[container.el.id]
+    if (spec && container.children.length) results.set(container.el.id, layoutContainer(container, spec))
   }
-
-  return { boxes, width: solved.width, height: solved.height, origin }
-}
-
-export function clearContainerLayout(container: ConvertedElement) {
-  container.children.forEach((child) => {
-    child.layoutOffset = undefined
-  })
+  return results
 }

@@ -1,5 +1,5 @@
 import type { Asset } from '../../types'
-import { IMPACT_LABELS, IMPACT_ORDER, LIBRARY_VERSION, RULES, buildCoverage, gateStatus, ruleset, type Stage } from './rules'
+import { ACTIVE_IDS, IMPACT_LABELS, IMPACT_ORDER, LIBRARY_VERSION, RULES, buildCoverage, gateStatus, ruleset, type Stage } from './rules'
 import type {
   Coverage,
   Finding,
@@ -21,6 +21,28 @@ import { applyOverrides } from './overrides'
 import { measureLayout } from './layout'
 import { measureContrast, measurePixels } from './pixels'
 import { makeFinding, sortFindings, type RawFinding } from './findings'
+import { reviewInputHash } from './hash'
+
+export { reviewInputHash } from './hash'
+export type { ReviewInput } from './hash'
+
+/** Produce the exact static SVG frame used by the numeric review for Agent inspection. */
+export async function buildReviewFrameSvg(asset: Asset, options: ReviewOptions = {}): Promise<string> {
+  const frameRatio = clamp01(options.frame ?? 1)
+  const snap = await mountSnapshot(asset)
+  try {
+    const idMap = assignIds(snap)
+    applyOverrides(snap, asset.overrides, idMap)
+    if (asset.groups.length || Object.keys(asset.layouts || {}).length || Object.keys(asset.overrides || {}).length || snap.animationCount || snap.hasSmil) {
+      const { applyStudioFrame } = await import('./studioFrame')
+      applyStudioFrame(snap, asset, idMap, frameRatio)
+    }
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    return bakeStatic(snap)
+  } finally {
+    snap.dispose()
+  }
+}
 
 /**
  * 评审入口：定格一帧 → 取坐标 → 量像素 → 套阈值 → 出覆盖率与闸门。
@@ -136,7 +158,9 @@ export async function runReview(asset: Asset, options: ReviewOptions = {}): Prom
     const partialBleed = layout.findings.filter((f) => f.ruleId === 'VS-01' && f.status === 'PASS' && f.evidence?.kind === 'shape' && Number(f.measured) > 0).length
     if (partialBleed) notes.push(`${partialBleed} 个装饰图形出血到画外：按有意出血处理，不计裁切`)
 
+    // 只保留当前规则库里的规则；语义规则交给 Agent，不参与自动测量
     const raws: RawFinding[] = [...layout.findings, ...contrast.findings, ...pixelFindings, ...mediaFindings]
+      .filter((r) => ACTIVE_IDS.has(r.ruleId) && RULES[r.ruleId]?.measure !== 'semantic')
     const unmeasured = [...layout.unmeasured, ...contrast.unmeasured]
     if (!raster?.image) unmeasured.push({ ruleId: 'CL-01', reason: '光栅化失败，调色板无法统计' })
     if (!raster?.image) unmeasured.push({ ruleId: 'NS-01', reason: '光栅化失败，负空间无法统计' })
@@ -340,30 +364,5 @@ const byImpact = (cards: ReviewCard[], impact: Impact) => ({
 
 const levelRank = (l: Level) => ({ FAIL: 0, WARN: 1, UNMEASURED: 2, PASS: 3 })[l] ?? 9
 const round4 = (v: number) => Math.round(v * 10000) / 10000
-
-/** 输入指纹：同一份输入重复评审必须可复现（也用来判「画面已改，结果过期」）。 */
-export type ReviewInput = Pick<Asset, 'svg' | 'overrides' | 'groups' | 'layouts' | 'width' | 'height'>
-
-export function reviewInputHash(asset: ReviewInput, options: ReviewOptions = {}): string {
-  const canonical = (value: unknown) => JSON.stringify(value, (_key, item) =>
-    item && typeof item === 'object' && !Array.isArray(item)
-      ? Object.fromEntries(Object.keys(item).sort().map((key) => [key, item[key]]))
-      : item,
-  )
-  return hashOf([
-    'studio-frame-v2', asset.svg, String(asset.width), String(asset.height),
-    canonical(asset.groups || []), canonical(asset.layouts || {}), canonical(asset.overrides || {}), canonical(options),
-  ])
-}
-
-function hashOf(parts: string[]): string {
-  let h = 0x811c9dc5
-  const text = parts.join('\u0000')
-  for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i)
-    h = Math.imul(h, 0x01000193)
-  }
-  return (h >>> 0).toString(16).padStart(8, '0')
-}
 
 export type { Finding, ReviewReport, ReviewOptions, QvElement }

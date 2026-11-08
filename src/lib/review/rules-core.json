@@ -1,0 +1,802 @@
+{
+  "libraryVersion": 4,
+  "referenceCanvas": {
+    "width": 1920,
+    "height": 1080,
+    "note": "几何阈值为 px@1080p，实际按 scale = min(W,H)/1080 缩放"
+  },
+  "coveragePolicy": {
+    "rule": "每条写作规则都必须有可算指标（metric + gate）和落地实现；没有 metric 的规则不算规则",
+    "noMetric": "无 metric 的规则只能记 severity=human，进人审清单，不计入通过率",
+    "silent": "规则已实现但本次没有产出记录时记 UNMEASURED，不得算 PASS；报告必须逐条列出状态"
+  },
+  "statusVocabulary": [
+    "PASS",
+    "WARN",
+    "FAIL",
+    "UNMEASURED",
+    "NA",
+    "DIAGNOSTIC"
+  ],
+  "dimensions": {
+    "measure": "exact 定义即数值 / model 代理模型，仅序关系可信 / semantic 只能人判",
+    "threshold": "standard 可引用规范，改动需换引文 / convention 行业惯例，可辩护无强制力 / proposal 本项目提案，永不阻断",
+    "severity": "blocker 值得修 / warn 可讨论 / info 参考",
+    "impact": "high 高（做不成）/ medium 中（读不顺）/ low 低（不精致）；只决定排序与展示预算，不决定能不能拦",
+    "medium": "video / ui / print",
+    "status": "PASS/WARN/FAIL 是闸门结论；DIAGNOSTIC 是诊断输出，不参与判定"
+  },
+  "impactPolicy": {
+    "axis": "影响程度：高=做不成 / 中=读不顺 / 低=不精致；与闸门权限（能不能拦）、媒介（video/ui/print）相互独立",
+    "labels": {
+      "high": "高",
+      "medium": "中",
+      "low": "低"
+    },
+    "byPrinciple": {
+      "可读性": "high",
+      "可用性": "high",
+      "交付完整性": "high",
+      "对比": "high",
+      "亲密性": "medium",
+      "视觉层次": "medium",
+      "对齐": "medium",
+      "网格": "medium",
+      "格式塔·相似": "medium",
+      "格式塔·闭合": "medium",
+      "格式塔·连续": "medium",
+      "共同区域": "medium",
+      "负空间": "medium",
+      "重复与一致性": "medium",
+      "信息密度": "medium",
+      "运动与节奏": "medium",
+      "统一与多样": "low",
+      "平衡": "low",
+      "比例": "low",
+      "意义": "low"
+    },
+    "override": {
+      "SN-01": "low",
+      "OR-01": "low",
+      "PN-01": "low",
+      "NS-02": "low",
+      "TY-07": "medium",
+      "TY-08": "medium"
+    },
+    "fallback": "medium",
+    "order": [
+      "high",
+      "medium",
+      "low"
+    ],
+    "budget": {
+      "high": null,
+      "medium": 5,
+      "low": 0,
+      "elementsPerCard": 5,
+      "note": "高影响不折叠（一条问题都不该被藏）；中影响按规则聚合成一张卡，超过 5 类折成一行；低影响只给条数与规则 ID"
+    },
+    "note": "影响程度只做排序与展示预算，不改变 PASS/WARN/FAIL：高影响不等于能拦，低影响也不等于可忽略。完整记录仍在 findings[]，折叠只发生在 view 里"
+  },
+  "rules": [
+    {
+      "id": "PR-01",
+      "title": "语义分组",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "gap_ratio",
+      "unit": "ratio",
+      "gate": {
+        "warn": {
+          "lt": 1.2
+        }
+      },
+      "minSamples": 3,
+      "requires": [
+        "boxes"
+      ],
+      "note": "间距比用于定位，结合共同区域和任务语义做一次判断。缺少可核对的归属证据时记未测。同一容器内的行距按组内间距处理，用与组内净距相同的量取基准；容器边界只用来判断归属，不当间距用。",
+      "supersededBy": "GR-02",
+      "measure": "semantic",
+      "threshold": "proposal",
+      "citation": "Williams《写给大家看的设计书》（The Non-Designer's Design Book） Proximity；考夫卡《格式塔心理学原理》（Principles of Gestalt Psychology, 1935） 接近性原理；Wertheimer 1923 论文",
+      "principle": "亲密",
+      "violation": "配送地址的标签离付款字段 8px，离自己的地址输入框 24px，两组又没有分隔。按表单的字段定义，地址标签与地址输入框同组。当前版面更容易把标签读成付款字段的说"
+    },
+    {
+      "id": "CR-01",
+      "title": "共同区域",
+      "principle": "格式塔",
+      "measure": "semantic",
+      "threshold": "proposal",
+      "citation": "考夫卡《格式塔心理学原理》（Principles of Gestalt Psychology, 1935） 共同区域原理；Wertheimer 1923 论文《Laws of Organization in Perceptual Forms》",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "cross_container_group_ratio",
+      "unit": "ratio",
+      "gate": {
+        "warn": {
+          "gt": 0.3
+        }
+      },
+      "minSamples": 2,
+      "requires": [
+        "boxes",
+        "groups"
+      ],
+      "implemented": false,
+      "violation": "列表项的标题在表格头容器，内容在表体容器，两者应属同一组。",
+      "note": "共同区域指：同一容器或背景块内的元素被视为一组，优先于单纯的距离关系。容器边界需可见（背景、描边、分割线或留白块）。无容器的纯排版页面按语义分组规则判，本规则记不适用。「应该同组」需要任务语义，缺任务上下文时记未测。",
+      "needsPreciseBoxes": true
+    },
+    {
+      "id": "ML-01",
+      "title": "分块与层级",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "chunk_count",
+      "unit": "count",
+      "gate": {
+        "warn": {
+          "gt": 9
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "boxes",
+        "groups"
+      ],
+      "note": "只统计同一视口内的主要信息块。表格行、列表项、图例条目算块内元素，不单独计块。仪表盘和监控墙天然多块，有声明时记不适用。判断「主要」需要任务目标，缺任务上下文时记未测。",
+      "measure": "semantic",
+      "threshold": "proposal",
+      "citation": "Miller 1956《The Magical Number Seven, Plus or Minus Two》；Cowan 2001《The magical number 4 in short-term memory》；Morville & Rosenfeld 组织系统",
+      "principle": "信息组织",
+      "violation": "一屏 11 个信息块，视觉权重几乎相同，标题出现四级。"
+    },
+    {
+      "id": "CT-02",
+      "title": "前景对比度",
+      "severity": "blocker",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "wcag_contrast",
+      "unit": "ratio",
+      "gate": {
+        "fail": {
+          "lt": 4.0
+        },
+        "warn": {
+          "lt": 4.5
+        }
+      },
+      "minSamples": 1,
+      "gateLarge": {
+        "fail": {
+          "lt": 2.5
+        },
+        "warn": {
+          "lt": 3.0
+        }
+      },
+      "requires": [
+        "rendered_frame",
+        "boxes"
+      ],
+      "note": "大字为至少 18pt 或 14pt 粗体，CJK 用等效尺寸。只检查适用的文字和必要视觉线索。投放背景未知时记未测。文字和图形分别核验，整条规则取最差已确认结果。",
+      "measure": "exact",
+      "threshold": "standard",
+      "citation": "WCAG 2.2 SC 1.4.3、SC 1.4.11",
+      "principle": "对比",
+      "violation": "实际 Web 普通白字置于 #777 背景上，对比度约 4.48:1。白底上用于识别输入框的必要边界为 #999，对比度约 2.85:1。两处均低于各自门槛。"
+    },
+    {
+      "id": "CORE-01",
+      "title": "颜色非唯一线索",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "unimplemented",
+      "unit": "ratio",
+      "gate": {
+        "warn": {}
+      },
+      "minSamples": 1,
+      "note": "只测传达信息的颜色。纯装饰用色不适用。链接带下划线或图标时合规。缺任务语义、无法判断颜色是否承载信息时记未测。",
+      "measure": "semantic",
+      "threshold": "proposal",
+      "principle": "对比",
+      "violation": "必填项只用红色区分，没有图标或文字说明；错误态只把边框变红，不显示图标和原因。",
+      "citation": "WCAG 2.2 SC 1.4.1 Use of Color（Level A）"
+    },
+    {
+      "id": "RP-01",
+      "title": "同类组件与样式一致性",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "type_scale_levels",
+      "unit": "count",
+      "gate": {
+        "warn": {
+          "gt": 0
+        }
+      },
+      "minSamples": 3,
+      "requires": [
+        "boxes"
+      ],
+      "note": "同组指同角色、同状态、同容器内至少 2 个实例。状态差异（悬停、禁用、错误）和已声明的合法变体不算偏差。语义色跨位置漂移单独记录：同一语义（成功、警告、错误、链接）在页面内出现两种以上色相即计入 N。缺声明规格时只报告实测样式分布，不判 WARN。",
+      "measure": "exact",
+      "threshold": "proposal",
+      "citation": "Williams《写给大家看的设计书》（The Non-Designer's Design Book） Repetition；考夫卡《格式塔心理学原理》（Principles of Gestalt Psychology, 1935） 相似性原理；设计 token 化（Material 3、Polaris）",
+      "principle": "重复",
+      "violation": "同一组、同角色的实例长得不一样，读者会以为它们不是同一种东西。"
+    },
+    {
+      "id": "SP-01",
+      "title": "间距节奏一致性",
+      "principle": "重复",
+      "measure": "exact",
+      "threshold": "proposal",
+      "citation": "Material Design 8dp 基线网格；「同组同档」是在此之上的推论，不是规范条文",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "spacing_scale_levels",
+      "unit": "count",
+      "gate": {
+        "warn": {
+          "gt": 0
+        }
+      },
+      "minSamples": 5,
+      "requires": [
+        "boxes"
+      ],
+      "violation": "同组 5 行列表，净距 16、24、16、32、16 CSS px。众数档为 16，24 与 32 各偏离一次，K=2。记 WARN，指向这两处。CV ≈ 0.",
+      "note": "同组至少 3 个相邻对，元素为同角色同级（同 tag、同容器、字高差 < 1.5 倍）。表格行列、网格布局和声明为不等距的分组（时间轴、瀑布流）记不适用。组间距离不参与本规则，归语义分组。量取基准（边界或中线）必须固定一种，报告写明。",
+      "needsPreciseBoxes": true
+    },
+    {
+      "id": "TY-01",
+      "title": "排版档位预算",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "family_count",
+      "unit": "count",
+      "gate": {
+        "warn": {
+          "gt": 0
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "boxes"
+      ],
+      "secondary": {
+        "metric": "weight_count",
+        "gate": {
+          "warn": {
+            "gt": 4
+          }
+        }
+      },
+      "note": "只统计同一视口内的可见文字。展示型页面、多品牌嵌入和代码展示类页面按 Ant 的例外说明处理。Ant 的 3–5 针对\"一个系统设计\"，本规则借用它作单页筛查上限，超出不等于错，只说明系统复杂度偏高。档位计数不说明层级是否成比例；成比例与否要看相邻档位比，不在本规则内。",
+      "measure": "exact",
+      "threshold": "convention",
+      "citation": "Ant Design 字体规范",
+      "principle": "重复",
+      "violation": "字号档或字重档超出预算，层级系统变复杂，读者分不清哪些信息同级。"
+    },
+    {
+      "id": "CL-01",
+      "title": "色彩预算",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "palette_count",
+      "unit": "count",
+      "gate": {
+        "warn": {
+          "gt": 4
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "rendered_frame"
+      ],
+      "secondary": {
+        "metric": "dominant_share",
+        "gate": {
+          "warn": {
+            "lt": 0.15
+          }
+        }
+      },
+      "note": "单屏指一个固定视口。状态色（成功、警告、错误）按角色计，同一角色不同明度不算新颜色。品牌渐变按 1 色计。图片、视频内容不计。含完整语义色体系的界面通常需要 5–7 色，4 是基线不是硬性上限，超出时先确认每个颜色能否映射到声明角色。同一角色内部是否同色归同类组件规则，本规则只管颜色总量与是否来自声明调色板。营销页、展示型页面可放宽到 7 色并注明理由；照片类界面、地图和图表记不适用。",
+      "measure": "exact",
+      "threshold": "proposal",
+      "citation": "Shneiderman《Designing the User Interface》；Material 3 颜色角色",
+      "principle": "重复",
+      "violation": "单屏 7 种可辨颜色：背景、正文、主色、次色、两种不同色相的促销色、一个未声明的图标色。C单=7，超过 4；后三种无法映射到调色板。数量与映射两项各记一次 WA"
+    },
+    {
+      "id": "AL-01",
+      "title": "对齐",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "align_dev_p90",
+      "unit": "px@1080p",
+      "gate": {
+        "warn": {
+          "gt": 2
+        }
+      },
+      "minSamples": 4,
+      "requires": [
+        "boxes",
+        "groups"
+      ],
+      "note": "仅测已声明或有明确依据的同层级、同轴锚点组。组或轴无法确认时记未测；光学补偿和自由构图可注明例外。坐标使用投放坐标系。表格内的列对齐单独核对：同一列的数字右对齐或小数点对齐，文字列左对齐；混排时按该列多数值的对齐方式判。",
+      "measure": "exact",
+      "threshold": "proposal",
+      "citation": "Williams《写给大家看的设计书》（The Non-Designer's Design Book） Alignment；Müller-Brockmann《Grid Systems in Graphic Design》",
+      "principle": "对齐",
+      "violation": "项目声明同列输入框的左锚点为 x=24 CSS px，其中一个落在 x=28 CSS px。对声明锚点的偏差为 4 CSS px，超过 Web 初始预设 2 C",
+      "needsPreciseBoxes": true
+    },
+    {
+      "id": "GR-01",
+      "title": "网格对齐",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "grid_align_share",
+      "unit": "ratio",
+      "gate": {
+        "warn": {
+          "lt": 0.8
+        }
+      },
+      "minSamples": 5,
+      "requires": [
+        "boxes"
+      ],
+      "note": "按各声明轴独立量偏差，元素必须满足所有适用轴。网格应存在但缺声明时记未测；明确采用自由布局时记不适用。",
+      "measure": "exact",
+      "threshold": "proposal",
+      "citation": "Müller-Brockmann《Grid Systems in Graphic Design》；Material 3 8dp",
+      "principle": "网格",
+      "violation": "声明双轴均须落在原点 (0,0)、步长 8px 的网格上。6 个元素的横坐标均在格上，纵坐标均偏 1px。双轴容差为 0.8px，6 个元素均未同时满足两轴，落",
+      "needsPreciseBoxes": true
+    },
+    {
+      "id": "VH-01",
+      "title": "主次与视觉焦点",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "primary_rank",
+      "unit": "rank",
+      "gate": {
+        "warn": {
+          "gt": 1
+        }
+      },
+      "minSamples": 2,
+      "requires": [
+        "boxes",
+        "salience"
+      ],
+      "note": "字号级差、强调样式和装饰噪声属于诊断证据。缺任务目标时记未测。阅读流单独核对：重量峰值是否落在此次任务的主信息上，路径是否被无关高对比元素打断；RTL 语言按镜像方向评估，自由构图和艺术性排版可声明例外。",
+      "measure": "semantic",
+      "threshold": "proposal",
+      "citation": "Williams《写给大家看的设计书》（The Non-Designer's Design Book） Contrast；Ngo 等 2003 界面美学度量（Sequence）",
+      "principle": "视觉层次",
+      "violation": "库存监控页应优先传达严重告警。首屏最大、对比最高的是促销横幅，告警却缩在低显著性的角落。指出横幅与告警位置，说明主任务为何被抢占。"
+    },
+    {
+      "id": "SN-01",
+      "title": "信息噪音比",
+      "severity": "warn",
+      "medium": [
+        "ui"
+      ],
+      "metric": "decor_ratio",
+      "unit": "ratio",
+      "gate": {
+        "warn": {
+          "gt": 0.3
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "boxes",
+        "roles"
+      ],
+      "note": "装饰指不承载信息与操作的纯视觉元素：背景纹理、装饰线条、插画、水印。图标和插图若承担识别或引导功能，算信息不算装饰。装饰密度低的极简界面和满版信息图都不适用。角色归属有歧义时记未测。",
+      "measure": "semantic",
+      "threshold": "proposal",
+      "citation": "Tufte《The Visual Display of Quantitative Information》(1983) data-ink ratio；信号噪音比（通信理论）",
+      "principle": "视觉层次",
+      "violation": "页面用大面积渐变、水印和装饰图标铺底，主操作区反而对比最低。"
+    },
+    {
+      "id": "BL-01",
+      "title": "视觉重量与留白",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "weight_delta_ratio",
+      "unit": "ratio",
+      "gate": {
+        "warn": {
+          "gt": 0.15
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "salience"
+      ],
+      "note": "局部密度、对称性和比例都可作为证据，比较时固定区域和口径。阈值按项目声明。",
+      "measure": "semantic",
+      "threshold": "proposal",
+      "citation": "Ngo 等 2003，14 项界面美学度量（Balance、Equilibrium、Density）",
+      "principle": "平衡与比例",
+      "violation": "三个同用途、等面积摘要区要求布局均衡，其中一块临时堆入多组说明，标签互相挤压。占用率为 34%、36%、68%。结合标签间距和内容归属确认第三块需要拆分。"
+    },
+    {
+      "id": "QL-03",
+      "title": "字号下限",
+      "severity": "blocker",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "font_size_ratio_short_side",
+      "unit": "ratio",
+      "gate": {
+        "fail": {
+          "lt": 0.022
+        },
+        "warn": {
+          "lt": 0.035
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "boxes"
+      ],
+      "gateUI": {
+        "metric": "font_size_px",
+        "gate": {
+          "fail": {
+            "lt": 12
+          },
+          "warn": {
+            "lt": 14
+          }
+        }
+      },
+      "note": "按目标视口和实际变换量投放字号。缺投放尺寸且无法换算 CSS px 时记未测。",
+      "measure": "exact",
+      "threshold": "convention",
+      "citation": "Carbon Design System type sets；Ant Design",
+      "principle": "可读性与可辨识性",
+      "violation": "项目采用 12 CSS px 正文字号下限，Web 表单辅助说明用 11 CSS px。正文 11 CSS px。FAIL：低于该项目声明的 12 CSS px",
+      "needsPreciseBoxes": true
+    },
+    {
+      "id": "TY-02",
+      "title": "行长",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "chars_per_line",
+      "unit": "chars",
+      "gate": {
+        "warn": {
+          "gt": 1
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "boxes",
+        "font_metrics"
+      ],
+      "note": "只测连续正文段落。标题、按钮、表格单元格、代码块不适用。行宽随视口变化时按评审视口记录并注明。",
+      "measure": "exact",
+      "threshold": "convention",
+      "citation": "WCAG 2.2 SC 1.4.8 Visual Presentation（Level AAA）；Bringhurst《The Elements of Typographic Style》",
+      "principle": "可读性与可辨识性",
+      "violation": "正文每行字数超出可读上限，换行时容易串行。"
+    },
+    {
+      "id": "QL-04",
+      "title": "正文排版",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "line_height_ratio",
+      "unit": "ratio",
+      "gate": {
+        "fail": {
+          "lt": 1.4
+        },
+        "warn": {
+          "lt": 1.5
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "boxes"
+      ],
+      "gateDisplay": {
+        "metric": "line_height_ratio_display",
+        "gate": {
+          "fail": {
+            "lt": 1.02
+          },
+          "warn": {
+            "lt": 1.08
+          }
+        }
+      },
+      "note": "段落关系归语义分组，文字是否足够大归字号下限。段落居中、孤行、纤细字重、字距和文本占比可作证据。缺可读原文或无法确认正文角色时记未测。",
+      "measure": "semantic",
+      "threshold": "convention",
+      "citation": "Bringhurst《The Elements of Typographic Style》；Ant Design 字体规范",
+      "principle": "可读性与可辨识性",
+      "violation": "说明正文每行 52 个汉字，16px 字号配 19px 基线间距，行末回到下一行时容易串行。行高比约 1.19。检查长行和过近的相邻基线，建议缩窄正文列并增加行",
+      "needsPreciseBoxes": true
+    },
+    {
+      "id": "SG-01",
+      "title": "图形和标签的含义",
+      "principle": "可读性与可辨识性",
+      "measure": "semantic",
+      "threshold": "proposal",
+      "citation": "Nielsen《Usability Engineering》可用性启发式（匹配真实世界）",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": null,
+      "gate": null,
+      "minSamples": 0,
+      "requires": [
+        "intent"
+      ],
+      "violation": "提交入口只有一个抽象符号，附近没有文字。按任务定义，该控件表示提交申请，符号也可理解为保存草稿。指出该图形及其所在区域，建议补上明确标签。",
+      "note": "只评审画面提供的语义线索。缺任务上下文时记未测。"
+    },
+    {
+      "id": "CORE-02",
+      "title": "图像比例失真",
+      "severity": "warn",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "aspect_distortion",
+      "unit": "ratio",
+      "gate": {
+        "warn": {
+          "gt": 0.02
+        }
+      },
+      "minSamples": 1,
+      "note": "只测有原始尺寸的位图。SVG、图标字体、有意裁切（object-fit: cover）和装饰性背景不适用。缺原图尺寸记未测。",
+      "measure": "exact",
+      "threshold": "proposal",
+      "principle": "可读性与可辨识性",
+      "violation": "位图被拉伸或压扁，比例失真，画面显得业余。",
+      "citation": "定义性：宽高比改变即变形；AUV-Bench graphics & imagery 维度要求 appropriately proportioned"
+    },
+    {
+      "id": "QL-07",
+      "title": "资源失效",
+      "severity": "blocker",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "resource_status",
+      "unit": "enum",
+      "gate": {
+        "fail": {
+          "in": [
+            404,
+            "empty",
+            "decode_error"
+          ]
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "asset_scan"
+      ],
+      "note": "检查实际请求和解码结果，不只检查 URL 字符串。检查加载和解码，不应只以 URL 是否存在判定。缺所需证据时记未测；确认场景不适用时记不适用。",
+      "measure": "exact",
+      "threshold": "standard",
+      "citation": "定义性：资源不可解码即不存在",
+      "principle": "交付检查",
+      "violation": "首屏产品图请求返回 404，画面显示破图。资源加载失败数=1。FAIL：至少一个失败资源。"
+    },
+    {
+      "id": "QL-01",
+      "title": "文本溢出",
+      "severity": "blocker",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "overflow_px_1080",
+      "unit": "px@1080p",
+      "gate": {
+        "fail": {
+          "gt": 0.5
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "rendered_frame",
+        "boxes"
+      ],
+      "note": "只测必须完整显示的文字。有意出血、允许省略的文本、装饰性文字不适用。缺渲染后墨迹边界时记未测，不能用字号推算文本宽度。",
+      "measure": "exact",
+      "threshold": "convention",
+      "citation": "定义性：文字超出允许区域即溢出；0.5 CSS px 为抗锯齿容差",
+      "principle": "交付检查",
+      "violation": "按钮内「提交申请」最后一字超出容器内容区 3 CSS px，压到相邻图标上。",
+      "needsPreciseBoxes": true,
+      "needsExactWidth": true
+    },
+    {
+      "id": "VS-01",
+      "title": "必要内容裁切",
+      "severity": "blocker",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "out_of_canvas_ratio",
+      "unit": "ratio",
+      "gate": {
+        "fail": {
+          "gt": 0
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "boxes"
+      ],
+      "secondary": {
+        "metric": "out_of_safe_ratio",
+        "gate": {
+          "warn": {
+            "gt": 0
+          }
+        }
+      },
+      "note": "文字按渲染墨迹检查。允许的省略及有意出血按声明排除。目标画板、必要角色或裁切证据不明时记未测。",
+      "measure": "exact",
+      "threshold": "standard",
+      "citation": "定义性：内容被裁即不可见",
+      "principle": "交付检查",
+      "violation": "窄按钮的容器裁掉「提交申请」最后一个字的一部分。投放尺寸下实际裁切 3 CSS px，超过 0.5 px，记 FAIL。",
+      "needsPreciseBoxes": true
+    },
+    {
+      "id": "QL-02",
+      "title": "必要内容遮挡",
+      "severity": "blocker",
+      "medium": [
+        "ui",
+        "print"
+      ],
+      "metric": "occlusion_ratio",
+      "unit": "ratio",
+      "gate": {
+        "warn": {
+          "gt": 0.03
+        }
+      },
+      "minSamples": 1,
+      "requires": [
+        "rendered_frame",
+        "boxes"
+      ],
+      "note": "这里检查图层覆盖造成的内容损失。容器或画板裁切归必要内容裁切。有意重叠且不损害必要信息时不适用。",
+      "measure": "exact",
+      "threshold": "proposal",
+      "citation": "定义性：遮挡造成信息损失；3% 为提案值",
+      "principle": "交付检查",
+      "violation": "弹窗的关闭图标覆盖标题。对比有无该图标的渲染结果，标题墨迹被挡 8%，记 WARN。",
+      "needsExactWidth": true
+    }
+  ],
+  "provenance": {
+    "measure": {
+      "exact": "定义即数值，无可争参数",
+      "model": "代理模型的输出，仅序关系可信",
+      "semantic": "只能人判"
+    },
+    "threshold": {
+      "standard": "可引用规范，改动需换引文",
+      "convention": "行业惯例，可辩护无强制力",
+      "proposal": "本项目提案，只保证内部一致"
+    }
+  },
+  "principles": {
+    "亲密性": "格式塔·接近，同组要近、异组要远",
+    "对比": "该跳出来的要跳出来，包括文字与底色、图形与底色",
+    "重复与一致性": "同类东西长得一样，体现为字体族/字号/字重/间距的档位收敛",
+    "对齐": "边缘落在同一根线上，视线不用重新找起点",
+    "网格": "元素共享同一套坐标骨架",
+    "格式塔·相似": "外观相似即同类",
+    "格式塔·闭合": "边界能被补全，容器才成立",
+    "格式塔·连续": "视线沿一条路径流动，不被折断",
+    "共同区域": "共享底色/容器的元素被读成一组",
+    "视觉层次": "第一眼落在最重要的地方，且有且只有一个第一",
+    "负空间": "留白是主动的，不是剩下的",
+    "平衡": "视觉重量不往一边倒",
+    "比例": "大小关系有依据",
+    "统一与多样": "整体成立，局部有变化",
+    "信息密度": "单位面积的认知负荷可控",
+    "运动与节奏": "动的位置、方向、快慢有理由",
+    "意义": "形式服务于功能，没有装饰性冗余",
+    "可读性": "看得清、读得完、不串行（工程兜底）",
+    "可用性": "点得到、有反馈、记得住（工程兜底）",
+    "交付完整性": "资源完好、没有被裁、没有空屏（工程兜底）"
+  },
+  "scope": {
+    "in": [
+      "svg",
+      "html",
+      "png",
+      "jpg",
+      "design file export"
+    ],
+    "out": [
+      "video"
+    ],
+    "note": "视频评审（时序/抽帧/音画）整块停用，相关规则标 outOfScope，不进判定也不计入覆盖率"
+  }
+}
