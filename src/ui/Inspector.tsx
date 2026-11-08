@@ -770,7 +770,7 @@ function AssetPanel({ asset, studio }: { asset: Asset; studio: Studio | null }) 
       )}
 
       <div className="version-entry">
-        <AssetVersions asset={asset} />
+        <AssetVersions asset={asset} studio={studio} />
       </div>
 
       <div className="inspector-actions">
