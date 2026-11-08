@@ -710,6 +710,10 @@ function AssetPanel({ asset, studio }: { asset: Asset; studio: Studio | null }) 
 
   return (
     <>
+      <Field label="名称">
+        <TextInput value={asset.name} onChange={(v) => store.renameAsset(asset.id, v)} />
+      </Field>
+
       <div className="stat-grid">
         <div className="stat">
           <span className="stat-label">画布尺寸</span>
@@ -731,23 +735,7 @@ function AssetPanel({ asset, studio }: { asset: Asset; studio: Studio | null }) 
         </div>
       </div>
 
-      <Field label="名称">
-        <TextInput value={asset.name} onChange={(v) => store.renameAsset(asset.id, v)} />
-      </Field>
       <VideoCopyEditor key={asset.id} asset={asset} />
-
-      <div className="meta-row">
-        <span>来源</span>
-        <span className="mono">{asset.source === 'sample' ? '内置示例' : '本地导入'}</span>
-      </div>
-      <div className="meta-row">
-        <span>素材 ID</span>
-        <span className="mono" title={asset.id}>{asset.id}</span>
-      </div>
-      <div className="meta-row">
-        <span>动画引擎</span>
-        <span className="mono">GSAP · {asset.groups.length ? 'timeline 驱动' : '未启用'}</span>
-      </div>
 
       {asset.warnings.length > 0 && (
         <div className="warnings" aria-label="降级提示">
