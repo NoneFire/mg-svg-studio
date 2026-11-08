@@ -563,6 +563,11 @@ export class Store {
   }
 
   async removeAsset(id: string) {
+    const pending = this.pendingVersions.get(id)
+    if (pending) {
+      clearTimeout(pending)
+      this.pendingVersions.delete(id)
+    }
     this.commitAssets('删除素材', this.assets.filter((asset) => asset.id !== id))
     await dbDeleteVersions(id)
   }
@@ -667,21 +672,24 @@ export class Store {
     const doc = parseSvgDocument(record.svg)
     const groups = doc.groups.map((g, i) => ({ ...g, id: `${assetId}_g${i}` }))
     this.restoring = true
-    this.editAsset(assetId, `恢复自版本 ${record.index}`, () => ({
-      svg: record.svg,
-      width: doc.width || record.width || asset?.width || 1920,
-      height: doc.height || record.height || asset?.height || 1080,
-      kind: groups.length ? 'animated' : 'static',
-      groups,
-      elements: elementIndexOf(doc),
-      warnings: doc.warnings,
-      overrides: {},
-      layouts: {},
-      review: undefined,
-      agentReview: undefined,
-      revision: { index: record.index, createdAt: record.createdAt, label: record.label },
-    }))
-    this.restoring = false
+    try {
+      this.editAsset(assetId, `恢复自版本 ${record.index}`, () => ({
+        svg: record.svg,
+        width: doc.width || record.width || asset?.width || 1920,
+        height: doc.height || record.height || asset?.height || 1080,
+        kind: groups.length ? 'animated' : 'static',
+        groups,
+        elements: elementIndexOf(doc),
+        warnings: doc.warnings,
+        overrides: {},
+        layouts: {},
+        review: undefined,
+        agentReview: undefined,
+        revision: { index: record.index, createdAt: record.createdAt, label: record.label },
+      }))
+    } finally {
+      this.restoring = false
+    }
   }
 
   async renameAsset(id: string, name: string) {
