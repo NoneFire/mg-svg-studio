@@ -58,7 +58,7 @@ export default function AssetVersions({ asset, studio }: { asset: Asset; studio?
   const stages = () => [leftStage.current, rightStage.current]
 
   useEffect(() => {
-    if (!open) {
+    if (!open || !ordered.length) {
       setPlaying(false)
       return
     }
