@@ -666,6 +666,7 @@ export class Store {
     // 重新解析 SVG：元素索引、分组、警告都要跟着换，否则样式覆盖会对不上旧 id
     const doc = parseSvgDocument(record.svg)
     const groups = doc.groups.map((g, i) => ({ ...g, id: `${assetId}_g${i}` }))
+    this.restoring = true
     this.editAsset(assetId, `恢复自版本 ${record.index}`, () => ({
       svg: record.svg,
       width: doc.width || record.width || asset?.width || 1920,
@@ -678,8 +679,9 @@ export class Store {
       layouts: {},
       review: undefined,
       agentReview: undefined,
+      revision: { index: record.index, createdAt: record.createdAt, label: record.label },
     }))
-    await this.commitVersion(assetId, `恢复自版本 ${record.index}`)
+    this.restoring = false
   }
 
   async renameAsset(id: string, name: string) {
@@ -750,7 +752,10 @@ export class Store {
   private pendingVersions = new Map<string, ReturnType<typeof setTimeout>>()
 
   /** 只有内容变了才记版本：拖位置、改名、排布都不算；同一素材 1.5 秒内合并成一次 */
+  private restoring = false
+
   private scheduleVersions(next: Asset[]) {
+    if (this.restoring) return
     for (const asset of next) {
       const previous = this.assets.find((item) => item.id === asset.id)
       if (!previous) continue
