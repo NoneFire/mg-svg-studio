@@ -114,17 +114,29 @@ export default function HelpModal({ onClose }: { onClose: () => void }) {
           <pre className="help-prompt">{`用 mgsvg-cli 技能操作这个项目。
 
 仓库：当前工作目录
-Studio 已在运行：${typeof location !== 'undefined' ? location.origin : 'http://localhost:5188'}
+当前 Studio 地址：${typeof location !== 'undefined' ? location.origin : '（未知）'}
 
+先判断跑在哪种环境：
+· localhost / 127.0.0.1 → 本地模式，CLI 能连上浏览器里的 Studio
+· 线上部署地址（unicloud 等）→ 只能走文件模式，bridge 连不上
+
+── 本地模式 ──
 第一步：node bin/mgsvg.mjs context --json
         拿到 sessionId 和当前选区，不要凭项目名猜路径。
 
-常用命令：
   node bin/mgsvg.mjs live --session <id> --asset <id> --replace <svg>
   node bin/mgsvg.mjs live --session <id> --assets a,b,c --versions
   node bin/mgsvg.mjs version list --asset <id> --session <id>
   node bin/mgsvg.mjs live --session <id> --asset <id> --remove
 
+── 线上部署版 ──
+bridge 和 live 都不可用（连不到本地 127.0.0.1 的桥）。
+把 .mgsvg 下载到本地，用文件命令改，再传回去：
+  node bin/mgsvg.mjs outline project.mgsvg --elements --json
+  node bin/mgsvg.mjs apply project.mgsvg --ops ops.json --dry-run
+  node bin/mgsvg.mjs validate project.mgsvg
+
+── 两种环境都适用 ──
 改完画面类素材要渲染自检：
   Chrome --headless --virtual-time-budget=12000 --screenshot=/tmp/check.png \
     --window-size=1920,1080 "file:///path.svg"
