@@ -1,0 +1,372 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" style="max-width:100%;height:auto;background:#0f1117">
+  <defs>
+    <style>
+      text { font-family: 'Noto Sans SC', 'OPPO Sans 4.0', 'Alibaba PuHuiTi 3.0', 'PingFang SC', 'Hiragino Sans GB', sans-serif; }
+
+      /* 每个动作用独立的 keyframes，避免 Studio 把不同节奏的同类动作合并成一层 */
+      .tocbar { transform-box: fill-box; transform-origin: left center;
+                animation: tocBarIn .7s cubic-bezier(.65,0,.35,1) both; }
+      @keyframes tocBarIn { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+      .dot   { opacity:0; transform-box: fill-box; transform-origin: center;
+               animation: tocDotIn .62s cubic-bezier(.34,1.56,.64,1) both; }
+      @keyframes tocDotIn { 0% { opacity:0; transform: scale(.5); } 65% { opacity:1; transform: scale(1.12); } 100% { opacity:1; transform: scale(1); } }
+
+      .toclab { opacity:0; animation: tocLabelIn .62s cubic-bezier(.22,1,.36,1) both; }
+      @keyframes tocLabelIn { from { opacity:0; transform: translateY(14px); } to { opacity:1; transform: translateY(0); } }
+
+      .head  { opacity:0; animation: titleIn .72s cubic-bezier(.22,1,.36,1) both; }
+      @keyframes titleIn { from { opacity:0; transform: translateY(26px); } to { opacity:1; transform: translateY(0); } }
+
+      .uline { transform-box: fill-box; transform-origin: left center;
+               animation: titleRuleIn .48s cubic-bezier(.65,0,.35,1) both; }
+      @keyframes titleRuleIn { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+      .defin { opacity:0; animation: definitionIn .66s cubic-bezier(.22,1,.36,1) both; }
+      @keyframes definitionIn { from { opacity:0; transform: translateY(16px); } to { opacity:1; transform: translateY(0); } }
+
+      .col   { opacity:0; animation: colHeadIn .6s cubic-bezier(.22,1,.36,1) both; }
+      @keyframes colHeadIn { from { opacity:0; transform: translateY(12px); } to { opacity:1; transform: translateY(0); } }
+
+      .row   { opacity:0; animation: rowHeadIn .6s cubic-bezier(.22,1,.36,1) both; }
+      @keyframes rowHeadIn { from { opacity:0; transform: translateX(-14px); } to { opacity:1; transform: translateX(0); } }
+
+      .cell  { opacity:0; transform-box: fill-box; transform-origin: center;
+               animation: cellIn .64s cubic-bezier(.34,1.56,.64,1) both; }
+      @keyframes cellIn { 0% { opacity:0; transform: scale(.86); } 65% { opacity:1; transform: scale(1.02); } 100% { opacity:1; transform: scale(1); } }
+
+      .subfade { opacity:0; animation: cellSubIn .55s ease both; }
+      @keyframes cellSubIn { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: translateY(0); } }
+
+      .tag   { opacity:0; transform-box: fill-box; transform-origin: center;
+               animation: assumeTagIn .5s cubic-bezier(.34,1.56,.64,1) both; }
+      @keyframes assumeTagIn { 0% { opacity:0; transform: scale(1.55) rotate(-5deg); } 60% { opacity:1; transform: scale(.97) rotate(2deg); } 100% { opacity:1; transform: scale(1) rotate(0); } }
+
+      .tagout { transform-box: fill-box; transform-origin: center;
+                animation: assumeTagOut .62s cubic-bezier(.55,0,.85,.36) both; }
+      @keyframes assumeTagOut { 0% { opacity:1; transform: translateY(0) rotate(0); } 18% { opacity:1; transform: translateY(-7px) rotate(-1.5deg); } 100% { opacity:0; transform: translateY(34px) rotate(4deg); } }
+
+      .whyh  { opacity:0; animation: whyCardIn .66s cubic-bezier(.22,1,.36,1) both; }
+      @keyframes whyCardIn { from { opacity:0; transform: translateY(18px); } to { opacity:1; transform: translateY(0); } }
+
+      .step  { opacity:0; animation: stepIn .66s cubic-bezier(.22,1,.36,1) both; }
+      @keyframes stepIn { from { opacity:0; transform: translateX(-20px); } to { opacity:1; transform: translateX(0); } }
+
+      .arr   { transform-box: fill-box; transform-origin: center top;
+               animation: arrowIn .5s cubic-bezier(.65,0,.35,1) both; }
+      @keyframes arrowIn { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+
+      .ah    { opacity:0; transform-box: fill-box; transform-origin: center;
+               animation: arrowHeadIn .4s cubic-bezier(.34,1.56,.64,1) both; }
+      @keyframes arrowHeadIn { from { opacity:0; transform: scale(.4); } to { opacity:1; transform: scale(1); } }
+
+      .breathe { transform-box: fill-box; transform-origin: center;
+                 animation: heroGlow 3.4s ease-in-out infinite; }
+      @keyframes heroGlow { 0%,100% { opacity:.45; transform: scale(1); } 50% { opacity:1; transform: scale(1.015); } }
+
+      .sum   { opacity:0; animation: summaryIn .7s cubic-bezier(.22,1,.36,1) both; }
+      @keyframes summaryIn { from { opacity:0; transform: translateY(16px); } to { opacity:1; transform: translateY(0); } }
+
+      .chip  { opacity:0; transform-box: fill-box; transform-origin: center;
+               animation: solutionIn .56s cubic-bezier(.34,1.56,.64,1) both; }
+      @keyframes solutionIn { 0% { opacity:0; transform: scale(.8); } 70% { opacity:1; transform: scale(1.03); } 100% { opacity:1; transform: scale(1); } }
+
+      .subin { opacity:0; animation: captionIn .6s ease both; }
+      @keyframes captionIn { from { opacity:0; } to { opacity:1; } }
+    </style>
+  </defs>
+
+  <svg x="0" y="0" width="1920" height="1080" viewBox="0 0 1920 1080" aria-hidden="true">
+  <defs>
+      <!-- 底色：极深冷灰，上略暗下略亮 -->
+      <linearGradient id="bg-base" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0"    stop-color="#0d0d10"/>
+        <stop offset="0.42" stop-color="#131317"/>
+        <stop offset="0.78" stop-color="#15151a"/>
+        <stop offset="1"    stop-color="#111114"/>
+      </linearGradient>
+  
+      <!-- 大面积柔光：只为打破死黑、做出体积，强度很低 -->
+      <radialGradient id="bg-washA" cx="0.5" cy="0.5" r="0.5">
+        <stop offset="0"    stop-color="#a8aec6" stop-opacity="0.04"/>
+        <stop offset="0.55" stop-color="#a8aec6" stop-opacity="0.018"/>
+        <stop offset="1"    stop-color="#a8aec6" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="bg-washB" cx="0.5" cy="0.5" r="0.5">
+        <stop offset="0"    stop-color="#8b91a8" stop-opacity="0.032"/>
+        <stop offset="0.6"  stop-color="#8b91a8" stop-opacity="0.014"/>
+        <stop offset="1"    stop-color="#8b91a8" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="bg-washC" cx="0.5" cy="0.5" r="0.5">
+        <stop offset="0"    stop-color="#c9ccd8" stop-opacity="0.028"/>
+        <stop offset="1"    stop-color="#c9ccd8" stop-opacity="0"/>
+      </radialGradient>
+  
+      <!-- 暗角：四角压暗，但不压死 -->
+      <radialGradient id="bg-vignette" cx="0.46" cy="0.44" r="0.78">
+        <stop offset="0"    stop-color="#000000" stop-opacity="0"/>
+        <stop offset="0.62" stop-color="#000000" stop-opacity="0.10"/>
+        <stop offset="0.86" stop-color="#000000" stop-opacity="0.32"/>
+        <stop offset="1"    stop-color="#000000" stop-opacity="0.55"/>
+      </radialGradient>
+  
+      <!-- 右侧收暗，让重心偏左，方便放标题 -->
+      <linearGradient id="bg-rightFade" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0.55" stop-color="#000000" stop-opacity="0"/>
+        <stop offset="1"    stop-color="#000000" stop-opacity="0.26"/>
+      </linearGradient>
+  
+      <!-- 每 5 格的辅助线，稍亮一点，给画面结构感 -->
+      <pattern id="bg-gridMajor" width="270" height="270" patternUnits="userSpaceOnUse">
+        <path d="M270 0 H0 V270" fill="none" stroke="#dfe4f2" stroke-opacity="0.075" stroke-width="1.5"/>
+      </pattern>
+  
+      <!-- 竖向极淡光带：模拟压缩后那种一条条的光柱 -->
+      <filter id="bg-softBeam" x="-30%" y="-10%" width="160%" height="120%">
+        <feGaussianBlur stdDeviation="42"/>
+      </filter>
+      <linearGradient id="bg-beamGrad" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0"   stop-color="#ffffff" stop-opacity="0"/>
+        <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.032"/>
+        <stop offset="1"   stop-color="#ffffff" stop-opacity="0"/>
+      </linearGradient>
+  
+      <!-- 颗粒：抵消视频压缩后的色带 -->
+      <filter id="bg-grain" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" seed="7" stitchTiles="stitch" result="noise"/>
+        <feColorMatrix in="noise" type="saturate" values="0" result="mono"/>
+        <feComponentTransfer in="mono">
+          <feFuncA type="linear" slope="0.05"/>
+        </feComponentTransfer>
+      </filter>
+  
+    </defs>
+  <rect width="1920" height="1080" fill="url(#bg-base)"/>
+  
+    
+    <ellipse cx="620" cy="470" rx="1000" ry="700" fill="url(#bg-washA)"/>
+    <ellipse cx="1180" cy="760" rx="820" ry="520" fill="url(#bg-washB)"/>
+    <ellipse cx="300" cy="900" rx="700" ry="420" fill="url(#bg-washC)"/>
+  
+    
+    <g opacity="0.9">
+      <rect x="150"  y="-60" width="260" height="1200" fill="url(#bg-beamGrad)" filter="url(#bg-softBeam)"/>
+      <rect x="640"  y="-60" width="150" height="1200" fill="url(#bg-beamGrad)" filter="url(#bg-softBeam)"/>
+      <rect x="1010" y="-60" width="380" height="1200" fill="url(#bg-beamGrad)" filter="url(#bg-softBeam)"/>
+      <rect x="1560" y="-60" width="220" height="1200" fill="url(#bg-beamGrad)" filter="url(#bg-softBeam)"/>
+    </g>
+  
+    
+    <g id="bg-grid" fill="none" stroke="#d3d9ec" stroke-linecap="butt">
+      <g stroke-opacity="0.10" stroke-width="1.5">
+        <line x1="53.33" y1="0" x2="53.33" y2="1080"/>
+        <line x1="106.67" y1="0" x2="106.67" y2="1080"/>
+        <line x1="160.0" y1="0" x2="160.0" y2="1080"/>
+        <line x1="213.33" y1="0" x2="213.33" y2="1080"/>
+        <line x1="266.67" y1="0" x2="266.67" y2="1080"/>
+        <line x1="320.0" y1="0" x2="320.0" y2="1080"/>
+        <line x1="373.33" y1="0" x2="373.33" y2="1080"/>
+        <line x1="426.67" y1="0" x2="426.67" y2="1080"/>
+        <line x1="480.0" y1="0" x2="480.0" y2="1080"/>
+        <line x1="533.33" y1="0" x2="533.33" y2="1080"/>
+        <line x1="586.67" y1="0" x2="586.67" y2="1080"/>
+        <line x1="640.0" y1="0" x2="640.0" y2="1080"/>
+        <line x1="693.33" y1="0" x2="693.33" y2="1080"/>
+        <line x1="746.67" y1="0" x2="746.67" y2="1080"/>
+        <line x1="800.0" y1="0" x2="800.0" y2="1080"/>
+        <line x1="853.33" y1="0" x2="853.33" y2="1080"/>
+        <line x1="906.67" y1="0" x2="906.67" y2="1080"/>
+        <line x1="960.0" y1="0" x2="960.0" y2="1080"/>
+        <line x1="1013.33" y1="0" x2="1013.33" y2="1080"/>
+        <line x1="1066.67" y1="0" x2="1066.67" y2="1080"/>
+        <line x1="1120.0" y1="0" x2="1120.0" y2="1080"/>
+        <line x1="1173.33" y1="0" x2="1173.33" y2="1080"/>
+        <line x1="1226.67" y1="0" x2="1226.67" y2="1080"/>
+        <line x1="1280.0" y1="0" x2="1280.0" y2="1080"/>
+        <line x1="1333.33" y1="0" x2="1333.33" y2="1080"/>
+        <line x1="1386.67" y1="0" x2="1386.67" y2="1080"/>
+        <line x1="1440.0" y1="0" x2="1440.0" y2="1080"/>
+        <line x1="1493.33" y1="0" x2="1493.33" y2="1080"/>
+        <line x1="0" y1="54" x2="1920" y2="54"/>
+        <line x1="0" y1="108" x2="1920" y2="108"/>
+        <line x1="0" y1="162" x2="1920" y2="162"/>
+        <line x1="0" y1="216" x2="1920" y2="216"/>
+        <line x1="0" y1="324" x2="1920" y2="324"/>
+        <line x1="0" y1="378" x2="1920" y2="378"/>
+        <line x1="0" y1="432" x2="1920" y2="432"/>
+        <line x1="0" y1="486" x2="1920" y2="486"/>
+        <line x1="0" y1="594" x2="1920" y2="594"/>
+        <line x1="0" y1="648" x2="1920" y2="648"/>
+        <line x1="0" y1="702" x2="1920" y2="702"/>
+        <line x1="0" y1="756" x2="1920" y2="756"/>
+        <line x1="0" y1="864" x2="1920" y2="864"/>
+        <line x1="0" y1="918" x2="1920" y2="918"/>
+        <line x1="0" y1="972" x2="1920" y2="972"/>
+        <line x1="0" y1="1026" x2="1920" y2="1026"/>
+      </g>
+      <g stroke-opacity="0.15" stroke-width="1.5">
+        <line x1="1546.67" y1="0" x2="1546.67" y2="1080"/>
+        <line x1="1600.0" y1="0" x2="1600.0" y2="1080"/>
+        <line x1="1653.33" y1="0" x2="1653.33" y2="1080"/>
+        <line x1="1706.67" y1="0" x2="1706.67" y2="1080"/>
+        <line x1="1760.0" y1="0" x2="1760.0" y2="1080"/>
+        <line x1="1813.33" y1="0" x2="1813.33" y2="1080"/>
+        <line x1="1866.67" y1="0" x2="1866.67" y2="1080"/>
+        
+        <line x1="0" y1="0" x2="1920" y2="0"/>
+        <line x1="0" y1="270" x2="1920" y2="270"/>
+        <line x1="0" y1="540" x2="1920" y2="540"/>
+        <line x1="0" y1="810" x2="1920" y2="810"/>
+        <line x1="0" y1="1080" x2="1920" y2="1080"/>
+      </g>
+    </g>
+  
+    
+    <rect width="1920" height="1080" fill="url(#bg-rightFade)"/>
+    <rect width="1920" height="1080" fill="url(#bg-vignette)"/>
+  
+    
+    <rect width="1920" height="1080" filter="url(#bg-grain)" style="mix-blend-mode:overlay" opacity="0.9"/>
+    </svg>
+
+  <!-- ===== 顶部章节目录（距顶 48，轨道高 10） ===== -->
+  <g id="kc-toc">
+    <rect x="80" y="48" width="1760" height="10" rx="5" fill="#1f2733"/>
+    <g class="tocbar" style="animation-delay:.15s">
+      <rect x="80" y="48" width="880" height="10" rx="5" fill="#38bdf8"/>
+    </g>
+    <g class="dot" style="animation-delay:.30s"><circle cx="80" cy="53" r="12" fill="#38bdf8"/></g>
+    <g class="dot" style="animation-delay:.42s"><circle cx="960" cy="53" r="12" fill="#38bdf8"/></g>
+    <g class="dot" style="animation-delay:.54s"><circle cx="1840" cy="53" r="9" fill="#64748b"/></g>
+
+    <text x="80" y="92" class="toclab" style="animation-delay:.44s" font-size="22" font-weight="600" fill="#94a3b8">01 现象</text>
+    <text x="960" y="92" text-anchor="middle" class="toclab" style="animation-delay:.56s" font-size="22" font-weight="800" fill="#38bdf8">02 机制</text>
+    <text x="1840" y="92" text-anchor="end" class="toclab" style="animation-delay:.68s" font-size="22" font-weight="600" fill="#94a3b8">03 解法</text>
+  </g>
+
+  <!-- ===== 标题区（内容区左边界 80） ===== -->
+  <g id="kc-head">
+    <text x="80" y="146" class="head" style="animation-delay:.50s" font-size="20" font-weight="700" letter-spacing="2" fill="#94a3b8">CURSE OF KNOWLEDGE · 概念拆解</text>
+    <text x="80" y="222" class="head" style="animation-delay:.62s" font-size="76" font-weight="800" fill="#e8edf6">知识的诅咒</text>
+    <text x="80" y="274" class="head" style="animation-delay:.74s" font-size="28" font-weight="400" fill="#94a3b8">一旦知道，就很难想象「不知道」是什么感觉。</text>
+    <g class="uline" style="animation-delay:1.30s"><rect x="308" y="238" width="152" height="4" rx="2" fill="#ef4444"/></g>
+  </g>
+
+  <!-- ===== 一句话定义（右上，平衡标题区） ===== -->
+  <g id="kc-def">
+    <g class="defin" style="animation-delay:.95s">
+      <rect x="1340" y="132" width="500" height="146" rx="16" fill="#12161e" stroke="#2b3340" stroke-width="1.5"/>
+    </g>
+    <text x="1364" y="166" class="defin" style="animation-delay:1.05s" font-size="14" font-weight="700" letter-spacing="3" fill="#8b9aad">DEFINITION</text>
+    <text x="1364" y="204" class="defin" style="animation-delay:1.15s" font-size="22" fill="#cbd5e1">你没法把认知调回「未知」，</text>
+    <text x="1364" y="238" class="defin" style="animation-delay:1.25s" font-size="22" fill="#cbd5e1">于是高估了别人听懂的部分。</text>
+  </g>
+
+  <!-- ===== 四象限（1920 安全区内） ===== -->
+  <g id="kc-matrix">
+    <!-- 列标题 -->
+    <text x="465" y="330" text-anchor="middle" class="col" style="animation-delay:1.00s" font-size="24" font-weight="600" letter-spacing="2" fill="#94a3b8">他知道</text>
+    <text x="1029" y="330" text-anchor="middle" class="col" style="animation-delay:1.12s" font-size="24" font-weight="600" letter-spacing="2" fill="#94a3b8">他不知道</text>
+
+    <!-- 行标题 -->
+    <text x="175" y="470" text-anchor="end" class="row" style="animation-delay:1.22s" font-size="24" font-weight="600" letter-spacing="2" fill="#94a3b8">我知道</text>
+    <text x="175" y="700" text-anchor="end" class="row" style="animation-delay:1.34s" font-size="24" font-weight="600" letter-spacing="2" fill="#94a3b8">我不知道</text>
+
+    <!-- 象限 1：共识区 -->
+    <g class="cell" style="animation-delay:1.40s">
+        <rect x="195" y="356" width="540" height="206" rx="18" fill="#34d399" fill-opacity="0.08" stroke="#34d399" stroke-width="2"/>
+        <text x="465" y="448" text-anchor="middle" font-size="34" font-weight="800" fill="#e8edf6">共识区</text>
+        <text x="465" y="490" text-anchor="middle" class="subfade" style="animation-delay:1.54s" font-size="20" fill="#cbd5e1">你说一句，他就懂</text>
+      </g>
+
+    <!-- 象限 2：知识诅咒区（主角） -->
+    <g class="cell" style="animation-delay:1.56s">
+      <rect x="759" y="356" width="540" height="206" rx="18" fill="#ef4444" fill-opacity="0.12" stroke="#ef4444" stroke-width="3"/>
+      <rect x="759" y="356" width="540" height="206" rx="18" fill="none" stroke="#ef4444" stroke-width="5" class="breathe" style="animation-delay:3.20s"/>
+      <text x="1029" y="446" text-anchor="middle" font-size="34" font-weight="800" fill="#f87171">知识诅咒区</text>
+      <text x="1029" y="488" text-anchor="middle" class="subfade" style="animation-delay:1.70s" font-size="20" fill="#cbd5e1">你的常识，不是他的常识</text>
+    </g>
+
+    <!-- 你以为他懂（错误假设，会退场） -->
+    <g class="tagout" style="animation-delay:3.55s">
+      <g class="tag" style="animation-delay:2.35s">
+        <rect x="1122" y="372" width="150" height="34" rx="17" fill="#0f1117" stroke="#f87171" stroke-width="1.5"/>
+        <text x="1197" y="395" text-anchor="middle" font-size="15" font-weight="700" fill="#f87171">你以为他懂</text>
+      </g>
+    </g>
+
+    <!-- 象限 3：请教区 -->
+    <g class="cell" style="animation-delay:1.72s">
+        <rect x="195" y="586" width="540" height="206" rx="18" fill="#fbbf24" fill-opacity="0.08" stroke="#fbbf24" stroke-width="2"/>
+        <text x="465" y="678" text-anchor="middle" font-size="34" font-weight="800" fill="#e8edf6">请教区</text>
+        <text x="465" y="720" text-anchor="middle" class="subfade" style="animation-delay:1.86s" font-size="20" fill="#cbd5e1">他懂你不懂，去问</text>
+      </g>
+
+    <!-- 象限 4：共同盲区 -->
+    <g class="cell" style="animation-delay:1.88s">
+        <rect x="759" y="586" width="540" height="206" rx="18" fill="#94a3b8" fill-opacity="0.07" stroke="#64748b" stroke-width="2"/>
+        <text x="1029" y="678" text-anchor="middle" font-size="34" font-weight="800" fill="#cbd5e1">共同盲区</text>
+        <text x="1029" y="720" text-anchor="middle" class="subfade" style="animation-delay:2.02s" font-size="20" fill="#cbd5e1">都不知道，先别假设</text>
+      </g>
+  </g>
+
+  <!-- ===== 右侧：机制拆解 ===== -->
+  <g id="kc-why">
+    <g class="whyh" style="animation-delay:2.90s">
+      <rect x="1340" y="300" width="500" height="492" rx="18" fill="#12161e" stroke="#2b3340" stroke-width="1.5"/>
+    </g>
+    <text x="1364" y="330" class="whyh" style="animation-delay:3.00s" font-size="14" font-weight="700" letter-spacing="3" fill="#8b9aad">MECHANISM</text>
+    <text x="1364" y="362" class="whyh" style="animation-delay:3.10s" font-size="26" font-weight="800" fill="#e8edf6">为什么会这样</text>
+
+    <!-- 步骤 1 -->
+    <g class="step" style="animation-delay:3.22s">
+      <rect x="1364" y="400" width="4" height="46" rx="2" fill="#34d399"/>
+      <text x="1386" y="420" font-size="21" font-weight="700" fill="#e8edf6">你知道</text>
+      <text x="1386" y="446" font-size="16" fill="#7d8b9f">结论、背景、前提都在脑子里</text>
+    </g>
+    <g class="arr" style="animation-delay:3.34s"><path d="M1386 456 v14" stroke="#475569" stroke-width="2"/></g>
+    <g class="ah" style="animation-delay:3.38s"><path d="M1382 470 h8 l-4 6 z" fill="#475569"/></g>
+
+    <!-- 步骤 2 -->
+    <g class="step" style="animation-delay:3.38s">
+      <rect x="1364" y="496" width="4" height="46" rx="2" fill="#fbbf24"/>
+      <text x="1386" y="516" font-size="21" font-weight="700" fill="#e8edf6">默认他也知道</text>
+      <text x="1386" y="542" font-size="16" fill="#7d8b9f">你回不到「不知道」的状态</text>
+    </g>
+    <g class="arr" style="animation-delay:3.50s"><path d="M1386 552 v14" stroke="#475569" stroke-width="2"/></g>
+    <g class="ah" style="animation-delay:3.54s"><path d="M1382 566 h8 l-4 6 z" fill="#475569"/></g>
+
+    <!-- 步骤 3 -->
+    <g class="step" style="animation-delay:3.54s">
+      <rect x="1364" y="592" width="4" height="46" rx="2" fill="#f87171"/>
+      <text x="1386" y="612" font-size="21" font-weight="700" fill="#e8edf6">省掉前提</text>
+      <text x="1386" y="638" font-size="16" fill="#7d8b9f">只说结论，因为前提「显然」</text>
+    </g>
+    <g class="arr" style="animation-delay:3.66s"><path d="M1386 648 v14" stroke="#475569" stroke-width="2"/></g>
+    <g class="ah" style="animation-delay:3.70s"><path d="M1382 662 h8 l-4 6 z" fill="#475569"/></g>
+
+    <!-- 步骤 4 -->
+    <g class="step" style="animation-delay:3.70s">
+      <rect x="1364" y="688" width="4" height="46" rx="2" fill="#38bdf8"/>
+      <text x="1386" y="708" font-size="21" font-weight="700" fill="#e8edf6">他按经验补</text>
+      <text x="1386" y="734" font-size="16" fill="#7d8b9f">补出来的，往往不是你想要的</text>
+    </g>
+  </g>
+
+  <!-- ===== 结论 ===== -->
+  <g id="kc-sum">
+    <text x="960" y="846" text-anchor="middle" class="sum" style="animation-delay:4.50s" font-size="30" font-weight="700" fill="#e8edf6">不是对方笨，是你省掉了自己习以为常的前提。</text>
+    <g class="chip" style="animation-delay:5.20s">
+      <rect x="778" y="870" width="364" height="42" rx="21" fill="#38bdf8" fill-opacity="0.10" stroke="#38bdf8" stroke-width="1.5"/>
+      <text x="960" y="898" text-anchor="middle" font-size="20" font-weight="700" fill="#38bdf8">解法：先讲前提，再给结论</text>
+    </g>
+  </g>
+
+  <!-- ===== 字幕（距底 56，胶囊 568×84） ===== -->
+  <g id="kc-sub">
+    <g class="subin" style="animation-delay:.90s">
+      <rect x="676" y="940" width="568" height="84" rx="10" fill="#4a4a48" stroke="#000" stroke-opacity="0.08"/>
+    </g>
+    <text x="960" y="1002" text-anchor="middle" class="subin" style="animation-delay:1.02s" font-size="50" font-weight="500" fill="#fafafa">你懂的，他未必懂。</text>
+  </g>
+</svg>
