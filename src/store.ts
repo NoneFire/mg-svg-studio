@@ -609,6 +609,24 @@ export class Store {
     return dbListVersions(assetId)
   }
 
+  /** 删掉指定的历史版本（清理重复用），并把 revision 指向剩下的最新一版 */
+  async deleteVersions(assetId: string, versionIds: string[]) {
+    if (!versionIds.length) return 0
+    const db = await openDB()
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(DB_VERSION_STORE, 'readwrite')
+      const store = tx.objectStore(DB_VERSION_STORE)
+      for (const id of versionIds) store.delete(id)
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error)
+    })
+    const left = await dbListVersions(assetId)
+    this.editAsset(assetId, '清理版本', () => ({
+      revision: left[0] ? { index: left[0].index, createdAt: left[0].createdAt } : undefined,
+    }))
+    return versionIds.length
+  }
+
   /** 把若干独立素材并进目标素材的版本历史，然后删掉这些素材 */
   async mergeAsVersions(targetId: string, sourceIds: string[]) {
     const target = this.assets.find((a) => a.id === targetId)

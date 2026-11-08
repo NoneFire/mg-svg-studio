@@ -19275,7 +19275,9 @@ var init_args = __esm({
         name: "value",
         merge: "value",
         force: "switch",
-        versions: "switch"
+        versions: "switch",
+        restore: "value",
+        "delete-versions": "value"
       },
       bridge: { port: "value" },
       mcp: { project: "value", bridge: "value" }
@@ -19595,7 +19597,7 @@ async function startBridge(port = 7350) {
     if ((type === "style.set" || type === "style.clear") && !element) {
       throw new Error("\u8BF7\u5148\u9009\u4E2D\u5143\u7D20\uFF0C\u6216\u63D0\u4F9B\u7D20\u6750\u548C\u5143\u7D20 ID");
     }
-    if (!["style.set", "style.clear", "select", "save", "review", "asset.add", "asset.mergeVersions", "asset.versions", "project.reload"].includes(type)) throw new Error("\u4E0D\u652F\u6301\u7684\u5B9E\u65F6\u547D\u4EE4");
+    if (!["style.set", "style.clear", "select", "save", "review", "asset.add", "asset.mergeVersions", "asset.versions", "asset.restoreVersion", "asset.deleteVersions", "project.reload"].includes(type)) throw new Error("\u4E0D\u652F\u6301\u7684\u5B9E\u65F6\u547D\u4EE4");
     if (type === "review" && payload.frame !== void 0 && (typeof payload.frame !== "number" || !Number.isFinite(payload.frame) || payload.frame < 0 || payload.frame > 1)) throw new Error("\u8BC4\u5BA1\u5E27\u5FC5\u987B\u5728 0 \u5230 1 \u4E4B\u95F4");
     const id2 = randomUUID();
     pending.set(id2, {
@@ -20210,7 +20212,7 @@ var HELP = `mgsvg \u2014 MG SVG Studio \u9879\u76EE\u6587\u4EF6\u5DE5\u5177\uFF0
   mgsvg bridge  [--port 7350]                  \u5F00\u672C\u5730\u9009\u62E9\u6865\uFF08Agent \u7528\u5B83\u770B\u4F60\u5728\u9009\u4EC0\u4E48\uFF09
   mgsvg context [--bridge 7350] [--session <id>] [--wait 30] [--after <selectionId>] [--json]
   mgsvg live    [--bridge 7350] (--session <id> | --current) [--asset <id>] [--element <id>]
-                --set fill=#f00 | --clear | --select <id|label> | --add <svg> [--name \u540D\u79F0] | --asset <\u76EE\u6807> --merge <\u7D20\u6750id,...> | --save [--force] | --reload | --review [--frame 0..1]
+                --set fill=#f00 | --clear | --select <id|label> | --add <svg> [--name \u540D\u79F0] | --asset <\u76EE\u6807> --merge <\u7D20\u6750id,...> | --asset <id> --restore <\u7248\u672Cid> | --save [--force] | --reload | --review [--frame 0..1]
   mgsvg validate <project> [--json]
   mgsvg mcp     [--project <project>] [--bridge <port>]   \u542F\u52A8 MCP server\uFF08stdio\uFF0C\u53EF\u5E26\u9009\u62E9\u6865\uFF09
 
@@ -20355,9 +20357,11 @@ async function runLive(flags) {
   const add = str(flags, "add");
   const merge = str(flags, "merge");
   const listVersions = !!flags.versions;
+  const restoreVersion = str(flags, "restore");
+  const deleteVersions = str(flags, "delete-versions");
   if (merge && (!asset || add)) usage("--merge \u9700\u8981 --asset \u6307\u5B9A\u76EE\u6807\u7D20\u6750");
   const name = str(flags, "name");
-  if ([set, clear, save, reload, review, Boolean(select), Boolean(add), Boolean(merge), Boolean(listVersions && asset)].filter(Boolean).length !== 1) {
+  if ([set, clear, save, reload, review, Boolean(select), Boolean(add), Boolean(merge), Boolean(listVersions && asset), Boolean(restoreVersion && asset), Boolean(deleteVersions && asset)].filter(Boolean).length !== 1) {
     usage("\u8BF7\u9009\u62E9\u4E00\u79CD\u64CD\u4F5C\uFF1A--set\u3001--clear\u3001--select\u3001--add\u3001--save\u3001--reload \u6216 --review");
   }
   if (sessionId && (set || clear) && (!asset || !element)) usage("\u9501\u5B9A\u5B9E\u65F6\u4FEE\u6539\u65F6\u9700\u8981 --asset \u548C --element");
@@ -20365,10 +20369,12 @@ async function runLive(flags) {
   if (name && !add) usage("--name \u53EA\u7528\u4E8E --add");
   const frame = num2(flags, "frame");
   if (frame !== void 0 && (!review || frame < 0 || frame > 1)) usage("--frame \u53EA\u7528\u4E8E --review\uFF0C\u8303\u56F4\u4E3A 0\u20131");
-  const type = save ? "save" : reload ? "project.reload" : review ? "review" : select ? "select" : add ? "asset.add" : merge && asset ? "asset.mergeVersions" : listVersions && asset ? "asset.versions" : clear ? "style.clear" : "style.set";
+  const type = save ? "save" : reload ? "project.reload" : review ? "review" : select ? "select" : add ? "asset.add" : merge && asset ? "asset.mergeVersions" : listVersions && asset ? "asset.versions" : restoreVersion && asset ? "asset.restoreVersion" : deleteVersions && asset ? "asset.deleteVersions" : clear ? "style.clear" : "style.set";
   const payload = { asset, element: select || element, frame };
   if (set) payload.patch = parseStylePatch(setPairs(flags, NUMERIC_STYLE, (value) => value));
   if (merge) payload.sources = merge.split(",").map((v2) => v2.trim()).filter(Boolean);
+  if (restoreVersion) payload.versionId = restoreVersion;
+  if (deleteVersions) payload.versionIds = deleteVersions.split(",").map((v2) => v2.trim()).filter(Boolean);
   if (save && flags.force) payload.force = true;
   if (add) {
     payload.svg = fs5.readFileSync(path5.resolve(add), "utf8");
@@ -20399,6 +20405,8 @@ async function runLive(flags) {
         else if (add) console.log(`\u2713 \u5DF2\u6DFB\u52A0 ${data.name} (${data.asset}) ${data.width}\xD7${data.height}`);
         else if (listVersions) console.log(data.versions?.length ? JSON.stringify(data.versions, null, 2) : "\u8FD9\u4E2A\u7D20\u6750\u8FD8\u6CA1\u6709\u7248\u672C\u8BB0\u5F55");
         else if (merge) console.log(`\u2713 \u5DF2\u5E76\u5165 ${data.merged} \u4E2A\u7248\u672C\uFF0C\u5F53\u524D\u6700\u9AD8 v${data.index}`);
+        else if (restoreVersion) console.log(`\u2713 \u5DF2\u6062\u590D\u5230 ${restoreVersion}\uFF08${data.width}\xD7${data.height}\uFF09`);
+        else if (deleteVersions) console.log(`\u2713 \u5DF2\u5220\u9664 ${data.removed} \u4E2A\u7248\u672C`);
         else console.log(`\u2713 ${data.element} \u2190 ${JSON.stringify(data.overrides ?? null)}`);
       });
       return;

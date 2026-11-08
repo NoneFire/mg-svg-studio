@@ -44,6 +44,35 @@ node bin/mgsvg.mjs live --session SESSION --reload
 
 如果 Studio 页面重载、切换项目或会话过期，重新读取 context。请求的目标不可用时，不要擅自改动另一个当前选中的元素。
 
+### 版本历史
+
+素材的版本存在浏览器 IndexedDB 里（`versions` 表），只有**内容变化**（SVG、尺寸、样式覆盖、布局参数）才会自动记一版，1.5 秒内的连续修改合并成一条；拖动位置、改名、自动排列都不记。恢复版本是**追加**语义：以旧版为底生成一个新版本，历史不回退。
+
+```bash
+# 查某个素材的版本（按 index 从新到旧）
+node bin/mgsvg.mjs live --session SESSION --asset ASSET_ID --versions
+
+# 恢复到某一版（会产生一个新版本）
+node bin/mgsvg.mjs live --session SESSION --asset ASSET_ID --restore "ASSET_ID:7"
+
+# 把几个独立素材并进目标素材的版本历史，然后删掉这些素材
+node bin/mgsvg.mjs live --session SESSION --asset ASSET_ID --merge "a_xxx,a_yyy"
+
+# 清理重复版本，逗号分隔
+node bin/mgsvg.mjs live --session SESSION --asset ASSET_ID --delete-versions "ASSET_ID:4,ASSET_ID:5"
+```
+
+改完 SVG 后不要用 `<g transform>` 包住整块内容来平移：评审按元素坐标和容器关系判溢出，套一层 group 会让容器框和文字偏移对不上，整片文字被误判成溢出。直接改各元素的 `x/y/cy/y1/y2`。
+
+### 保存冲突
+
+`--save` 在磁盘文件与打开时的快照不一致时会拒绝写入，避免覆盖别处（另一个标签页或同步工具）的改动。确认要以当前 Studio 状态覆盖时加 `--force`：
+
+```bash
+node bin/mgsvg.mjs live --session SESSION --save --force
+```
+
+
 ## 运行视觉评审
 
 - `review <项目文件>` 读取已保存的快照，并报告结果是否仍然有效。

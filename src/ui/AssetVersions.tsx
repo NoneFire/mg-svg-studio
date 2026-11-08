@@ -11,142 +11,107 @@ import {
   DialogTitle,
   DialogTrigger,
 } from './kit/dialog'
-import { AssetPreviewCanvas } from './AssetVersionPreview'
 import { Icon } from './Icon'
 
-/** 版本时间轴：最新在最左，左滑回看更早的版本 */
+/** 版本对比：所有历史版本并排铺开，直接比差异，不用一版一版翻 */
 export default function AssetVersions({ asset }: { asset: Asset }) {
   const [open, setOpen] = useState(false)
   const [versions, setVersions] = useState<AssetVersionRecord[]>([])
-  const [cursor, setCursor] = useState(0)
-  const [busy, setBusy] = useState(false)
+  const [busyId, setBusyId] = useState('')
   const [error, setError] = useState('')
 
   const reload = useCallback(async () => {
-    const list = await store.listVersions(asset.id)
-    setVersions(list)
-    setCursor((current) => Math.min(current, Math.max(0, list.length - 1)))
+    setVersions(await store.listVersions(asset.id))
   }, [asset.id])
 
   useEffect(() => {
     if (open) void reload()
   }, [open, reload, asset.revision?.index])
 
-  const current = versions[cursor]
-  const view: Asset = current
-    ? { ...asset, svg: current.svg, width: current.width, height: current.height }
-    : asset
-
-  const step = (delta: number) =>
-    setCursor((index) => Math.max(0, Math.min(versions.length - 1, index + delta)))
-
-  useEffect(() => {
-    if (!open) return
-    const onKey = (event: KeyboardEvent) => {
-      // 左箭头 = 更早的版本
-      if (event.key === 'ArrowLeft') {
-        event.preventDefault()
-        step(1)
-      } else if (event.key === 'ArrowRight') {
-        event.preventDefault()
-        step(-1)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open, versions.length])
-
-  const restore = async () => {
-    if (!current) return
-    setBusy(true)
+  const restore = async (version: AssetVersionRecord) => {
+    setBusyId(version.id)
     setError('')
     try {
-      await store.restoreVersion(asset.id, current.id)
+      await store.restoreVersion(asset.id, version.id)
       await reload()
-      setCursor(0)
     } catch (err) {
       setError((err as Error)?.message || String(err))
     } finally {
-      setBusy(false)
+      setBusyId('')
     }
   }
 
   const saveCurrent = async () => {
     await store.commitVersion(asset.id)
     await reload()
-    setCursor(0)
   }
+
+  const ordered = [...versions].sort((a, b) => a.index - b.index)
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="xs" title="按时间回看这个素材的历史版本">
+        <Button variant="outline" size="xs" title="并排对比这个素材的历史版本">
           <Icon name="history" size={12} /> 版本
         </Button>
       </DialogTrigger>
-      <DialogContent className="asset-preview-dialog">
+      <DialogContent className="asset-preview-dialog version-dialog">
         <DialogHeader className="history-header">
-          <DialogTitle>版本时间轴</DialogTitle>
+          <DialogTitle>版本对比</DialogTitle>
           <DialogDescription>
-            {asset.name || '未命名素材'} · 共 {versions.length} 个版本
-            {current ? ` · 正在看 v${current.index}` : ''} · 左滑看更早
+            {asset.name || '未命名素材'} · 共 {versions.length} 个版本，从左到右按时间排 · 点任意一版恢复
           </DialogDescription>
         </DialogHeader>
 
-        <div className="version-stage">
-          <button
-            className="version-arrow"
-            onClick={() => step(1)}
-            disabled={cursor >= versions.length - 1}
-            aria-label="更早的版本"
-          >
-            <Icon name="chevronLeft" size={16} />
-          </button>
-          <div className="version-canvas">
-            <AssetPreviewCanvas key={current?.id ?? 'live'} asset={view} />
-          </div>
-          <button
-            className="version-arrow"
-            onClick={() => step(-1)}
-            disabled={cursor <= 0}
-            aria-label="更新的版本"
-          >
-            <Icon name="chevronRight" size={16} />
-          </button>
-        </div>
+        {error && <p className="qv-note qv-err">{error}</p>}
 
-        <div className="version-strip" role="tablist" aria-label="版本列表">
-          {versions.length ? (
-            versions.map((version, index) => (
-              <button
-                key={version.id}
-                role="tab"
-                aria-selected={index === cursor}
-                className={`version-chip ${index === cursor ? 'active' : ''}`}
-                onClick={() => setCursor(index)}
-                title={`v${version.index} · ${new Date(version.createdAt).toLocaleString()}`}
-              >
-                <b>v{version.index}</b>
-                <span>{version.width}×{version.height}</span>
-              </button>
-            ))
-          ) : (
-            <span className="qv-note">还没有保存过版本。点右下角「存为新版本」开始记录。</span>
-          )}
-        </div>
+        {ordered.length ? (
+          <div className="version-grid">
+            {ordered.map((version) => (
+              <figure className="version-card" key={version.id}>
+                <div className="version-shot">
+                  <img
+                    src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(version.svg)}`}
+                    alt={`版本 ${version.index}`}
+                    loading="lazy"
+                  />
+                </div>
+                <figcaption>
+                  <b>v{version.index}</b>
+                  <span className="qv-mono">
+                    {version.width}×{version.height}
+                  </span>
+                  <span className="version-time">
+                    {new Date(version.createdAt).toLocaleString('zh-CN', {
+                      month: '2-digit',
+                      day: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                </figcaption>
+                {version.label && <p className="version-label">{version.label}</p>}
+                <Button
+                  variant="outline"
+                  size="xs"
+                  disabled={busyId === version.id}
+                  onClick={() => void restore(version)}
+                >
+                  {busyId === version.id ? '恢复中…' : '恢复到此版本'}
+                </Button>
+              </figure>
+            ))}
+          </div>
+        ) : (
+          <p className="qv-note">还没有版本记录。点下面的「存为新版本」开始记录。</p>
+        )}
 
         <div className="asset-preview-actions">
-          {error && <span className="qv-note qv-err">{error}</span>}
           <DialogClose asChild>
-            <Button variant="ghost" size="sm" className="btn ghost small">
-              关闭
-            </Button>
+            <Button variant="ghost" size="sm" className="btn ghost small">关闭</Button>
           </DialogClose>
           <Button variant="outline" size="sm" className="btn ghost small" onClick={() => void saveCurrent()}>
             存为新版本
-          </Button>
-          <Button size="sm" className="btn primary small" disabled={!current || busy} onClick={() => void restore()}>
-            {busy ? '恢复中…' : '恢复到此版本'}
           </Button>
         </div>
       </DialogContent>

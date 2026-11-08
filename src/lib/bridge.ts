@@ -115,6 +115,17 @@ async function applyCommand(studio: Studio, command: BridgeCommand): Promise<unk
     const list = await store.listVersions(target.id)
     return { asset: target.id, versions: list.map((v) => ({ id: v.id, index: v.index, createdAt: v.createdAt, label: v.label, bytes: v.svg.length })) }
   }
+  if (type === 'asset.deleteVersions') {
+    const target = uniqueMatch(store.assets, payload.asset!, (entry) => entry.name, '素材')
+    const removed = await store.deleteVersions(target.id, payload.versionIds || [])
+    return { asset: target.id, removed }
+  }
+  if (type === 'asset.restoreVersion') {
+    const target = uniqueMatch(store.assets, payload.asset!, (entry) => entry.name, '素材')
+    await store.restoreVersion(target.id, payload.versionId || '')
+    const updated = store.assets.find((a) => a.id === target.id)
+    return { asset: target.id, width: updated?.width, height: updated?.height }
+  }
   if (type === 'asset.mergeVersions') {
     const target = uniqueMatch(store.assets, payload.asset!, (entry) => entry.name, '素材')
     const result = await store.mergeAsVersions(target.id, payload.sources || [])
