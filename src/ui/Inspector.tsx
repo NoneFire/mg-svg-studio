@@ -722,17 +722,21 @@ function AssetPanel({ asset, studio }: { asset: Asset; studio: Studio | null }) 
           </span>
         </div>
         <div className="stat">
-          <span className="stat-label">动画</span>
-          <span className="stat-value mono">{asset.groups.length} 条</span>
-        </div>
-        <div className="stat">
           <span className="stat-label">元素</span>
           <span className="stat-value mono">{elementCount}</span>
         </div>
-        <div className="stat">
-          <span className="stat-label">时长</span>
-          <span className="stat-value mono">{asset.groups.length ? `${duration.toFixed(2)}s` : '—'}</span>
-        </div>
+        {asset.groups.length > 0 && (
+          <div className="stat">
+            <span className="stat-label">动画</span>
+            <span className="stat-value mono">{asset.groups.length} 条</span>
+          </div>
+        )}
+        {asset.groups.length > 0 && (
+          <div className="stat">
+            <span className="stat-label">时长</span>
+            <span className="stat-value mono">{duration.toFixed(2)}s</span>
+          </div>
+        )}
       </div>
 
       <VideoCopyEditor key={asset.id} asset={asset} />

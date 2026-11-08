@@ -1741,7 +1741,7 @@ html[data-theme='light'] .inspector {
 }
 .stat-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-bottom: 16px;
   gap: 1px;
   border: 1px solid var(--border);
@@ -1750,9 +1750,12 @@ html[data-theme='light'] .inspector {
   overflow: hidden;
 }
 .stat {
-  display: grid;
-  gap: 4px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
   padding: 8px 10px;
+  min-width: 0;
   background: var(--panel-2);
 }
 .stat-label {
@@ -1761,8 +1764,11 @@ html[data-theme='light'] .inspector {
 }
 .stat-value {
   color: var(--text);
-  font-size: 13px;
-  overflow-wrap: anywhere;
+  font-size: 12px;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .meta-row {
