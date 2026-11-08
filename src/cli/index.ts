@@ -27,7 +27,7 @@ const HELP = `mgsvg — MG SVG Studio 项目文件工具（Agent 可直接改文
   mgsvg bridge  [--port 7350]                  开本地选择桥（Agent 用它看你在选什么）
   mgsvg context [--bridge 7350] [--session <id>] [--wait 30] [--after <selectionId>] [--json]
   mgsvg live    [--bridge 7350] (--session <id> | --current) [--asset <id>] [--element <id>]
-                --set fill=#f00 | --clear | --select <id|label> | --add <svg> [--name 名称] | --asset <id> --replace <svg文件>（原地替换） | --asset <目标> --merge <素材id,...> | --asset <id> --restore <版本id> | --save [--force] | --reload | --review [--frame 0..1]
+                --set fill=#f00 | --clear | --select <id|label> | --add <svg> [--name 名称] | --asset <id> --replace <svg文件>（原地替换） | --asset <id> --remove（删除） | --asset <目标> --merge <素材id,...> | --asset <id> --restore <版本id> | --save [--force] | --reload | --review [--frame 0..1]
   mgsvg validate <project> [--json]
   mgsvg mcp     [--project <project>] [--bridge <port>]   启动 MCP server（stdio，可带选择桥）
 
@@ -185,12 +185,13 @@ async function runLive(flags: Flags) {
   const add = str(flags, 'add')
   const merge = str(flags, 'merge')
   const replace = str(flags, 'replace')
+  const remove = !!flags.remove
   const listVersions = !!flags.versions
   const restoreVersion = str(flags, 'restore')
   const deleteVersions = str(flags, 'delete-versions')
   if (merge && (!asset || add)) usage('--merge 需要 --asset 指定目标素材')
   const name = str(flags, 'name')
-  if ([set, clear, save, reload, review, Boolean(select), Boolean(add), Boolean(merge), Boolean(replace && asset), Boolean(listVersions && asset), Boolean(restoreVersion && asset), Boolean(deleteVersions && asset)].filter(Boolean).length !== 1) {
+  if ([set, clear, save, reload, review, Boolean(select), Boolean(add), Boolean(merge), Boolean(replace && asset), Boolean(remove && asset), Boolean(listVersions && asset), Boolean(restoreVersion && asset), Boolean(deleteVersions && asset)].filter(Boolean).length !== 1) {
     usage('请选择一种操作：--set、--clear、--select、--add、--save、--reload 或 --review')
   }
   if (sessionId && (set || clear) && (!asset || !element)) usage('锁定实时修改时需要 --asset 和 --element')
@@ -212,6 +213,8 @@ async function runLive(flags: Flags) {
               ? 'asset.mergeVersions'
               : replace && asset
                 ? 'asset.replaceSvg'
+                : remove && asset
+                  ? 'asset.remove'
               : listVersions && asset
                 ? 'asset.versions'
                 : restoreVersion && asset
@@ -259,6 +262,7 @@ async function runLive(flags: Flags) {
         else if (listVersions) console.log((data.versions as unknown[])?.length ? JSON.stringify(data.versions, null, 2) : '这个素材还没有版本记录')
         else if (merge) console.log(`✓ 已并入 ${data.merged} 个版本，当前最高 v${data.index}`)
         else if (replace) console.log(`✓ 已替换素材内容（${data.width}×${data.height}）`)
+        else if (remove) console.log(`✓ 已删除素材「${data.name}」`)
         else if (restoreVersion) console.log(`✓ 已恢复到 ${restoreVersion}（${data.width}×${data.height}）`)
         else if (deleteVersions) console.log(`✓ 已删除 ${data.removed} 个版本`)
         else console.log(`✓ ${data.element} ← ${JSON.stringify(data.overrides ?? null)}`)

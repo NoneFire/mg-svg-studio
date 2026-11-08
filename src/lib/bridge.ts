@@ -126,6 +126,11 @@ async function applyCommand(studio: Studio, command: BridgeCommand): Promise<unk
     const updated = store.assets.find((a) => a.id === target.id)
     return { asset: target.id, width: updated?.width, height: updated?.height }
   }
+  if (type === 'asset.remove') {
+    const target = uniqueMatch(store.assets, payload.asset!, (entry) => entry.name, '素材')
+    await store.removeAsset(target.id)
+    return { removed: target.id, name: target.name }
+  }
   if (type === 'asset.replaceSvg') {
     if (!payload.svg?.trim()) throw new Error('替换素材需要 SVG 源码')
     const target = uniqueMatch(store.assets, payload.asset!, (entry) => entry.name, '素材')
