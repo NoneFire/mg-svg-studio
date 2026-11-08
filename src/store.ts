@@ -613,13 +613,22 @@ export class Store {
   async restoreVersion(assetId: string, versionId: string) {
     const record = (await dbListVersions(assetId)).find((v) => v.id === versionId)
     if (!record) throw new Error('找不到这个版本')
+    const asset = this.assets.find((a) => a.id === assetId)
+    // 重新解析 SVG：元素索引、分组、警告都要跟着换，否则样式覆盖会对不上旧 id
+    const doc = parseSvgDocument(record.svg)
+    const groups = doc.groups.map((g, i) => ({ ...g, id: `${assetId}_g${i}` }))
     this.editAsset(assetId, `恢复自版本 ${record.index}`, () => ({
       svg: record.svg,
-      width: record.width,
-      height: record.height,
+      width: doc.width || record.width || asset?.width || 1920,
+      height: doc.height || record.height || asset?.height || 1080,
+      kind: groups.length ? 'animated' : 'static',
+      groups,
+      elements: elementIndexOf(doc),
+      warnings: doc.warnings,
+      overrides: {},
+      layouts: {},
       review: undefined,
       agentReview: undefined,
-      overrides: {},
     }))
     await this.commitVersion(assetId, `恢复自版本 ${record.index}`)
   }

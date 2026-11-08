@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import AssetVersions from './AssetVersions'
 import { Tabs } from 'radix-ui'
 import { store } from '../store'
 import type { Studio } from '../lib/studio'
@@ -787,12 +788,7 @@ function AssetPanel({ asset, studio }: { asset: Asset; studio: Studio | null }) 
         >
           <Icon name="copy" size={13} /> 复制素材
         </button>
-        <button
-          className="btn ghost small"
-          onClick={() => void store.commitVersion(asset.id)}
-        >
-          <Icon name="history" size={13} /> 保存为新版本
-        </button>
+        <AssetVersions asset={asset} />
         <button
           className="btn danger small"
           onClick={() => {

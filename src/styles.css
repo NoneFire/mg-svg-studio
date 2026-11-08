@@ -3893,3 +3893,59 @@ html[data-theme='light'] .timeline-voice {
     height: clamp(140px, 32dvh, 240px);
   }
 }
+
+/* 版本时间轴 */
+.version-stage {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.version-arrow {
+  flex: none;
+  width: 30px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.version-arrow:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.version-arrow:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.version-canvas {
+  flex: 1;
+  min-width: 0;
+}
+.version-strip {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 8px 0 2px;
+}
+.version-chip {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 4px 9px;
+  color: var(--muted);
+  font-size: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.version-chip b {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+}
+.version-chip.active {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
