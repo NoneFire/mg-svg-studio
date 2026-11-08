@@ -102,6 +102,38 @@ export default function HelpModal({ onClose }: { onClose: () => void }) {
             <em>切换左栏或右栏</em>
           </div>
 
+
+          <h3>交给 Agent 操作</h3>
+          <p>
+            这套项目配了一个技能 <code>mgsvg-cli</code>，放在
+            <code>.agents/skills/mgsvg-cli/SKILL.md</code>。它会告诉 Agent 怎么读选区、改样式、换字体、并排对比版本、跑视觉评审。
+          </p>
+          <p className="muted">
+            把下面这段发给你的 Agent（Claude Code / Codex / 任何能跑命令的 Agent），它就能接手：
+          </p>
+          <pre className="help-prompt">{`用 mgsvg-cli 技能操作这个项目。
+
+仓库：当前工作目录
+Studio 已在运行：${typeof location !== 'undefined' ? location.origin : 'http://localhost:5188'}
+
+第一步：node bin/mgsvg.mjs context --json
+        拿到 sessionId 和当前选区，不要凭项目名猜路径。
+
+常用命令：
+  node bin/mgsvg.mjs live --session <id> --asset <id> --replace <svg>
+  node bin/mgsvg.mjs live --session <id> --assets a,b,c --versions
+  node bin/mgsvg.mjs version list --asset <id> --session <id>
+  node bin/mgsvg.mjs live --session <id> --asset <id> --remove
+
+改完画面类素材要渲染自检：
+  Chrome --headless --virtual-time-budget=12000 --screenshot=/tmp/check.png \
+    --window-size=1920,1080 "file:///path.svg"
+
+注意：不要用 <g transform> 包整块内容做平移，评审会误判溢出。`}</pre>
+          <p className="muted">
+            没装技能的话，直接让 Agent 读 <code>.agents/skills/mgsvg-cli/SKILL.md</code> 也一样——
+            里面写了所有命令、字体清单和常见报错的处理方式。
+          </p>
           <h3>渲染与降级</h3>
           <p>
             SVG 会被解析成 Leafer 的图形树，因此可以点选单个元素改样式。渐变、虚线、圆角、混合模式、模糊都已支持；

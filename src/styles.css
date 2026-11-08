@@ -3746,3 +3746,18 @@ html[data-theme='light'] .timeline-voice {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.help-prompt {
+  margin: 8px 0 12px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--text);
+  white-space: pre;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  user-select: all;
+}
