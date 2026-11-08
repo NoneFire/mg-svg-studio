@@ -34,9 +34,6 @@ export default function InspectorHistory({ asset, elementId }: { asset: Asset; e
           {current
             ? <span className="history-status">当前版本</span>
             : <Button variant="outline" size="xs" onClick={restore}>恢复此版本</Button>}
-          <Button variant="outline" size="xs" title="基于此版本新建一个并排变体" onClick={() => store.saveVariant(version.asset)}>
-            另存为变体
-          </Button>
         </div>
       )
     }

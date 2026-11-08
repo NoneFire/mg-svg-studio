@@ -1135,7 +1135,6 @@ function normalizeAsset(a) {
     createdAt: Number(a.createdAt) || Date.now(),
     review: a.review && typeof a.review === "object" ? a.review : void 0,
     agentReview: a.agentReview && typeof a.agentReview === "object" ? a.agentReview : void 0,
-    variantOf: typeof a.variantOf === "string" ? a.variantOf : void 0,
     version: 1
   };
 }
@@ -19273,8 +19272,7 @@ var init_args = __esm({
         review: "switch",
         frame: "value",
         add: "value",
-        name: "value",
-        "variant-of": "value"
+        name: "value"
       },
       bridge: { port: "value" },
       mcp: { project: "value", bridge: "value" }
@@ -19594,7 +19592,7 @@ async function startBridge(port = 7350) {
     if ((type === "style.set" || type === "style.clear") && !element) {
       throw new Error("\u8BF7\u5148\u9009\u4E2D\u5143\u7D20\uFF0C\u6216\u63D0\u4F9B\u7D20\u6750\u548C\u5143\u7D20 ID");
     }
-    if (!["style.set", "style.clear", "select", "save", "review", "asset.add", "asset.variant", "project.reload"].includes(type)) throw new Error("\u4E0D\u652F\u6301\u7684\u5B9E\u65F6\u547D\u4EE4");
+    if (!["style.set", "style.clear", "select", "save", "review", "asset.add", "project.reload"].includes(type)) throw new Error("\u4E0D\u652F\u6301\u7684\u5B9E\u65F6\u547D\u4EE4");
     if (type === "review" && payload.frame !== void 0 && (typeof payload.frame !== "number" || !Number.isFinite(payload.frame) || payload.frame < 0 || payload.frame > 1)) throw new Error("\u8BC4\u5BA1\u5E27\u5FC5\u987B\u5728 0 \u5230 1 \u4E4B\u95F4");
     const id2 = randomUUID();
     pending.set(id2, {
@@ -20209,8 +20207,7 @@ var HELP = `mgsvg \u2014 MG SVG Studio \u9879\u76EE\u6587\u4EF6\u5DE5\u5177\uFF0
   mgsvg bridge  [--port 7350]                  \u5F00\u672C\u5730\u9009\u62E9\u6865\uFF08Agent \u7528\u5B83\u770B\u4F60\u5728\u9009\u4EC0\u4E48\uFF09
   mgsvg context [--bridge 7350] [--session <id>] [--wait 30] [--after <selectionId>] [--json]
   mgsvg live    [--bridge 7350] (--session <id> | --current) [--asset <id>] [--element <id>]
-                --set fill=#f00 | --clear | --select <id|label> | --add <svg> [--name \u540D\u79F0] [--variant-of <\u7D20\u6750id>] |
-                --asset <id> --variant-of <\u7D20\u6750id>\uFF08\u628A\u5DF2\u6709\u7D20\u6750\u5E76\u5230\u67D0\u4E2A\u7248\u672C\u65C1\uFF09 | --save | --reload | --review [--frame 0..1]
+                --set fill=#f00 | --clear | --select <id|label> | --add <svg> [--name \u540D\u79F0] | --save | --reload | --review [--frame 0..1]
   mgsvg validate <project> [--json]
   mgsvg mcp     [--project <project>] [--bridge <port>]   \u542F\u52A8 MCP server\uFF08stdio\uFF0C\u53EF\u5E26\u9009\u62E9\u6865\uFF09
 
@@ -20354,24 +20351,20 @@ async function runLive(flags) {
   const review = flags.review === true;
   const add = str(flags, "add");
   const name = str(flags, "name");
-  const variantOnly = Boolean(str(flags, "variant-of")) && Boolean(str(flags, "asset")) && !add;
-  if ([set, clear, save, reload, review, Boolean(select), Boolean(add), variantOnly].filter(Boolean).length !== 1) {
-    usage("\u8BF7\u9009\u62E9\u4E00\u79CD\u64CD\u4F5C\uFF1A--set\u3001--clear\u3001--select\u3001--add\u3001--save\u3001--reload\u3001--review\uFF0C\u6216 --asset \u914D --variant-of");
+  if ([set, clear, save, reload, review, Boolean(select), Boolean(add)].filter(Boolean).length !== 1) {
+    usage("\u8BF7\u9009\u62E9\u4E00\u79CD\u64CD\u4F5C\uFF1A--set\u3001--clear\u3001--select\u3001--add\u3001--save\u3001--reload \u6216 --review");
   }
   if (sessionId && (set || clear) && (!asset || !element)) usage("\u9501\u5B9A\u5B9E\u65F6\u4FEE\u6539\u65F6\u9700\u8981 --asset \u548C --element");
   if ((save || reload) && (asset || element) || (review || select) && element || add && (asset || element || select)) usage("\u8BE5\u64CD\u4F5C\u4E0D\u63A5\u53D7\u6B64\u7D20\u6750\u6216\u5143\u7D20\u53C2\u6570");
   if (name && !add) usage("--name \u53EA\u7528\u4E8E --add");
-  const variantOf = str(flags, "variant-of");
-  if (variantOf && !add && !asset) usage("--variant-of \u8981\u4E48\u914D --add\uFF0C\u8981\u4E48\u914D --asset \u6307\u5B9A\u8981\u5F52\u5C5E\u7684\u7D20\u6750");
   const frame = num2(flags, "frame");
   if (frame !== void 0 && (!review || frame < 0 || frame > 1)) usage("--frame \u53EA\u7528\u4E8E --review\uFF0C\u8303\u56F4\u4E3A 0\u20131");
-  const type = save ? "save" : reload ? "project.reload" : review ? "review" : select ? "select" : add ? "asset.add" : variantOf && asset ? "asset.variant" : clear ? "style.clear" : "style.set";
+  const type = save ? "save" : reload ? "project.reload" : review ? "review" : select ? "select" : add ? "asset.add" : clear ? "style.clear" : "style.set";
   const payload = { asset, element: select || element, frame };
   if (set) payload.patch = parseStylePatch(setPairs(flags, NUMERIC_STYLE, (value) => value));
   if (add) {
     payload.svg = fs5.readFileSync(path5.resolve(add), "utf8");
     payload.name = name || path5.basename(add, path5.extname(add));
-    if (variantOf) payload.variantOf = variantOf;
   }
   const port = portOf(flags, "bridge", 7350);
   const base = `http://127.0.0.1:${port}`;

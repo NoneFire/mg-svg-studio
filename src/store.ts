@@ -14,7 +14,8 @@ import {
 const DB_NAME = 'mg-svg-studio'
 const DB_STORE = 'assets'
 const DB_META_STORE = 'meta'
-const DB_VERSION = 2
+const DB_VERSION_STORE = 'versions'
+const DB_VERSION = 3
 const ACTIVE_PROJECT_KEY = 'active-project'
 const ACTIVE_WORKSPACE_KEY = 'active-workspace'
 const WORKSPACE_LINKS_KEY = 'workspace-links'
@@ -35,6 +36,62 @@ type StoredWorkspace = StoredProjectLink & StoredHistoryState & { stamp?: string
 type WorkspaceSession = { id: string; stamp: string | null }
 type WorkspaceLink = Pick<StoredProjectLink, 'handle' | 'url' | 'fileKey'>
 
+export interface AssetVersionRecord {
+  id: string
+  assetId: string
+  index: number
+  createdAt: number
+  label?: string
+  svg: string
+  width: number
+  height: number
+}
+
+/** 某个素材的全部历史版本，按 index 从新到旧 */
+async function dbListVersions(assetId: string): Promise<AssetVersionRecord[]> {
+  try {
+    const db = await openDB()
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(DB_VERSION_STORE, 'readonly')
+      const req = tx.objectStore(DB_VERSION_STORE).index('assetId').getAll(IDBKeyRange.only(assetId))
+      req.onsuccess = () => resolve((req.result as AssetVersionRecord[]).sort((a, b) => b.index - a.index))
+      req.onerror = () => reject(req.error)
+    })
+  } catch {
+    return []
+  }
+}
+
+async function dbPutVersion(record: AssetVersionRecord): Promise<void> {
+  const db = await openDB()
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(DB_VERSION_STORE, 'readwrite')
+    tx.objectStore(DB_VERSION_STORE).put(record)
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error)
+  })
+}
+
+async function dbDeleteVersions(assetId: string): Promise<void> {
+  try {
+    const db = await openDB()
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(DB_VERSION_STORE, 'readwrite')
+      const req = tx.objectStore(DB_VERSION_STORE).index('assetId').openCursor(IDBKeyRange.only(assetId))
+      req.onsuccess = () => {
+        const cursor = req.result
+        if (!cursor) return
+        cursor.delete()
+        cursor.continue()
+      }
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error)
+    })
+  } catch {
+    /* 版本清理失败不阻断删除 */
+  }
+}
+
 function uid(prefix = 'a') {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}${Date.now().toString(36).slice(-3)}`
 }
@@ -48,6 +105,10 @@ function openDB() {
       const db = req.result
       if (!db.objectStoreNames.contains(DB_STORE)) db.createObjectStore(DB_STORE, { keyPath: 'id' })
       if (!db.objectStoreNames.contains(DB_META_STORE)) db.createObjectStore(DB_META_STORE)
+      if (!db.objectStoreNames.contains(DB_VERSION_STORE)) {
+        const store = db.createObjectStore(DB_VERSION_STORE, { keyPath: 'id' })
+        store.createIndex('assetId', 'assetId')
+      }
     }
     req.onsuccess = () => {
       const db = req.result
@@ -259,44 +320,11 @@ function orderedAssets(assets: Asset[], order: ArrangeSettings['order']): Asset[
 
 export function autoLayout(assets: Asset[], settings: ArrangeSettings = DEFAULT_ARRANGE_SETTINGS): Asset[] {
   if (!assets.length) return assets
-  const byId = new Map(assets.map((asset) => [asset.id, asset]))
-  const groups = new Map<string, Asset[]>()
-  for (const asset of assets) {
-    let current = asset
-    const visited = new Set<string>()
-    while (current.variantOf && !visited.has(current.id)) {
-      visited.add(current.id)
-      const parent = byId.get(current.variantOf)
-      if (!parent) break
-      current = parent
-    }
-    const rootId = current.variantOf && !byId.has(current.variantOf) ? current.variantOf : current.id
-    const members = groups.get(rootId) ?? []
-    members.push(asset)
-    groups.set(rootId, members)
-  }
-  const families = [...groups].map(([rootId, members]) => {
-    const root = byId.get(rootId)
-    const ordered = members.sort((a, b) => {
-      if (root && a.id === root.id) return -1
-      if (root && b.id === root.id) return 1
-      return a.createdAt - b.createdAt || a.id.localeCompare(b.id)
-    })
-    const sizes = ordered.map((asset) => cellSize(asset))
-    return {
-      root: root ?? ordered[0],
-      members: ordered,
-      width: sizes.reduce((sum, size) => sum + size.w, 0) + settings.gap * Math.max(0, ordered.length - 1),
-      height: Math.max(...sizes.map((size) => size.h)),
-    }
+  const ordered = orderedAssets(assets, settings.order)
+  const items = ordered.map((asset) => {
+    const size = cellSize(asset)
+    return { id: asset.id, width: size.w, height: size.h }
   })
-  const orderedFamilies = orderedAssets(families.map((family) => family.root), settings.order)
-    .map((root) => families.find((family) => family.root.id === root.id)!)
-  const items = orderedFamilies.map((family) => ({
-    id: family.root.id,
-    width: family.width,
-    height: family.height,
-  }))
   const { boxes } = solveLayout(items, {
     mode: settings.mode,
     cols: settings.cols,
@@ -306,20 +334,10 @@ export function autoLayout(assets: Asset[], settings: ArrangeSettings = DEFAULT_
     alignX: 'start',
     alignY: 'start',
   })
-  const familyBoxes = new Map(boxes.map((box) => [box.id, box]))
-  const positions = new Map<string, { x: number; y: number }>()
-  for (const family of orderedFamilies) {
-    const box = familyBoxes.get(family.root.id)
-    if (!box) continue
-    let x = box.x
-    for (const asset of family.members) {
-      positions.set(asset.id, { x, y: box.y })
-      x += cellSize(asset).w + settings.gap
-    }
-  }
+  const byId = new Map(boxes.map((box) => [box.id, box]))
   return assets.map((asset) => {
-    const position = positions.get(asset.id)
-    return position ? { ...asset, ...position } : asset
+    const box = byId.get(asset.id)
+    return box ? { ...asset, x: box.x, y: box.y } : asset
   })
 }
 
@@ -527,9 +545,8 @@ export class Store {
     return 0
   }
 
-  async addSvgText(text: string, name: string, variantOf?: string) {
+  async addSvgText(text: string, name: string) {
     const asset = this.buildAsset(text, name, 'import')
-    if (variantOf && this.assets.some((a) => a.id === variantOf)) asset.variantOf = variantOf
     // 只给新素材找位置，不动已有素材：排在现有内容最右侧，顶对齐。
     // 想要整板重排时，走「整理画布」显式触发。
     if (this.assets.length) {
@@ -547,6 +564,7 @@ export class Store {
 
   async removeAsset(id: string) {
     this.commitAssets('删除素材', this.assets.filter((asset) => asset.id !== id))
+    await dbDeleteVersions(id)
   }
 
   async duplicateAsset(id: string) {
@@ -566,65 +584,44 @@ export class Store {
     this.commitAssets('复制素材', [...this.assets, copy])
   }
 
-  saveVariant(version: Asset) {
-    const original = this.assets.find((asset) => asset.id === version.id) ?? version
-    const byId = new Map(this.assets.map((asset) => [asset.id, asset]))
-    let root = original
-    const visited = new Set<string>()
-    while (root.variantOf && !visited.has(root.id)) {
-      visited.add(root.id)
-      const parent = byId.get(root.variantOf)
-      if (!parent) break
-      root = parent
-    }
-    const familyRootId = root.variantOf && !byId.has(root.variantOf) ? root.variantOf : root.id
-    const family = this.assets.filter((asset) => {
-      let current = asset
-      const seen = new Set<string>()
-      while (current.variantOf && !seen.has(current.id)) {
-        seen.add(current.id)
-        const parent = byId.get(current.variantOf)
-        if (!parent) break
-        current = parent
-      }
-      const candidateRootId = current.variantOf && !byId.has(current.variantOf) ? current.variantOf : current.id
-      return candidateRootId === familyRootId
-    })
-    const rootAsset = byId.get(familyRootId) ?? root
-    const nameBase = this.assets.find((asset) => asset.id === version.id)?.name ?? version.name
-    const variantName = (index: number) => `${nameBase} · 变体 ${index}`
-    let suffix = 1
-    while (this.assets.some((asset) => asset.name === variantName(suffix))) suffix++
-    const rootSize = cellSize(rootAsset)
-    const gap = this.arrangeSettings.gap
-    let x = Math.max(rootAsset.x + rootSize.w, ...family.map((asset) => asset.x + cellSize(asset).w)) + gap
-    const y = rootAsset.y
-    const size = cellSize(version)
-    while (true) {
-      const blockers = this.assets.filter((asset) => {
-        const other = cellSize(asset)
-        const overlapsX = x < asset.x + other.w && x + size.w > asset.x
-        const overlapsY = y - LABEL_H < asset.y + other.h && y + size.h > asset.y - LABEL_H
-        return overlapsX && overlapsY
-      })
-      if (!blockers.length) break
-      x = Math.max(...blockers.map((asset) => asset.x + cellSize(asset).w)) + gap
-    }
-    const copy: Asset = {
-      ...version,
-      id: uid(),
-      name: variantName(suffix),
+  /** 把当前素材记为一个版本；历史只追加，不覆盖旧版本 */
+  async commitVersion(assetId: string, label?: string): Promise<AssetVersionRecord | null> {
+    const asset = this.assets.find((a) => a.id === assetId)
+    if (!asset) return null
+    const existing = await dbListVersions(assetId)
+    const index = (existing[0]?.index ?? 0) + 1
+    const record: AssetVersionRecord = {
+      id: `${assetId}:${index}`,
+      assetId,
+      index,
       createdAt: Date.now(),
-      x,
-      y,
-      review: undefined,
-      variantOf: version.id,
-      version: 1,
+      label,
+      svg: asset.svg,
+      width: asset.width,
+      height: asset.height,
     }
-    this.selection = { assetId: copy.id }
-    this.multiSelect = []
-    this.selectedGroupId = null
-    this.commitAssets('另存为变体', [...this.assets, copy])
+    await dbPutVersion(record)
+    this.editAsset(assetId, '记录版本', () => ({ revision: { index, createdAt: record.createdAt, label } }))
+    return record
+  }
+
+  listVersions(assetId: string) {
+    return dbListVersions(assetId)
+  }
+
+  /** 从历史版本恢复：以旧版为底追加一个新版本，历史不回退 */
+  async restoreVersion(assetId: string, versionId: string) {
+    const record = (await dbListVersions(assetId)).find((v) => v.id === versionId)
+    if (!record) throw new Error('找不到这个版本')
+    this.editAsset(assetId, `恢复自版本 ${record.index}`, () => ({
+      svg: record.svg,
+      width: record.width,
+      height: record.height,
+      review: undefined,
+      agentReview: undefined,
+      overrides: {},
+    }))
+    await this.commitVersion(assetId, `恢复自版本 ${record.index}`)
   }
 
   async renameAsset(id: string, name: string) {
@@ -1296,14 +1293,6 @@ export class Store {
     this.arrangeSettings = { ...settings }
     try { localStorage.setItem('mg-arrange-settings', JSON.stringify(this.arrangeSettings)) } catch {}
     this.emit()
-  }
-
-  /** 把一个素材标成另一张图的变体，然后重排；同族会横向并排 */
-  setVariantOf(id: string, variantOf: string | null) {
-    const asset = this.assets.find((a) => a.id === id)
-    if (!asset) return
-    asset.variantOf = variantOf && variantOf !== id ? variantOf : undefined
-    this.relayout()
   }
 
   relayout(settings = this.arrangeSettings) {

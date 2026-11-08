@@ -106,14 +106,9 @@ async function applyCommand(studio: Studio, command: BridgeCommand): Promise<unk
   if (type === 'save') return store.saveProject({ linkedOnly: true, automatic: true })
   if (type === 'asset.add') {
     if (!payload.svg?.trim() || !payload.name?.trim()) throw new Error('添加素材需要 SVG 源码和名称')
-    await store.addSvgText(payload.svg, payload.name, payload.variantOf)
+    await store.addSvgText(payload.svg, payload.name)
     const added = store.selectedAsset
     return { asset: added?.id, name: added?.name, width: added?.width, height: added?.height, dirty: store.projectDirty }
-  }
-  if (type === 'asset.variant') {
-    const target = uniqueMatch(store.assets, payload.asset!, (entry) => entry.name, '素材')
-    store.setVariantOf(target.id, payload.variantOf || null)
-    return { asset: target.id, variantOf: payload.variantOf || null }
   }
   if (type === 'project.reload') {
     if (store.projectDirty) throw new Error('Studio 有未保存改动，请先保存或导出副本再重新载入')

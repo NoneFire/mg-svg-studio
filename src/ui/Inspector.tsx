@@ -789,9 +789,9 @@ function AssetPanel({ asset, studio }: { asset: Asset; studio: Studio | null }) 
         </button>
         <button
           className="btn ghost small"
-          onClick={() => store.saveVariant(asset)}
+          onClick={() => void store.commitVersion(asset.id)}
         >
-          <Icon name="copy" size={13} /> 另存为变体
+          <Icon name="history" size={13} /> 保存为新版本
         </button>
         <button
           className="btn danger small"

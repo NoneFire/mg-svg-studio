@@ -27,8 +27,7 @@ const HELP = `mgsvg — MG SVG Studio 项目文件工具（Agent 可直接改文
   mgsvg bridge  [--port 7350]                  开本地选择桥（Agent 用它看你在选什么）
   mgsvg context [--bridge 7350] [--session <id>] [--wait 30] [--after <selectionId>] [--json]
   mgsvg live    [--bridge 7350] (--session <id> | --current) [--asset <id>] [--element <id>]
-                --set fill=#f00 | --clear | --select <id|label> | --add <svg> [--name 名称] [--variant-of <素材id>] |
-                --asset <id> --variant-of <素材id>（把已有素材并到某个版本旁） | --save | --reload | --review [--frame 0..1]
+                --set fill=#f00 | --clear | --select <id|label> | --add <svg> [--name 名称] | --save | --reload | --review [--frame 0..1]
   mgsvg validate <project> [--json]
   mgsvg mcp     [--project <project>] [--bridge <port>]   启动 MCP server（stdio，可带选择桥）
 
@@ -185,15 +184,12 @@ async function runLive(flags: Flags) {
   const review = flags.review === true
   const add = str(flags, 'add')
   const name = str(flags, 'name')
-  const variantOnly = Boolean(str(flags, 'variant-of')) && Boolean(str(flags, 'asset')) && !add
-  if ([set, clear, save, reload, review, Boolean(select), Boolean(add), variantOnly].filter(Boolean).length !== 1) {
-    usage('请选择一种操作：--set、--clear、--select、--add、--save、--reload、--review，或 --asset 配 --variant-of')
+  if ([set, clear, save, reload, review, Boolean(select), Boolean(add)].filter(Boolean).length !== 1) {
+    usage('请选择一种操作：--set、--clear、--select、--add、--save、--reload 或 --review')
   }
   if (sessionId && (set || clear) && (!asset || !element)) usage('锁定实时修改时需要 --asset 和 --element')
   if (((save || reload) && (asset || element)) || ((review || select) && element) || (add && (asset || element || select))) usage('该操作不接受此素材或元素参数')
   if (name && !add) usage('--name 只用于 --add')
-  const variantOf = str(flags, 'variant-of')
-  if (variantOf && !add && !asset) usage('--variant-of 要么配 --add，要么配 --asset 指定要归属的素材')
   const frame = num(flags, 'frame')
   if (frame !== undefined && (!review || frame < 0 || frame > 1)) usage('--frame 只用于 --review，范围为 0–1')
   const type: BridgeCommand['type'] = save
@@ -206,17 +202,14 @@ async function runLive(flags: Flags) {
           ? 'select'
           : add
             ? 'asset.add'
-            : variantOf && asset
-              ? 'asset.variant'
-              : clear
-                ? 'style.clear'
-                : 'style.set'
+            : clear
+              ? 'style.clear'
+              : 'style.set'
   const payload: BridgeCommand['payload'] = { asset, element: select || element, frame }
   if (set) payload.patch = parseStylePatch(setPairs(flags, NUMERIC_STYLE, (value) => value))
   if (add) {
     payload.svg = fs.readFileSync(path.resolve(add), 'utf8')
     payload.name = name || path.basename(add, path.extname(add))
-    if (variantOf) payload.variantOf = variantOf
   }
 
   const port = portOf(flags, 'bridge', 7350)

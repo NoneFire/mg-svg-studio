@@ -114,7 +114,6 @@ export function stripRuntime(asset: Asset): Asset {
     createdAt: rest.createdAt || Date.now(),
     review: rest.review,
     agentReview: rest.agentReview,
-    variantOf: rest.variantOf,
     version: 1,
   }
 }
@@ -160,7 +159,6 @@ export function normalizeAsset(a: any): Asset {
     createdAt: Number(a.createdAt) || Date.now(),
     review: a.review && typeof a.review === 'object' ? a.review : undefined,
     agentReview: a.agentReview && typeof a.agentReview === 'object' ? a.agentReview : undefined,
-    variantOf: typeof a.variantOf === 'string' ? a.variantOf : undefined,
     version: 1,
   }
 }

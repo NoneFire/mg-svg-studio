@@ -124,8 +124,8 @@ export default function LeftPanel({ studio }: { studio: Studio | null }) {
                       <DropdownMenuItem onSelect={() => store.duplicateAsset(asset.id)}>
                         <Icon name="copy" size={14} /> 复制素材
                       </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => store.saveVariant(asset)}>
-                        <Icon name="copy" size={14} /> 另存为变体
+                      <DropdownMenuItem onSelect={() => void store.commitVersion(asset.id)}>
+                        <Icon name="history" size={14} /> 保存为新版本
                       </DropdownMenuItem>
                       <DropdownMenuItem variant="destructive" onSelect={() => {
                         if (confirm(`删除素材「${asset.name}」？`)) void store.removeAsset(asset.id)

@@ -34,7 +34,7 @@ export function sameAsset(a: Asset, b: Asset, includeReview = false) {
   return a === b || (
     a.id === b.id && a.name === b.name && a.svg === b.svg &&
     a.width === b.width && a.height === b.height && a.kind === b.kind &&
-    a.x === b.x && a.y === b.y && a.source === b.source && a.createdAt === b.createdAt && a.variantOf === b.variantOf &&
+    a.x === b.x && a.y === b.y && a.source === b.source && a.createdAt === b.createdAt &&
     a.videoCopy === b.videoCopy && a.voiceoverAudio === b.voiceoverAudio &&
     sameValue(a.groups, b.groups) && sameValue(a.elements ?? [], b.elements ?? []) &&
     sameValue(a.overrides, b.overrides) && sameValue(a.layouts ?? {}, b.layouts ?? {}) &&

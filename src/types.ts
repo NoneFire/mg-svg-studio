@@ -88,8 +88,8 @@ export interface Asset {
   review?: import('./lib/review/types').ReviewSnapshot
   /** 最近一次 Agent 语义评审：与公式评审分开保存、分开过期 */
   agentReview?: import('./lib/review/types').AgentReviewSnapshot
-  /** 变体来源素材 ID；指向最初素材，供自动排列按时间把变体放在右侧 */
-  variantOf?: string
+  /** 当前版本在时间轴上的位置；历史另存 IndexedDB，不进项目文件 */
+  revision?: { index: number; createdAt: number; label?: string }
   source: 'sample' | 'import'
   x: number
   y: number
