@@ -1,7 +1,5 @@
 export type Mat = { a: number; b: number; c: number; d: number; e: number; f: number }
 
-export type Color = { r: number; g: number; b: number; a: number }
-
 export interface Keyframe {
   offset: number
   value: string
@@ -97,15 +95,3 @@ export interface Asset {
   version: 1
 }
 
-export interface BoardRect {
-  x: number
-  y: number
-  width: number
-  height: number
-}
-
-export interface AssetRuntimeInfo {
-  duration: number
-  groupCount: number
-  elementCount: number
-}

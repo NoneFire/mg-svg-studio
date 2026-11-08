@@ -95,18 +95,6 @@ export function SearchField({ label, value, onChange }: { label: string; value: 
   )
 }
 
-export function Section({ title, action, children, dense }: { title: string; action?: ReactNode; children: ReactNode; dense?: boolean }) {
-  return (
-    <section className={`section ${dense ? 'dense' : ''}`}>
-      <header className="section-head">
-        <h3>{title}</h3>
-        {action}
-      </header>
-      <div className="section-body">{children}</div>
-    </section>
-  )
-}
-
 export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
     <label className="field">

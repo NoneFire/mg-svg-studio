@@ -43,31 +43,13 @@ export function apply(m: Mat, x: number, y: number): { x: number; y: number } {
   return { x: m.a * x + m.c * y + m.e, y: m.b * x + m.d * y + m.f }
 }
 
-export function invert(m: Mat): Mat {
-  const det = m.a * m.d - m.b * m.c
-  if (!det) return { ...IDENTITY }
-  const id = 1 / det
-  return {
-    a: m.d * id,
-    b: -m.b * id,
-    c: -m.c * id,
-    d: m.a * id,
-    e: (m.c * m.f - m.d * m.e) * id,
-    f: (m.b * m.e - m.a * m.f) * id,
-  }
-}
 
-export function toArray(m: Mat): [number, number, number, number, number, number] {
-  return [m.a, m.b, m.c, m.d, m.e, m.f]
-}
 
-export function isIdentity(m: Mat): boolean {
-  return m.a === 1 && m.b === 0 && m.c === 0 && m.d === 1 && m.e === 0 && m.f === 0
-}
 
-export function around(px: number, py: number): Mat {
-  return translate(px, py)
-}
+
+
+
+
 
 /** 围绕某点的变换：T(p) * m * T(-p) */
 export function pivotMatrix(m: Mat, px: number, py: number): Mat {

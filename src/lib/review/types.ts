@@ -103,24 +103,6 @@ export interface QvFrame {
   elements: QvElement[]
 }
 
-export interface QvBoxes {
-  canvas: { width: number; height: number }
-  frames: QvFrame[]
-  precision: 'exact' | 'estimated'
-  precisionDetail?: { position: 'exact' | 'estimated'; width: 'exact' | 'estimated' }
-  source: string
-  /** 画面是否按 1080 短边归一 */
-  scale: number
-  meta: {
-    duration: number
-    animationCount: number
-    smil: boolean
-    imageCount: number
-    brokenImages: string[]
-    baked: boolean
-  }
-}
-
 export interface Finding {
   id: string
   ruleId: string

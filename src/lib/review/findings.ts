@@ -134,4 +134,3 @@ export function sortFindings(findings: Finding[]): Finding[] {
   )
 }
 
-export const textOf = (el: QvElement | undefined) => (el?.text || '').slice(0, 80)

@@ -50,6 +50,3 @@ export function readStdin(): Promise<string> {
   })
 }
 
-export function readJsonFile(file: string): any {
-  return JSON.parse(fs.readFileSync(path.resolve(file), 'utf8'))
-}

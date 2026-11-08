@@ -142,17 +142,8 @@ function extent(boxes: LayoutBox[]) {
 }
 
 /** 语义化预设，UI 上的「一键排布」用它 */
-export const LAYOUT_PRESETS: Record<string, Partial<LayoutSpec>> = {
-  row: { mode: 'row', gap: 24, alignY: 'center', justify: 'start' },
-  rowSpread: { mode: 'row', gap: 24, alignY: 'center', justify: 'between' },
-  column: { mode: 'column', gap: 16, alignX: 'start', justify: 'start' },
-  grid3: { mode: 'grid', cols: 3, gap: 20, rowGap: 20, alignX: 'center', alignY: 'center' },
-  grid2: { mode: 'grid', cols: 2, gap: 24, rowGap: 24, alignX: 'start', alignY: 'start' },
-}
 
-export function summarizeLayout(items: number, spec: LayoutSpec): string {
-  const mode = spec.mode === 'row' ? '横向' : spec.mode === 'column' ? '纵向' : spec.mode === 'grid' ? `${spec.cols} 列网格` : '自由'
-  return `${items} 个元素 · ${mode} · 间距 ${spec.gap}`
-}
+
+
 
 export type { LayoutSpec, LayoutItem, LayoutBox, LayoutResult }

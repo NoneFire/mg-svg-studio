@@ -145,25 +145,7 @@ function collectAnimations(svg: SVGSVGElement, shadow: ShadowRoot): Animation[] 
 }
 
 /** 把每条动画拨到同一时刻并暂停。t 的单位是秒。 */
-export function freezeAt(snap: Snapshot, seconds: number) {
-  const ms = Math.max(0, seconds * 1000)
-  for (const a of collectAnimations(snap.svg, snap.shadow)) {
-    try {
-      a.pause()
-      a.currentTime = ms
-    } catch {
-      /* 单条动画不能定位时跳过，不影响其它 */
-    }
-  }
-  if (snap.hasSmil) {
-    try {
-      snap.svg.pauseAnimations()
-      snap.svg.setCurrentTime(Math.max(0, seconds))
-    } catch {
-      /* SMIL 不可用时静态属性仍然可测 */
-    }
-  }
-}
+
 
 /** computed style 里这些属性决定“画出来长什么样”，必须抄进静态副本。 */
 const BAKE_PROPS = [

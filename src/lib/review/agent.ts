@@ -113,10 +113,3 @@ export function parseAgentReviewDocument(
   }
 }
 
-export function parseAgentReviewResponse(
-  raw: string,
-  validRuleIds: Set<string>,
-  boxes: Record<string, [number, number, number, number]>,
-): AgentReviewResult[] {
-  return parseAgentReviewDocument(raw, validRuleIds, boxes).reviews
-}

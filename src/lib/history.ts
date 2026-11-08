@@ -46,21 +46,9 @@ export function sameValue(a: unknown, b: unknown) {
   return a === b || JSON.stringify(a) === JSON.stringify(b)
 }
 
-export function sameElementProperties(a: Asset, b: Asset, elementId: string) {
-  return sameValue(a.overrides[elementId], b.overrides[elementId]) &&
-    sameValue(a.layouts?.[elementId], b.layouts?.[elementId])
-}
 
-export function elementChangeDetail(before: Asset, after: Asset, elementId: string) {
-  const labels: string[] = []
-  if (!sameValue(before.overrides[elementId], after.overrides[elementId])) labels.push('样式')
-  if (!sameValue(before.layouts?.[elementId], after.layouts?.[elementId])) labels.push('容器布局')
-  const targetsElement = (group: Asset['groups'][number]) =>
-    group.targetIds?.length ? group.targetIds.includes(elementId) : group.targetId === elementId
-  if (before.groups !== after.groups &&
-      !sameValue(before.groups.filter(targetsElement), after.groups.filter(targetsElement))) labels.push('动画')
-  return labels.join('、')
-}
+
+
 
 export function assetChanges(before: Asset[], after: Asset[]): AssetChange[] {
   const previous = new Map(before.map((asset, index) => [asset.id, { asset, index }]))
