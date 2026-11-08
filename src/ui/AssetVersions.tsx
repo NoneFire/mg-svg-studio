@@ -35,8 +35,8 @@ export default function AssetVersions({ asset }: { asset: Asset }) {
   }, [asset.id])
 
   useEffect(() => {
-    if (open) void reload()
-  }, [open, reload, asset.revision?.index])
+    void reload()
+  }, [reload, asset.revision?.index])
 
   const ordered = [...versions].sort((a, b) => a.index - b.index)
 
@@ -104,9 +104,18 @@ export default function AssetVersions({ asset }: { asset: Asset }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="xs" title="对比这个素材的历史版本">
-          <Icon name="history" size={12} /> 版本
-        </Button>
+        <button type="button" className="version-entry-card" title="对比这个素材的历史版本">
+          <Icon name="history" size={16} />
+          <span className="version-entry-text">
+            <strong>版本历史</strong>
+            <span>
+              {versions.length
+                ? `${versions.length} 个版本 · 点这里并排对比，可恢复任意一版`
+                : '还没有记录，点这里查看'}
+            </span>
+          </span>
+          <Icon name="chevronRight" size={14} />
+        </button>
       </DialogTrigger>
       <DialogContent className="asset-preview-dialog version-dialog">
         <DialogHeader className="history-header">

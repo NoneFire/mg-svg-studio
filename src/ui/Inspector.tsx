@@ -753,7 +753,6 @@ function AssetPanel({ asset, studio }: { asset: Asset; studio: Studio | null }) 
 
       <div className="version-entry">
         <AssetVersions asset={asset} />
-        <span className="qv-note">点上面的「版本」打开对比，回看这张图的修改记录，可恢复到任意一版。</span>
       </div>
 
       <div className="inspector-actions">

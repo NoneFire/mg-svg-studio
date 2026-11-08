@@ -1812,18 +1812,41 @@ html[data-theme='light'] .inspector {
 }
 
 .version-entry {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
   margin-top: 16px;
   padding-top: 14px;
   border-top: 1px solid var(--border);
 }
-.version-entry .qv-note {
-  font-size: 11px;
-  line-height: 1.5;
+.version-entry-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  text-align: left;
   color: var(--muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.version-entry-card:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.version-entry-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.version-entry-text strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.version-entry-text span {
+  font-size: 11px;
+  line-height: 1.4;
 }
 .inspector-actions {
   display: grid;
