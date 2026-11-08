@@ -647,6 +647,24 @@ function ElementPanel({ asset, studio }: { asset: Asset; studio: Studio | null }
                   <NumberInput value={Number((selected.node as any).letterSpacing ?? 0)} step={0.5} onChange={(v) => apply({ letterSpacing: v })} />
                 </Field>
               </div>
+              <Field label="字体">
+                <span
+                  className="element-readout"
+                  title={String((selected.node as any).fontFamily ?? '')}
+                >
+                  {String((selected.node as any).fontFamily ?? '').split(',')[0].replace(/["']/g, '').trim() || '继承自样式表'}
+                </span>
+              </Field>
+              <div className="grid-2">
+                <Field label="字重">
+                  <span className="element-readout">{Number((selected.node as any).fontWeight ?? 400)}</span>
+                </Field>
+                <Field label="行高">
+                  <span className="element-readout">
+                    {Number((selected.node as any).lineHeight ?? 0) || '按字号自动'}
+                  </span>
+                </Field>
+              </div>
             </>
           )}
 

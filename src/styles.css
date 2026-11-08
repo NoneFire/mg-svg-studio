@@ -3730,3 +3730,19 @@ html[data-theme='light'] .timeline-voice {
   color: var(--muted);
   font-size: 11px;
 }
+
+.element-readout {
+  display: flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 8px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

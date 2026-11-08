@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800" role="img" aria-labelledby="title desc">
+  <title id="title">三步发布一篇内容</title>
+  <desc id="desc">三步流程信息图：选题与提纲、撰写与配图、发布与复盘。</desc>
+
+  <rect width="1200" height="800" fill="#F8FAFC"/>
+
+  <g font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', sans-serif">
+
+    <!-- 眉标 -->
+    <text x="64" y="104" font-size="14" font-weight="600" letter-spacing="2" fill="#2563EB">内容运营手册</text>
+
+    <!-- 主标题：全图唯一焦点 -->
+    <text x="64" y="160" font-size="44" font-weight="600" fill="#0F172A">三步发布一篇内容</text>
+
+    <!-- 副标题 -->
+    <text x="64" y="204" font-size="18" fill="#475569">从选题到复盘，固定 3 个检查点</text>
+
+    <!-- 01 -->
+    <g>
+      <rect x="64" y="272" width="320" height="320" rx="16" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+      <text x="96" y="328" font-size="14" font-weight="600" letter-spacing="1" fill="#2563EB">01</text>
+      <text x="96" y="376" font-size="24" font-weight="600" fill="#0F172A">选题与提纲</text>
+      <text x="96" y="424" font-size="16" fill="#475569">先写一句话结论，</text>
+      <text x="96" y="452" font-size="16" fill="#475569">再列 3 个支撑点，</text>
+      <text x="96" y="480" font-size="16" fill="#475569">最后标出素材来源。</text>
+      <text x="96" y="544" font-size="14" fill="#475569">产出：选题单</text>
+    </g>
+
+    <!-- 02 -->
+    <g>
+      <rect x="440" y="272" width="320" height="320" rx="16" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+      <text x="472" y="328" font-size="14" font-weight="600" letter-spacing="1" fill="#2563EB">02</text>
+      <text x="472" y="376" font-size="24" font-weight="600" fill="#0F172A">撰写与配图</text>
+      <text x="472" y="424" font-size="16" fill="#475569">正文不超过 2000 字，</text>
+      <text x="472" y="452" font-size="16" fill="#475569">配图按 16:9 裁切，</text>
+      <text x="472" y="480" font-size="16" fill="#475569">每段只讲一件事。</text>
+      <text x="472" y="544" font-size="14" fill="#475569">产出：初稿</text>
+    </g>
+
+    <!-- 03 -->
+    <g>
+      <rect x="816" y="272" width="320" height="320" rx="16" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+      <text x="848" y="328" font-size="14" font-weight="600" letter-spacing="1" fill="#2563EB">03</text>
+      <text x="848" y="376" font-size="24" font-weight="600" fill="#0F172A">发布与复盘</text>
+      <text x="848" y="424" font-size="16" fill="#475569">发布后 24 小时，</text>
+      <text x="848" y="452" font-size="16" fill="#475569">记录阅读与转化，</text>
+      <text x="848" y="480" font-size="16" fill="#475569">下周复盘会上过。</text>
+      <text x="848" y="544" font-size="14" fill="#475569">产出：复盘表</text>
+    </g>
+
+    <!-- 结论句 -->
+    <rect x="64" y="680" width="32" height="4" rx="2" fill="#2563EB"/>
+    <text x="112" y="690" font-size="18" fill="#0F172A">先写结论，再补细节。</text>
+
+    <!-- 页脚 -->
+    <text x="64" y="752" font-size="14" fill="#475569">示例内容 · 数值仅作示意</text>
+  </g>
+</svg>
