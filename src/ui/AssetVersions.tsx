@@ -77,7 +77,7 @@ export default function AssetVersions({ asset }: { asset: Asset }) {
   ) => (
     <figure className="version-pane">
       <select
-        className="qv-tool-select"
+        className="select"
         aria-label={`${side}版本`}
         value={index}
         onChange={(event) => onPick(Number(event.target.value))}

@@ -2785,7 +2785,6 @@ html[data-theme='light'] .timeline-voice {
   padding-bottom: 8px;
   border-bottom: 1px solid var(--border);
 }
-.qv-tool-select,
 .qv-agent-cli-row {
   display: flex;
   gap: 8px;
@@ -3706,9 +3705,8 @@ html[data-theme='light'] .timeline-voice {
   gap: 8px;
   min-width: 0;
 }
-.version-pane .qv-tool-select {
+.version-pane .select {
   width: 100%;
-  height: 26px;
   font-family: var(--mono);
 }
 .version-shot {
