@@ -27,7 +27,7 @@ const HELP = `mgsvg — MG SVG Studio 项目文件工具（Agent 可直接改文
   mgsvg bridge  [--port 7350]                  开本地选择桥（Agent 用它看你在选什么）
   mgsvg context [--bridge 7350] [--session <id>] [--wait 30] [--after <selectionId>] [--json]
   mgsvg live    [--bridge 7350] (--session <id> | --current) [--asset <id>] [--element <id>]
-                --set fill=#f00 | --clear | --select <id|label> | --add <svg> [--name 名称] | --asset <目标> --merge <素材id,...> | --save | --reload | --review [--frame 0..1]
+                --set fill=#f00 | --clear | --select <id|label> | --add <svg> [--name 名称] | --asset <目标> --merge <素材id,...> | --save [--force] | --reload | --review [--frame 0..1]
   mgsvg validate <project> [--json]
   mgsvg mcp     [--project <project>] [--bridge <port>]   启动 MCP server（stdio，可带选择桥）
 
@@ -212,6 +212,7 @@ async function runLive(flags: Flags) {
   const payload: BridgeCommand['payload'] = { asset, element: select || element, frame }
   if (set) payload.patch = parseStylePatch(setPairs(flags, NUMERIC_STYLE, (value) => value))
   if (merge) payload.sources = merge.split(',').map((v) => v.trim()).filter(Boolean)
+  if (save && flags.force) payload.force = true
   if (add) {
     payload.svg = fs.readFileSync(path.resolve(add), 'utf8')
     payload.name = name || path.basename(add, path.extname(add))

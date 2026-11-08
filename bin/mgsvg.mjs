@@ -19273,7 +19273,8 @@ var init_args = __esm({
         frame: "value",
         add: "value",
         name: "value",
-        merge: "value"
+        merge: "value",
+        force: "switch"
       },
       bridge: { port: "value" },
       mcp: { project: "value", bridge: "value" }
@@ -20208,7 +20209,7 @@ var HELP = `mgsvg \u2014 MG SVG Studio \u9879\u76EE\u6587\u4EF6\u5DE5\u5177\uFF0
   mgsvg bridge  [--port 7350]                  \u5F00\u672C\u5730\u9009\u62E9\u6865\uFF08Agent \u7528\u5B83\u770B\u4F60\u5728\u9009\u4EC0\u4E48\uFF09
   mgsvg context [--bridge 7350] [--session <id>] [--wait 30] [--after <selectionId>] [--json]
   mgsvg live    [--bridge 7350] (--session <id> | --current) [--asset <id>] [--element <id>]
-                --set fill=#f00 | --clear | --select <id|label> | --add <svg> [--name \u540D\u79F0] | --asset <\u76EE\u6807> --merge <\u7D20\u6750id,...> | --save | --reload | --review [--frame 0..1]
+                --set fill=#f00 | --clear | --select <id|label> | --add <svg> [--name \u540D\u79F0] | --asset <\u76EE\u6807> --merge <\u7D20\u6750id,...> | --save [--force] | --reload | --review [--frame 0..1]
   mgsvg validate <project> [--json]
   mgsvg mcp     [--project <project>] [--bridge <port>]   \u542F\u52A8 MCP server\uFF08stdio\uFF0C\u53EF\u5E26\u9009\u62E9\u6865\uFF09
 
@@ -20366,6 +20367,7 @@ async function runLive(flags) {
   const payload = { asset, element: select || element, frame };
   if (set) payload.patch = parseStylePatch(setPairs(flags, NUMERIC_STYLE, (value) => value));
   if (merge) payload.sources = merge.split(",").map((v2) => v2.trim()).filter(Boolean);
+  if (save && flags.force) payload.force = true;
   if (add) {
     payload.svg = fs5.readFileSync(path5.resolve(add), "utf8");
     payload.name = name || path5.basename(add, path5.extname(add));

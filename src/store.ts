@@ -1179,7 +1179,7 @@ export class Store {
     }
   }
 
-  async saveProject({ linkedOnly = false, automatic = false } = {}) {
+  async saveProject({ linkedOnly = false, automatic = false, force = false } = {}) {
     return this.runFileTask(async () => {
       const picker = window as any
       const version = this.projectVersion
@@ -1216,7 +1216,7 @@ export class Store {
       }
       const assertUnchanged = async () => {
         if (version !== this.projectVersion) throw new Error('当前项目已切换，请重新保存')
-        if (baseline !== null && await (await handle.getFile()).text() !== baseline) {
+        if (!force && baseline !== null && await (await handle.getFile()).text() !== baseline) {
           throw new Error('磁盘上的项目文件已更改。可先导出当前改动的副本，再从文件重新载入')
         }
       }

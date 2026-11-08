@@ -103,7 +103,7 @@ function uniqueMatch<T extends { id: string }>(items: T[], key: string, label: (
 async function applyCommand(studio: Studio, command: BridgeCommand): Promise<unknown> {
   const { type, payload } = command
   // CLI 保存：有权限就直接写，不主动弹授权框；没权限时明确提示用户手动授权一次
-  if (type === 'save') return store.saveProject({ linkedOnly: true, automatic: true })
+  if (type === 'save') return store.saveProject({ linkedOnly: true, automatic: true, force: payload.force === true })
   if (type === 'asset.add') {
     if (!payload.svg?.trim() || !payload.name?.trim()) throw new Error('添加素材需要 SVG 源码和名称')
     await store.addSvgText(payload.svg, payload.name)
