@@ -738,7 +738,10 @@ function AssetPanel({ asset, studio }: { asset: Asset; studio: Studio | null }) 
         <TextInput value={asset.name} onChange={(v) => store.renameAsset(asset.id, v)} />
       </Field>
       <VideoCopyEditor key={asset.id} asset={asset} />
-      <InspectorHistory key={asset.id} asset={asset} />
+      <div className="version-entry">
+        <AssetVersions asset={asset} />
+        <span className="qv-note">按时间回看这张图的修改记录，可恢复到任意版本。</span>
+      </div>
 
       <div className="meta-row">
         <span>来源</span>
@@ -788,7 +791,6 @@ function AssetPanel({ asset, studio }: { asset: Asset; studio: Studio | null }) 
         >
           <Icon name="copy" size={13} /> 复制素材
         </button>
-        <AssetVersions asset={asset} />
         <button
           className="btn danger small"
           onClick={() => {

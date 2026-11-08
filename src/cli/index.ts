@@ -184,9 +184,10 @@ async function runLive(flags: Flags) {
   const review = flags.review === true
   const add = str(flags, 'add')
   const merge = str(flags, 'merge')
+  const listVersions = !!flags.versions
   if (merge && (!asset || add)) usage('--merge 需要 --asset 指定目标素材')
   const name = str(flags, 'name')
-  if ([set, clear, save, reload, review, Boolean(select), Boolean(add), Boolean(merge)].filter(Boolean).length !== 1) {
+  if ([set, clear, save, reload, review, Boolean(select), Boolean(add), Boolean(merge), Boolean(listVersions && asset)].filter(Boolean).length !== 1) {
     usage('请选择一种操作：--set、--clear、--select、--add、--save、--reload 或 --review')
   }
   if (sessionId && (set || clear) && (!asset || !element)) usage('锁定实时修改时需要 --asset 和 --element')
@@ -206,6 +207,8 @@ async function runLive(flags: Flags) {
             ? 'asset.add'
             : merge && asset
               ? 'asset.mergeVersions'
+              : listVersions && asset
+                ? 'asset.versions'
               : clear
                 ? 'style.clear'
                 : 'style.set'
@@ -241,6 +244,8 @@ async function runLive(flags: Flags) {
         else if (review) console.log(`${data.assetName}：${data.gate} · ${data.counts.FAIL} 硬伤 / ${data.counts.WARN} 提示`)
         else if (select) console.log(`✓ 已选中 ${data.selection?.elementId || data.selection?.assetId || '素材'}`)
         else if (add) console.log(`✓ 已添加 ${data.name} (${data.asset}) ${data.width}×${data.height}`)
+        else if (listVersions) console.log((data.versions as unknown[])?.length ? JSON.stringify(data.versions, null, 2) : '这个素材还没有版本记录')
+        else if (merge) console.log(`✓ 已并入 ${data.merged} 个版本，当前最高 v${data.index}`)
         else console.log(`✓ ${data.element} ← ${JSON.stringify(data.overrides ?? null)}`)
       })
       return

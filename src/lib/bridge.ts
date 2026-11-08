@@ -110,6 +110,11 @@ async function applyCommand(studio: Studio, command: BridgeCommand): Promise<unk
     const added = store.selectedAsset
     return { asset: added?.id, name: added?.name, width: added?.width, height: added?.height, dirty: store.projectDirty }
   }
+  if (type === 'asset.versions') {
+    const target = uniqueMatch(store.assets, payload.asset!, (entry) => entry.name, '素材')
+    const list = await store.listVersions(target.id)
+    return { asset: target.id, versions: list.map((v) => ({ id: v.id, index: v.index, createdAt: v.createdAt, label: v.label, bytes: v.svg.length })) }
+  }
   if (type === 'asset.mergeVersions') {
     const target = uniqueMatch(store.assets, payload.asset!, (entry) => entry.name, '素材')
     const result = await store.mergeAsVersions(target.id, payload.sources || [])

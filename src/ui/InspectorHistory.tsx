@@ -21,7 +21,7 @@ export default function InspectorHistory({ asset, elementId }: { asset: Asset; e
     return detail ? [{ entry, before, after, detail }] : []
   }), [asset.id, asset.svg, elementId, entries])
   const oldest = rows[0]?.before
-  const label = elementId ? '元素历史' : '素材版本'
+  const label = elementId ? '元素历史' : '编辑历史'
 
   const versionAction = (version: AssetVersion | undefined, versionLabel: string) => {
     if (!version) return null

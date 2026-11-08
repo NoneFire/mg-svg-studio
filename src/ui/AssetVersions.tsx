@@ -103,7 +103,7 @@ export default function AssetVersions({ asset }: { asset: Asset }) {
             <Icon name="chevronLeft" size={16} />
           </button>
           <div className="version-canvas">
-            <AssetPreviewCanvas asset={view} />
+            <AssetPreviewCanvas key={current?.id ?? 'live'} asset={view} />
           </div>
           <button
             className="version-arrow"
@@ -127,7 +127,7 @@ export default function AssetVersions({ asset }: { asset: Asset }) {
                 title={`v${version.index} · ${new Date(version.createdAt).toLocaleString()}`}
               >
                 <b>v{version.index}</b>
-                <span>{new Date(version.createdAt).toLocaleDateString()}</span>
+                <span>{version.width}×{version.height}</span>
               </button>
             ))
           ) : (
