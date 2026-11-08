@@ -631,7 +631,7 @@ select:focus {
 .asset-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 .asset-item {
   display: flex;
@@ -1125,8 +1125,8 @@ html[data-theme='light'] .inspector {
 .field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 8px;
+  gap: 5px;
+  margin-bottom: 12px;
   min-width: 0;
 }
 .field-label {
@@ -1768,7 +1768,7 @@ html[data-theme='light'] .inspector {
   display: flex;
   justify-content: space-between;
   gap: 10px;
-  padding: 5px 0;
+  padding: 7px 0;
   border-bottom: 1px solid var(--border-soft);
   font-size: 11px;
   color: var(--muted);
@@ -1804,9 +1804,26 @@ html[data-theme='light'] .inspector {
   line-height: 1.7;
 }
 
+.version-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.version-entry .qv-note {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+}
 .inspector-actions {
   display: grid;
-  gap: 4px;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
 }
 .inspector-actions .btn {
   justify-content: flex-start;
