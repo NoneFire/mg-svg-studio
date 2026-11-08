@@ -13,17 +13,25 @@ import {
 } from './kit/dialog'
 import { Icon } from './Icon'
 
-/** 版本对比：左边上一版，右边选中版，一次看两版 */
+const stamp = (version: AssetVersionRecord) =>
+  new Date(version.createdAt).toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+
+/** 版本对比：左右各自选版本，默认最后一版对前一版，像文本 diff */
 export default function AssetVersions({ asset }: { asset: Asset }) {
   const [open, setOpen] = useState(false)
   const [versions, setVersions] = useState<AssetVersionRecord[]>([])
-  const [cursor, setCursor] = useState(0)
+  const [leftIndex, setLeftIndex] = useState(0)
+  const [rightIndex, setRightIndex] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
   const reload = useCallback(async () => {
-    const list = await store.listVersions(asset.id)
-    setVersions(list)
+    setVersions(await store.listVersions(asset.id))
   }, [asset.id])
 
   useEffect(() => {
@@ -33,18 +41,21 @@ export default function AssetVersions({ asset }: { asset: Asset }) {
   const ordered = [...versions].sort((a, b) => a.index - b.index)
 
   useEffect(() => {
-    setCursor(Math.max(0, ordered.length - 1))
+    const count = ordered.length
+    if (!count) return
+    setRightIndex(count - 1)
+    setLeftIndex(Math.max(0, count - 2))
   }, [versions.length])
 
-  const current = ordered[cursor]
-  const previous = cursor > 0 ? ordered[cursor - 1] : null
+  const left = ordered[leftIndex]
+  const right = ordered[rightIndex]
 
-  const restore = async () => {
-    if (!current) return
+  const restore = async (target: AssetVersionRecord | undefined) => {
+    if (!target) return
     setBusy(true)
     setError('')
     try {
-      await store.restoreVersion(asset.id, current.id)
+      await store.restoreVersion(asset.id, target.id)
       await reload()
     } catch (err) {
       setError((err as Error)?.message || String(err))
@@ -58,20 +69,37 @@ export default function AssetVersions({ asset }: { asset: Asset }) {
     await reload()
   }
 
-  const shot = (version: AssetVersionRecord) => (
-    <img
-      src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(version.svg)}`}
-      alt={`版本 ${version.index}`}
-    />
+  const pane = (
+    version: AssetVersionRecord | undefined,
+    index: number,
+    onPick: (value: number) => void,
+    side: string,
+  ) => (
+    <figure className="version-pane">
+      <select
+        className="qv-tool-select"
+        aria-label={`${side}版本`}
+        value={index}
+        onChange={(event) => onPick(Number(event.target.value))}
+      >
+        {ordered.map((item, i) => (
+          <option key={item.id} value={i}>
+            v{item.index} · {item.width}×{item.height} · {stamp(item)}
+          </option>
+        ))}
+      </select>
+      <div className="version-shot">
+        {version ? (
+          <img
+            src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(version.svg)}`}
+            alt={`版本 ${version.index}`}
+          />
+        ) : (
+          <span className="version-empty">没有版本</span>
+        )}
+      </div>
+    </figure>
   )
-
-  const stamp = (version: AssetVersionRecord) =>
-    new Date(version.createdAt).toLocaleString('zh-CN', {
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -84,62 +112,22 @@ export default function AssetVersions({ asset }: { asset: Asset }) {
         <DialogHeader className="history-header">
           <DialogTitle>版本对比</DialogTitle>
           <DialogDescription>
-            {asset.name || '未命名素材'} · 共 {ordered.length} 个版本 · 左边是上一版，右边是选中的这版
+            {asset.name || '未命名素材'} · 共 {ordered.length} 个版本 · 左右各自选，默认最后一版对前一版
           </DialogDescription>
         </DialogHeader>
 
         {error && <p className="qv-note qv-err">{error}</p>}
 
         {ordered.length ? (
-          <>
-            <div className="version-compare">
-              <figure>
-                <div className="version-shot">
-                  {previous ? shot(previous) : <span className="version-empty">没有更早的版本</span>}
-                </div>
-                <figcaption>
-                  {previous ? (
-                    <>
-                      <b>v{previous.index}</b>
-                      <span className="qv-mono">{previous.width}×{previous.height}</span>
-                      <span className="version-time">{stamp(previous)}</span>
-                    </>
-                  ) : (
-                    <span className="qv-mono">—</span>
-                  )}
-                </figcaption>
-              </figure>
-              <figure>
-                <div className="version-shot">{current ? shot(current) : null}</div>
-                <figcaption>
-                  <b>v{current?.index}</b>
-                  <span className="qv-mono">{current?.width}×{current?.height}</span>
-                  <span className="version-time">{current && stamp(current)}</span>
-                </figcaption>
-              </figure>
-            </div>
-
-            <div className="version-strip" role="tablist" aria-label="版本列表">
-              {ordered.map((version, index) => (
-                <button
-                  key={version.id}
-                  role="tab"
-                  aria-selected={index === cursor}
-                  className={`version-chip ${index === cursor ? 'active' : ''}`}
-                  onClick={() => setCursor(index)}
-                  title={`v${version.index} · ${stamp(version)}`}
-                >
-                  v{version.index}
-                </button>
-              ))}
-            </div>
-          </>
+          <div className="version-compare">
+            {pane(left, leftIndex, setLeftIndex, '左侧')}
+            {pane(right, rightIndex, setRightIndex, '右侧')}
+          </div>
         ) : (
           <p className="qv-note">还没有版本记录。点下面的「存为新版本」开始记录。</p>
         )}
 
         <div className="asset-preview-actions">
-          {error && <span className="qv-note qv-err">{error}</span>}
           <DialogClose asChild>
             <Button variant="ghost" size="sm" className="btn ghost small">关闭</Button>
           </DialogClose>
@@ -149,10 +137,10 @@ export default function AssetVersions({ asset }: { asset: Asset }) {
           <Button
             size="sm"
             className="btn primary small"
-            disabled={!current || busy}
-            onClick={() => void restore()}
+            disabled={!right || busy}
+            onClick={() => void restore(right)}
           >
-            {busy ? '恢复中…' : `恢复到此版本 v${current?.index ?? ''}`}
+            {busy ? '恢复中…' : `恢复到 v${right?.index ?? ''}`}
           </Button>
         </div>
       </DialogContent>
