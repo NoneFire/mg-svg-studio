@@ -264,6 +264,14 @@ select:focus {
   color: var(--accent);
   font-weight: 600;
 }
+.segmented button.play-all.active {
+  color: #fff;
+  background: var(--accent);
+}
+.segmented button.play-all.active:hover:not(:disabled) {
+  background: var(--accent);
+  filter: brightness(1.05);
+}
 .segmented button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;

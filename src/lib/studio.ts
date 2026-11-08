@@ -772,6 +772,11 @@ export class Studio {
     return !!this.boards.get(assetId)?.player.playing
   }
 
+  /** 任意素材正在播放（顶部按钮据此切换成暂停态） */
+  isAnyPlaying() {
+    return [...this.boards.values()].some((board) => board.player.playing)
+  }
+
   getDuration(assetId: string) {
     return this.boards.get(assetId)?.player.duration ?? 0
   }

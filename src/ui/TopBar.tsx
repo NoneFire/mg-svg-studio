@@ -10,6 +10,7 @@ import CanvasViewControls from './CanvasViewControls'
 export default function TopBar({ studio }: { studio: Studio | null }) {
   const [help, setHelp] = useState(false)
   const hasAnimations = !!studio && store.assets.some((asset) => asset.groups.some((group) => group.enabled !== false))
+  const playing = studio?.isAnyPlaying() ?? false
 
   return (
     <header className="topbar">
@@ -43,14 +44,18 @@ export default function TopBar({ studio }: { studio: Studio | null }) {
       <div className="topbar-center">
         <div className="segmented playback-controls" role="group" aria-label="全局播放控制">
           <button
-            className="play-all"
-            onClick={() => studio?.play(undefined, { restart: true })}
+            className={`play-all ${playing ? 'active' : ''}`}
+            onClick={() => {
+              if (playing) studio?.pause()
+              else studio?.play(undefined, { restart: true })
+            }}
             disabled={!hasAnimations}
-            aria-label="播放全部"
-            title="从头播放全部动画"
+            aria-label={playing ? '暂停播放' : '播放全部'}
+            aria-pressed={playing}
+            title={playing ? '暂停全部动画' : '从头播放全部动画'}
           >
-            <Icon name="play" size={13} />
-            <span>播放</span>
+            <Icon name={playing ? 'pause' : 'play'} size={13} />
+            <span>{playing ? '暂停' : '播放'}</span>
           </button>
           <button onClick={() => studio?.showLastFrames()} disabled={!hasAnimations} aria-label="全部末帧" title="暂停全部动画并查看各自的末帧">
             <Icon name="skipForward" size={14} />
