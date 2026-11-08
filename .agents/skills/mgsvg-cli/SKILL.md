@@ -44,6 +44,16 @@ node bin/mgsvg.mjs live --session SESSION --reload
 
 如果 Studio 页面重载、切换项目或会话过期，重新读取 context。请求的目标不可用时，不要擅自改动另一个当前选中的元素。
 
+### 原地替换 vs 新增素材
+
+改的是同一张图的修正（调间距、修坐标、换字重），用**原地替换**，不要新增素材再合并：
+
+```bash
+node bin/mgsvg.mjs live --session SESSION --asset ASSET_ID --replace fixed.svg
+```
+
+它会重新解析 SVG、重建元素索引与分组，清掉旧覆盖，并按内容变化自动记一版历史。只有确实要并列保留的另一张图，才用 `--add`。
+
 ### 版本历史
 
 素材的版本存在浏览器 IndexedDB 里（`versions` 表），只有**内容变化**（SVG、尺寸、样式覆盖、布局参数）才会自动记一版，1.5 秒内的连续修改合并成一条；拖动位置、改名、自动排列都不记。恢复版本是**追加**语义：以旧版为底生成一个新版本，历史不回退。

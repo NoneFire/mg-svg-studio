@@ -692,6 +692,28 @@ export class Store {
     }
   }
 
+  /** 原地替换素材内容：重新解析 SVG，不新增素材；内容变了会自动记一版历史 */
+  async replaceAssetSvg(assetId: string, svg: string) {
+    const asset = this.assets.find((a) => a.id === assetId)
+    if (!asset) throw new Error('素材不存在')
+    const doc = parseSvgDocument(svg)
+    const groups = doc.groups.map((g, i) => ({ ...g, id: `${assetId}_g${i}` }))
+    this.editAsset(assetId, '替换素材内容', () => ({
+      svg,
+      width: doc.width || asset.width,
+      height: doc.height || asset.height,
+      kind: groups.length ? 'animated' : 'static',
+      groups,
+      elements: elementIndexOf(doc),
+      warnings: doc.warnings,
+      overrides: {},
+      layouts: {},
+      review: undefined,
+      agentReview: undefined,
+    }))
+    return { asset: assetId, width: doc.width || asset.width, height: doc.height || asset.height }
+  }
+
   async renameAsset(id: string, name: string) {
     this.editAsset(id, '重命名素材', () => ({ name }), `${id}:name`)
   }
