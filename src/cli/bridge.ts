@@ -74,7 +74,7 @@ export async function startBridge(port = 7350) {
     if ((type === 'style.set' || type === 'style.clear') && !element) {
       throw new Error('请先选中元素，或提供素材和元素 ID')
     }
-    if (!['style.set', 'style.clear', 'select', 'save', 'review', 'asset.add', 'project.reload'].includes(type)) throw new Error('不支持的实时命令')
+    if (!['style.set', 'style.clear', 'select', 'save', 'review', 'asset.add', 'asset.mergeVersions', 'project.reload'].includes(type)) throw new Error('不支持的实时命令')
     if (type === 'review' && payload.frame !== undefined && (
       typeof payload.frame !== 'number' || !Number.isFinite(payload.frame) || payload.frame < 0 || payload.frame > 1
     )) throw new Error('评审帧必须在 0 到 1 之间')

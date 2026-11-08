@@ -27,7 +27,7 @@ const HELP = `mgsvg — MG SVG Studio 项目文件工具（Agent 可直接改文
   mgsvg bridge  [--port 7350]                  开本地选择桥（Agent 用它看你在选什么）
   mgsvg context [--bridge 7350] [--session <id>] [--wait 30] [--after <selectionId>] [--json]
   mgsvg live    [--bridge 7350] (--session <id> | --current) [--asset <id>] [--element <id>]
-                --set fill=#f00 | --clear | --select <id|label> | --add <svg> [--name 名称] | --save | --reload | --review [--frame 0..1]
+                --set fill=#f00 | --clear | --select <id|label> | --add <svg> [--name 名称] | --asset <目标> --merge <素材id,...> | --save | --reload | --review [--frame 0..1]
   mgsvg validate <project> [--json]
   mgsvg mcp     [--project <project>] [--bridge <port>]   启动 MCP server（stdio，可带选择桥）
 
@@ -183,8 +183,10 @@ async function runLive(flags: Flags) {
   const reload = flags.reload === true
   const review = flags.review === true
   const add = str(flags, 'add')
+  const merge = str(flags, 'merge')
+  if (merge && (!asset || add)) usage('--merge 需要 --asset 指定目标素材')
   const name = str(flags, 'name')
-  if ([set, clear, save, reload, review, Boolean(select), Boolean(add)].filter(Boolean).length !== 1) {
+  if ([set, clear, save, reload, review, Boolean(select), Boolean(add), Boolean(merge)].filter(Boolean).length !== 1) {
     usage('请选择一种操作：--set、--clear、--select、--add、--save、--reload 或 --review')
   }
   if (sessionId && (set || clear) && (!asset || !element)) usage('锁定实时修改时需要 --asset 和 --element')
@@ -202,11 +204,14 @@ async function runLive(flags: Flags) {
           ? 'select'
           : add
             ? 'asset.add'
-            : clear
-              ? 'style.clear'
-              : 'style.set'
+            : merge && asset
+              ? 'asset.mergeVersions'
+              : clear
+                ? 'style.clear'
+                : 'style.set'
   const payload: BridgeCommand['payload'] = { asset, element: select || element, frame }
   if (set) payload.patch = parseStylePatch(setPairs(flags, NUMERIC_STYLE, (value) => value))
+  if (merge) payload.sources = merge.split(',').map((v) => v.trim()).filter(Boolean)
   if (add) {
     payload.svg = fs.readFileSync(path.resolve(add), 'utf8')
     payload.name = name || path.basename(add, path.extname(add))

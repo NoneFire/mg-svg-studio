@@ -38,8 +38,8 @@ export interface StudioContext {
 export interface BridgeCommand {
   id: string
   sessionId: string
-  type: 'style.set' | 'style.clear' | 'select' | 'save' | 'review' | 'asset.add' | 'project.reload'
-  payload: { asset?: string; element?: string; patch?: unknown; frame?: number; svg?: string; name?: string }
+  type: 'style.set' | 'style.clear' | 'select' | 'save' | 'review' | 'asset.add' | 'asset.mergeVersions' | 'project.reload'
+  payload: { asset?: string; element?: string; patch?: unknown; frame?: number; svg?: string; name?: string; sources?: string[] }
 }
 
 export type BridgeResult = { ok: true; result: unknown } | { ok: false; error: string; code?: string }

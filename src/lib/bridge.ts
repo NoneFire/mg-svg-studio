@@ -110,6 +110,11 @@ async function applyCommand(studio: Studio, command: BridgeCommand): Promise<unk
     const added = store.selectedAsset
     return { asset: added?.id, name: added?.name, width: added?.width, height: added?.height, dirty: store.projectDirty }
   }
+  if (type === 'asset.mergeVersions') {
+    const target = uniqueMatch(store.assets, payload.asset!, (entry) => entry.name, '素材')
+    const result = await store.mergeAsVersions(target.id, payload.sources || [])
+    return { asset: target.id, ...result }
+  }
   if (type === 'project.reload') {
     if (store.projectDirty) throw new Error('Studio 有未保存改动，请先保存或导出副本再重新载入')
     if (!store.projectHandle && !store.projectUrl) throw new Error('当前 Studio 项目没有关联可重新载入的文件')

@@ -22,7 +22,7 @@ const commands = {
   context: { bridge: 'value', session: 'value', wait: 'value', after: 'value' },
   live: {
     bridge: 'value', session: 'value', current: 'switch', asset: 'value', element: 'value', set: 'repeat',
-    clear: 'switch', select: 'value', save: 'switch', reload: 'switch', review: 'switch', frame: 'value', add: 'value', name: 'value',
+    clear: 'switch', select: 'value', save: 'switch', reload: 'switch', review: 'switch', frame: 'value', add: 'value', name: 'value', merge: 'value',
   },
   bridge: { port: 'value' },
   mcp: { project: 'value', bridge: 'value' },

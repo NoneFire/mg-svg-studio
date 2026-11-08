@@ -609,6 +609,37 @@ export class Store {
     return dbListVersions(assetId)
   }
 
+  /** 把若干独立素材并进目标素材的版本历史，然后删掉这些素材 */
+  async mergeAsVersions(targetId: string, sourceIds: string[]) {
+    const target = this.assets.find((a) => a.id === targetId)
+    if (!target) throw new Error('目标素材不存在')
+    const sources = sourceIds
+      .map((id) => this.assets.find((a) => a.id === id))
+      .filter((a): a is Asset => Boolean(a))
+      .sort((a, b) => a.createdAt - b.createdAt)
+    if (!sources.length) throw new Error('没有可合并的素材')
+    const existing = await dbListVersions(targetId)
+    let index = existing[0]?.index ?? 0
+    for (const source of sources) {
+      index += 1
+      await dbPutVersion({
+        id: `${targetId}:${index}`,
+        assetId: targetId,
+        index,
+        createdAt: source.createdAt,
+        label: source.name,
+        svg: source.svg,
+        width: source.width,
+        height: source.height,
+      })
+    }
+    const ids = new Set(sourceIds)
+    this.commitAssets('合并为版本', this.assets.filter((a) => !ids.has(a.id)))
+    for (const id of sourceIds) await dbDeleteVersions(id)
+    this.editAsset(targetId, '更新版本序号', () => ({ revision: { index, createdAt: Date.now() } }))
+    return { index, merged: sources.length }
+  }
+
   /** 从历史版本恢复：以旧版为底追加一个新版本，历史不回退 */
   async restoreVersion(assetId: string, versionId: string) {
     const record = (await dbListVersions(assetId)).find((v) => v.id === versionId)
@@ -692,7 +723,33 @@ export class Store {
   }
 
   private commitAssets(label: string, assets: Asset[], editKey?: string) {
-    if (this.recordHistory(label, assets, editKey)) this.applyAssets(assets)
+    if (this.recordHistory(label, assets, editKey)) {
+      this.scheduleVersions(assets)
+      this.applyAssets(assets)
+    }
+  }
+
+  private pendingVersions = new Map<string, ReturnType<typeof setTimeout>>()
+
+  /** 只有内容变了才记版本：拖位置、改名、排布都不算；同一素材 1.5 秒内合并成一次 */
+  private scheduleVersions(next: Asset[]) {
+    for (const asset of next) {
+      const previous = this.assets.find((item) => item.id === asset.id)
+      if (!previous) continue
+      const contentChanged =
+        previous.svg !== asset.svg ||
+        previous.width !== asset.width ||
+        previous.height !== asset.height ||
+        !sameValue(previous.overrides, asset.overrides) ||
+        !sameValue(previous.layouts, asset.layouts)
+      if (!contentChanged) continue
+      const pending = this.pendingVersions.get(asset.id)
+      if (pending) clearTimeout(pending)
+      this.pendingVersions.set(asset.id, setTimeout(() => {
+        this.pendingVersions.delete(asset.id)
+        void this.commitVersion(asset.id)
+      }, 1500))
+    }
   }
 
   private recordHistory(label: string, assets: Asset[], editKey?: string) {
