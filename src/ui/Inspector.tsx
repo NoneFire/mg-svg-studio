@@ -7,7 +7,6 @@ import type { AnimGroup, Asset, Keyframe, PropTrack, StylePatch } from '../types
 import { Icon } from './Icon'
 import { Chip, ColorField, Field, IconButton, NumberInput, ResizeHandle, Select, TextInput } from './controls'
 import { groupColor } from './Timeline'
-import InspectorHistory from './InspectorHistory'
 import GroupLayout from './GroupLayout'
 import VideoCopyEditor from './VideoCopyEditor'
 
@@ -583,7 +582,6 @@ function ElementPanel({ asset, studio }: { asset: Asset; studio: Studio | null }
             <Chip tone="accent">GROUP</Chip>
             <span className="element-label" title={selected.el.label}>{selected.el.label}</span>
           </div>
-          <InspectorHistory key={`${asset.id}:${selectedId}`} asset={asset} elementId={selectedId} />
           {(selected.children.length > 1 || asset.layouts?.[selected.el.id]) && (
             <GroupLayout key={`${asset.id}:${selected.el.id}`} asset={asset} id={selected.el.id}
               label={selected.el.label || '分组'} count={selected.children.length} />
@@ -618,7 +616,6 @@ function ElementPanel({ asset, studio }: { asset: Asset; studio: Studio | null }
               onClick={() => store.resetElementStyle(asset.id, selectedId!)}
             />
           </div>
-          <InspectorHistory key={`${asset.id}:${selectedId}`} asset={asset} elementId={selectedId} />
 
           <div className="grid-2">
             <Field label="填充">
@@ -738,10 +735,6 @@ function AssetPanel({ asset, studio }: { asset: Asset; studio: Studio | null }) 
         <TextInput value={asset.name} onChange={(v) => store.renameAsset(asset.id, v)} />
       </Field>
       <VideoCopyEditor key={asset.id} asset={asset} />
-      <div className="version-entry">
-        <AssetVersions asset={asset} />
-        <span className="qv-note">按时间回看这张图的修改记录，可恢复到任意版本。</span>
-      </div>
 
       <div className="meta-row">
         <span>来源</span>
@@ -765,6 +758,11 @@ function AssetPanel({ asset, studio }: { asset: Asset; studio: Studio | null }) 
           </ul>
         </div>
       )}
+
+      <div className="version-entry">
+        <AssetVersions asset={asset} />
+        <span className="qv-note">按时间回看这张图的修改记录，可恢复到任意版本。</span>
+      </div>
 
       <div className="inspector-actions">
         <button
