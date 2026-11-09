@@ -11,6 +11,7 @@ import {
   COPY_BODY_TOP, COPY_HEADER_TOP, COPY_LINE_HEIGHT, COPY_LINES, COPY_SIDE, COPY_TEXT_LEFT,
 } from './asset-card'
 import { fitText } from './text-fit'
+import { fontsSettled, hasPendingFonts } from './fonts'
 
 export interface StudioSelection {
   assetId?: string
@@ -625,6 +626,12 @@ export class Studio {
       const fallback = new Text({ text: '无法解析 SVG', fontSize: 14, fill: '#ff6b6b' } as any)
       board.contentHolder.add(fallback)
       board.ready = false
+    }
+    // 字体是异步加载的：先按回退字体排版，等 @font-face 就绪再重建一次
+    if (hasPendingFonts()) {
+      void fontsSettled().then(() => {
+        if (this.boards.get(asset.id) === board) this.refreshAsset(board, true)
+      })
     }
     this.drawGrid()
     this.syncSelectionOverlay()

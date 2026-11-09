@@ -4,6 +4,7 @@ import { store, type AssetVersionRecord } from '../store'
 import { convertSvg } from '../lib/convert'
 import { AssetPlayer } from '../lib/runtime'
 import { parseSvgDocument } from '../lib/svg-doc'
+import { fontsSettled, hasPendingFonts } from '../lib/fonts'
 
 export interface VersionStageHandle {
   /** 暂停并定格到这一版自己的末帧 */
@@ -32,6 +33,7 @@ const VersionStage = forwardRef<VersionStageHandle, {
   const stage = useRef<Stage | null>(null)
   const frame = useRef(0)
   const [failed, setFailed] = useState(false)
+  const [fontRev, setFontRev] = useState(0)
 
   const latest = useRef({ playing, onEnded })
   latest.current = { playing, onEnded }
@@ -77,6 +79,7 @@ const VersionStage = forwardRef<VersionStageHandle, {
     const node = host.current
     if (!node) return
     const leafer = new Leafer({ view: node, width: Math.max(1, node.clientWidth), height: Math.max(1, node.clientHeight), hittable: false })
+    let alive = true
     try {
       const converted = convertSvg(parseSvgDocument(asset.svg), asset)
       const board = new Box({ width: Math.max(1, asset.width), height: Math.max(1, asset.height), overflow: 'hide' })
@@ -108,20 +111,29 @@ const VersionStage = forwardRef<VersionStageHandle, {
       }
       setFailed(false)
 
+      // 字体是异步加载的：先按回退字体排版，等 @font-face 就绪再重建一次
+      if (hasPendingFonts()) {
+        void fontsSettled().then(() => {
+          if (alive) setFontRev((n) => n + 1)
+        })
+      }
+
       return () => {
+        alive = false
         observer.disconnect()
         stop()
         stage.current = null
         leafer.destroy()
       }
     } catch (error) {
+      alive = false
       console.error('无法预览这一版', error)
       setFailed(true)
       leafer.destroy()
       return () => stop()
     }
-    // 这一版换了就重建播放器
-  }, [asset])
+    // 这一版换了、或字体刚就绪时重建播放器
+  }, [asset, fontRev])
 
   useEffect(() => {
     const current = stage.current

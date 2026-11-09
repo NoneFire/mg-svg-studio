@@ -1,5 +1,6 @@
 import type { AnimGroup, Keyframe, PropTrack } from '../types'
 import { evalTimeExpr, matchRules, parseStylesheet, substituteVars, type Stylesheet } from './css'
+import { queueSvgFonts } from './fonts'
 
 export interface GradientStop {
   offset: number
@@ -363,6 +364,9 @@ export function parseSvgDocument(svgText: string): SvgDocument {
       if (m && patternIds.has(m[1])) warnings.push(`pattern 填充 #${m[1]} 已跳过（用纯色/渐变替代）`)
     })
   }
+
+  // 素材自带的 @font-face 不会进页面；这里排队注册，字体就绪后画布会重建一次
+  void queueSvgFonts(svgText)
 
   return {
     width,

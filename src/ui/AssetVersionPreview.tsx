@@ -5,6 +5,7 @@ import { convertSvg } from '../lib/convert'
 import { applyAssetLayouts } from '../lib/layout/apply'
 import { AssetPlayer } from '../lib/runtime'
 import { parseSvgDocument } from '../lib/svg-doc'
+import { fontsSettled, hasPendingFonts } from '../lib/fonts'
 import { Icon } from './Icon'
 import { Button } from './kit/button'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './kit/dialog'
@@ -71,11 +72,13 @@ export function AssetPreviewCanvas({ asset, layoutId, onLayoutPreview }: {
   const [time, setTime] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [failed, setFailed] = useState(false)
+  const [fontRev, setFontRev] = useState(0)
 
   useEffect(() => {
     const host = view.current
     if (!host) return
     const leafer = new Leafer({ view: host, width: host.clientWidth, height: host.clientHeight, hittable: false })
+    let alive = true
     try {
       const converted = convertSvg(parseSvgDocument(asset.svg), asset)
       const board = new Box({ width: Math.max(1, asset.width), height: Math.max(1, asset.height), overflow: 'hide' })
@@ -119,18 +122,28 @@ export function AssetPreviewCanvas({ asset, layoutId, onLayoutPreview }: {
       setTime(0)
       setPlaying(false)
       setFailed(false)
+
+      // 字体是异步加载的：先按回退字体排版，等 @font-face 就绪再重建一次
+      if (hasPendingFonts()) {
+        void fontsSettled().then(() => {
+          if (alive) setFontRev((n) => n + 1)
+        })
+      }
+
       return () => {
+        alive = false
         observer.disconnect()
         playback.current = null
         leafer.destroy()
       }
     } catch (error) {
+      alive = false
       leafer.destroy()
       console.error('无法预览素材版本', error)
       setFailed(true)
       onLayoutPreview?.(null)
     }
-  }, [asset, layoutId, onLayoutPreview])
+  }, [asset, layoutId, onLayoutPreview, fontRev])
 
   useEffect(() => {
     const preview = playback.current
