@@ -1,0 +1,251 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <title>分镜 · 章节目录飞入左上角</title>
+  <desc>竖排章节目录高亮第 03 章，再飞到左上角成为顶部信息条，随后进入内容动画。坐标遵循《版式规范 · 署名与圆形人像》。</desc>
+
+  <style>
+    .num  { font-family="仓耳渔阳体 W04, 仓耳渔阳体, PingFang SC, sans-serif" }
+    .lbl  { font-family="仓耳渔阳体 W04, 仓耳渔阳体, PingFang SC, sans-serif" }
+    .title { font-family="仓耳渔阳体 W04, 仓耳渔阳体, PingFang SC, sans-serif" }
+    .body  { font-family="仓耳渔阳体 W02, 仓耳渔阳体, PingFang SC, sans-serif" }
+    .sign  { font-family="仓耳渔阳体 W02, 仓耳渔阳体, PingFang SC, sans-serif" }
+  </style>
+
+  <svg x="0" y="0" width="1920" height="1080" viewBox="0 0 1920 1080" aria-hidden="true">
+<defs>
+    <!-- 底色：极深冷灰，上略暗下略亮 -->
+    <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"    stop-color="#0d0d10"/>
+      <stop offset="0.42" stop-color="#131317"/>
+      <stop offset="0.78" stop-color="#15151a"/>
+      <stop offset="1"    stop-color="#111114"/>
+    </linearGradient>
+
+    <!-- 大面积柔光：只为打破死黑、做出体积，强度很低 -->
+    <radialGradient id="washA" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0"    stop-color="#a8aec6" stop-opacity="0.04"/>
+      <stop offset="0.55" stop-color="#a8aec6" stop-opacity="0.018"/>
+      <stop offset="1"    stop-color="#a8aec6" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="washB" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0"    stop-color="#8b91a8" stop-opacity="0.032"/>
+      <stop offset="0.6"  stop-color="#8b91a8" stop-opacity="0.014"/>
+      <stop offset="1"    stop-color="#8b91a8" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="washC" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0"    stop-color="#c9ccd8" stop-opacity="0.028"/>
+      <stop offset="1"    stop-color="#c9ccd8" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- 暗角：四角压暗，但不压死 -->
+    <radialGradient id="vignette" cx="0.46" cy="0.44" r="0.78">
+      <stop offset="0"    stop-color="#000000" stop-opacity="0"/>
+      <stop offset="0.62" stop-color="#000000" stop-opacity="0.10"/>
+      <stop offset="0.86" stop-color="#000000" stop-opacity="0.32"/>
+      <stop offset="1"    stop-color="#000000" stop-opacity="0.55"/>
+    </radialGradient>
+
+    <!-- 右侧收暗，让重心偏左，方便放标题 -->
+    <linearGradient id="rightFade" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0.55" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="1"    stop-color="#000000" stop-opacity="0.26"/>
+    </linearGradient>
+
+    <!-- 每 5 格的辅助线，稍亮一点，给画面结构感 -->
+    <pattern id="gridMajor" width="270" height="270" patternUnits="userSpaceOnUse">
+      <path d="M270 0 H0 V270" fill="none" stroke="#dfe4f2" stroke-opacity="0.075" stroke-width="1.5"/>
+    </pattern>
+
+    <!-- 竖向极淡光带：模拟压缩后那种一条条的光柱 -->
+    <filter id="softBeam" x="-30%" y="-10%" width="160%" height="120%">
+      <feGaussianBlur stdDeviation="42"/>
+    </filter>
+    <linearGradient id="beamGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0"   stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.032"/>
+      <stop offset="1"   stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- 颗粒：抵消视频压缩后的色带 -->
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" seed="7" stitchTiles="stitch" result="noise"/>
+      <feColorMatrix in="noise" type="saturate" values="0" result="mono"/>
+      <feComponentTransfer in="mono">
+        <feFuncA type="linear" slope="0.05"/>
+      </feComponentTransfer>
+    </filter>
+
+  </defs>
+
+  <!-- 1. 底色 -->
+  <rect width="1920" height="1080" fill="url(#base)"/>
+
+  <!-- 2. 大面积柔光 -->
+  <ellipse cx="620" cy="470" rx="1000" ry="700" fill="url(#washA)"/>
+  <ellipse cx="1180" cy="760" rx="820" ry="520" fill="url(#washB)"/>
+  <ellipse cx="300" cy="900" rx="700" ry="420" fill="url(#washC)"/>
+
+  <!-- 3. 竖向光带（很淡，压在网格下面） -->
+  <g opacity="0.9">
+    <rect x="150"  y="-60" width="260" height="1200" fill="url(#beamGrad)" filter="url(#softBeam)"/>
+    <rect x="640"  y="-60" width="150" height="1200" fill="url(#beamGrad)" filter="url(#softBeam)"/>
+    <rect x="1010" y="-60" width="380" height="1200" fill="url(#beamGrad)" filter="url(#softBeam)"/>
+    <rect x="1560" y="-60" width="220" height="1200" fill="url(#beamGrad)" filter="url(#softBeam)"/>
+  </g>
+
+  <!-- 4. 网格 -->
+  <g id="grid" fill="none" stroke="#d3d9ec" stroke-linecap="butt">
+    <g stroke-opacity="0.10" stroke-width="1.5">
+      <line x1="53.33" y1="0" x2="53.33" y2="1080"/>
+      <line x1="106.67" y1="0" x2="106.67" y2="1080"/>
+      <line x1="160.0" y1="0" x2="160.0" y2="1080"/>
+      <line x1="213.33" y1="0" x2="213.33" y2="1080"/>
+      <line x1="266.67" y1="0" x2="266.67" y2="1080"/>
+      <line x1="320.0" y1="0" x2="320.0" y2="1080"/>
+      <line x1="373.33" y1="0" x2="373.33" y2="1080"/>
+      <line x1="426.67" y1="0" x2="426.67" y2="1080"/>
+      <line x1="480.0" y1="0" x2="480.0" y2="1080"/>
+      <line x1="533.33" y1="0" x2="533.33" y2="1080"/>
+      <line x1="586.67" y1="0" x2="586.67" y2="1080"/>
+      <line x1="640.0" y1="0" x2="640.0" y2="1080"/>
+      <line x1="693.33" y1="0" x2="693.33" y2="1080"/>
+      <line x1="746.67" y1="0" x2="746.67" y2="1080"/>
+      <line x1="800.0" y1="0" x2="800.0" y2="1080"/>
+      <line x1="853.33" y1="0" x2="853.33" y2="1080"/>
+      <line x1="906.67" y1="0" x2="906.67" y2="1080"/>
+      <line x1="960.0" y1="0" x2="960.0" y2="1080"/>
+      <line x1="1013.33" y1="0" x2="1013.33" y2="1080"/>
+      <line x1="1066.67" y1="0" x2="1066.67" y2="1080"/>
+      <line x1="1120.0" y1="0" x2="1120.0" y2="1080"/>
+      <line x1="1173.33" y1="0" x2="1173.33" y2="1080"/>
+      <line x1="1226.67" y1="0" x2="1226.67" y2="1080"/>
+      <line x1="1280.0" y1="0" x2="1280.0" y2="1080"/>
+      <line x1="1333.33" y1="0" x2="1333.33" y2="1080"/>
+      <line x1="1386.67" y1="0" x2="1386.67" y2="1080"/>
+      <line x1="1440.0" y1="0" x2="1440.0" y2="1080"/>
+      <line x1="1493.33" y1="0" x2="1493.33" y2="1080"/>
+      <line x1="0" y1="54" x2="1920" y2="54"/>
+      <line x1="0" y1="108" x2="1920" y2="108"/>
+      <line x1="0" y1="162" x2="1920" y2="162"/>
+      <line x1="0" y1="216" x2="1920" y2="216"/>
+      <line x1="0" y1="324" x2="1920" y2="324"/>
+      <line x1="0" y1="378" x2="1920" y2="378"/>
+      <line x1="0" y1="432" x2="1920" y2="432"/>
+      <line x1="0" y1="486" x2="1920" y2="486"/>
+      <line x1="0" y1="594" x2="1920" y2="594"/>
+      <line x1="0" y1="648" x2="1920" y2="648"/>
+      <line x1="0" y1="702" x2="1920" y2="702"/>
+      <line x1="0" y1="756" x2="1920" y2="756"/>
+      <line x1="0" y1="864" x2="1920" y2="864"/>
+      <line x1="0" y1="918" x2="1920" y2="918"/>
+      <line x1="0" y1="972" x2="1920" y2="972"/>
+      <line x1="0" y1="1026" x2="1920" y2="1026"/>
+    </g>
+    <g stroke-opacity="0.15" stroke-width="1.5">
+      <line x1="1546.67" y1="0" x2="1546.67" y2="1080"/>
+      <line x1="1600.0" y1="0" x2="1600.0" y2="1080"/>
+      <line x1="1653.33" y1="0" x2="1653.33" y2="1080"/>
+      <line x1="1706.67" y1="0" x2="1706.67" y2="1080"/>
+      <line x1="1760.0" y1="0" x2="1760.0" y2="1080"/>
+      <line x1="1813.33" y1="0" x2="1813.33" y2="1080"/>
+      <line x1="1866.67" y1="0" x2="1866.67" y2="1080"/>
+      
+      <line x1="0" y1="0" x2="1920" y2="0"/>
+      <line x1="0" y1="270" x2="1920" y2="270"/>
+      <line x1="0" y1="540" x2="1920" y2="540"/>
+      <line x1="0" y1="810" x2="1920" y2="810"/>
+      <line x1="0" y1="1080" x2="1920" y2="1080"/>
+    </g>
+  </g>
+
+  <!-- 5. 压暗 -->
+  <rect width="1920" height="1080" fill="url(#rightFade)"/>
+  <rect width="1920" height="1080" fill="url(#vignette)"/>
+
+  <!-- 6. 颗粒 -->
+  <rect width="1920" height="1080" filter="url(#grain)" style="mix-blend-mode:overlay" opacity="0.9"/>
+  </svg>
+
+  <!-- 竖排章节目录 -->
+  <g id="toc">
+    <g class="row r0" data-i="0">
+      <text class="num" x="760" y="420" font-size="30" font-weight="700" fill="#f59e0b">01</text>
+      <text class="lbl" x="824" y="420" font-size="36" font-weight="700" fill="#64748b">为什么没人听懂</text>
+    </g>
+    <g class="row r1" data-i="1">
+      <text class="num" x="760" y="496" font-size="30" font-weight="700" fill="#f59e0b">02</text>
+      <text class="lbl" x="824" y="496" font-size="36" font-weight="700" fill="#64748b">敲的人听见什么</text>
+    </g>
+    <g class="row r2" data-i="2">
+      <text class="num" x="760" y="572" font-size="30" font-weight="700" fill="#f59e0b">03</text>
+      <text class="lbl" x="824" y="572" font-size="36" font-weight="700" fill="#64748b">听的人听见什么</text>
+      <rect class="mark" x="716" y="542" width="5" height="34" rx="2.5" fill="#f59e0b"/>
+    </g>
+    <g class="row r3" data-i="3">
+      <text class="num" x="760" y="648" font-size="30" font-weight="700" fill="#f59e0b">04</text>
+      <text class="lbl" x="824" y="648" font-size="36" font-weight="700" fill="#64748b">差距有多大</text>
+    </g>
+    <g class="row r4" data-i="4">
+      <text class="num" x="760" y="724" font-size="30" font-weight="700" fill="#f59e0b">05</text>
+      <text class="lbl" x="824" y="724" font-size="36" font-weight="700" fill="#64748b">怎么才能破</text>
+    </g>
+  </g>
+
+  <!-- 落地后的顶部信息条底线 -->
+  <line id="toprule" x1="80" y1="116" x2="1840" y2="116" stroke="#2b3340" stroke-width="1"/>
+
+  <!-- 接下来的内容 -->
+  <g id="content">
+    <text class="title" x="80" y="320" font-size="64" font-weight="700" fill="#dfe4f2">同一次敲击，两种事实</text>
+    <text class="body" x="80" y="382" font-size="28" font-weight="500" fill="#93a3b8">你听见的只有五下敲击，旋律只存在于敲的人脑子里</text>
+    <g id="bars">
+      <rect class="bar" x="80" y="470" width="64" height="14" rx="7" fill="#5ec8b0"/>
+      <rect class="bar" x="176" y="470" width="64" height="14" rx="7" fill="#5ec8b0"/>
+      <rect class="bar" x="272" y="470" width="64" height="14" rx="7" fill="#f59e0b"/>
+      <rect class="bar" x="368" y="470" width="64" height="14" rx="7" fill="#5ec8b0"/>
+      <rect class="bar" x="464" y="470" width="64" height="14" rx="7" fill="#5ec8b0"/>
+    </g>
+  </g>
+
+  <!-- 署名（水印级）与圆形人像 -->
+  <text class="sign" x="1840" y="99" font-size="30" font-weight="500" fill="#dfe4f2" opacity=".42" letter-spacing="0.04em" text-anchor="end">皮卡付</text>
+  <g id="avatar">
+    <circle cx="144" cy="968" r="64" fill="#171d26" stroke="#93a3b8" stroke-width="1.6"/>
+    <circle cx="144" cy="968" r="64" fill="none" stroke="#f59e0b" stroke-width="3" opacity=".28"/>
+  </g>
+
+  <script><![CDATA[
+    var tl = gsap.timeline({ paused: true });
+
+    /* 1. 目录逐条落下 */
+    tl.from('.row', { opacity: 0, y: 26, duration: 0.5, ease: 'power3.out', stagger: 0.08 }, 0);
+
+    /* 2. 高亮扫过，停在第 03 条 */
+    tl.to('.r0 .lbl', { fill: '#dfe4f2', duration: 0.13 }, 1.00);
+    tl.to('.r1 .lbl', { fill: '#dfe4f2', duration: 0.13 }, 1.18);
+    tl.to('.r0 .lbl', { fill: '#64748b', duration: 0.13 }, 1.26);
+    tl.to('.r2 .lbl', { fill: '#dfe4f2', duration: 0.13 }, 1.36);
+    tl.to('.r1 .lbl', { fill: '#64748b', duration: 0.13 }, 1.44);
+    tl.fromTo('.mark', { opacity: 0, scaleY: 0, transformOrigin: '50% 50%' },
+                       { opacity: 1, scaleY: 1, duration: 0.22, ease: 'back.out(2.6)' }, 1.36);
+
+    /* 3. 未选中的淡出，选中的飞到左上角并缩到规范字号 */
+    tl.to('.r0, .r1, .r3, .r4', { opacity: 0, y: -18, duration: 0.42, ease: 'power2.in', stagger: 0.04 }, 1.98);
+    tl.to('.r2', { x: -680, y: -474, duration: 0.95, ease: 'power3.inOut' }, 2.06);
+    tl.to('.r2 .num', { attr: { 'font-size': 24 }, duration: 0.95, ease: 'power3.inOut' }, 2.06);
+    tl.to('.r2 .lbl', { attr: { 'font-size': 28 }, duration: 0.95, ease: 'power3.inOut' }, 2.06);
+    tl.to('.mark', { opacity: 0, duration: 0.4 }, 2.30);
+
+    /* 4. 顶部信息条落定 */
+    tl.fromTo('#toprule', { attr: { 'stroke-dashoffset': 1760 }, strokeDasharray: 1760 },
+                         { attr: { 'stroke-dashoffset': 0 }, duration: 0.7, ease: 'power2.inOut' }, 2.86);
+
+    /* 5. 内容开始 */
+    tl.from('.title', { opacity: 0, y: 22, duration: 0.62, ease: 'power3.out' }, 3.20);
+    tl.from('.body', { opacity: 0, y: 14, duration: 0.55, ease: 'power3.out' }, 3.46);
+    tl.from('.bar', { scaleX: 0, transformOrigin: '0% 50%', duration: 0.42, ease: 'back.out(2)', stagger: 0.06 }, 3.74);
+
+    /* 6. 补上规范里的另外两个固定元素 */
+    tl.from('#avatar', { opacity: 0, scale: 0.86, transformOrigin: '50% 50%', duration: 0.55, ease: 'back.out(1.8)' }, 4.34);
+    tl.from('.sign', { opacity: 0, duration: 0.6 }, 4.52);
+  ]]></script>
+</svg>
