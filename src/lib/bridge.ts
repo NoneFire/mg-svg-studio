@@ -142,11 +142,16 @@ async function applyCommand(studio: Studio, command: BridgeCommand): Promise<unk
     return { asset: target.id, ...result }
   }
   if (type === 'project.reload') {
-    if (store.projectDirty) throw new Error('Studio 有未保存改动，请先保存或导出副本再重新载入')
     if (!store.projectHandle && !store.projectUrl) throw new Error('当前 Studio 项目没有关联可重新载入的文件')
+    // 合并而不是覆盖：Agent 刚写进文件的改动会进来，界面上还没写回的改动也留着
     const reloaded = await store.reloadProject()
     if (!reloaded) throw new Error('Studio 取消了重新载入')
-    return { file: store.projectFileName || store.projectUrl, assets: store.assets.length, dirty: store.projectDirty }
+    return {
+      file: store.projectFileName || store.projectUrl,
+      assets: store.assets.length,
+      dirty: store.projectDirty,
+      liveSync: store.liveSync,
+    }
   }
 
   const asset = uniqueMatch(store.assets, payload.asset!, (entry) => entry.name, '素材')

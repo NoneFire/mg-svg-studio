@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { store } from './store'
+import { isPlayable } from './lib/project'
 import type { Studio } from './lib/studio'
 import TopBar from './ui/TopBar'
 import LeftPanel from './ui/LeftPanel'
@@ -36,6 +37,7 @@ export default function App() {
           store.updateSelection(sel, focusInspector)
         },
         onBoardMove: (id, x, y) => store.moveBoard(id, x, y),
+        onBoardDrop: (id, index) => store.reorderBoards(id, index),
         onZoom: (z) => store.setZoom(z),
         onPlaybackChange: () => store.emit(),
         // 点画布上的评审标注 → 面板聚焦到对应卡片
@@ -81,6 +83,12 @@ export default function App() {
     const t = setTimeout(() => setToast(''), 1800)
     return () => clearTimeout(t)
   }, [toast])
+
+  // 文件被外部改动、自动合并进来时给一条短提示（冲突会在文案里说清楚）
+  useEffect(() => {
+    if (!store.syncNoticeAt || !store.syncNotice) return
+    setToast(store.syncNotice)
+  }, [store.syncNoticeAt])
 
   useEffect(() => {
     if (!store.lastAddedId) return
@@ -162,6 +170,17 @@ export default function App() {
     studioRef.current?.toggleGrid(store.grid)
   }, [store.grid, studioReady])
 
+  // 画布格子设置：列数 / 间距 / 是否吸附，改了立刻生效
+  useEffect(() => {
+    studioRef.current?.setCanvasGrid(store.arrangeSettings)
+  }, [store.arrangeSettings, studioReady])
+
+  // 格子模式下画布位置由格子算出来：打开项目后先对齐一次，避免格子和卡片错开
+  useEffect(() => {
+    if (!store.ready) return
+    store.ensureCanvasGrid()
+  }, [store.ready, store.projectVersion, store.arrangeSettings])
+
   useEffect(() => {
     const studio = studioRef.current
     if (!studio || !studioReady) return
@@ -214,6 +233,30 @@ export default function App() {
     }
   }, [store.ready, projectLoad])
 
+  // 浏览器重启后本地文件授权会退回未授予：第一次点击 / 按键时补一次，
+  // 这样实时保存不用等用户去按 ⌘S 才生效。
+  useEffect(() => {
+    if (!studioReady) return
+    const grant = () => {
+      window.removeEventListener('pointerdown', grant)
+      window.removeEventListener('keydown', grant)
+      void store.requestFilePermission()
+    }
+    window.addEventListener('pointerdown', grant)
+    window.addEventListener('keydown', grant)
+    return () => {
+      window.removeEventListener('pointerdown', grant)
+      window.removeEventListener('keydown', grant)
+    }
+  }, [studioReady])
+
+  // 左栏浮在画布上：适应画布时把它当成左侧留白，内容不会被面板盖住
+  useEffect(() => {
+    if (!studioReady) return
+    const panel = document.getElementById('library')
+    studioRef.current?.setViewInset({ left: store.leftOpen && panel ? panel.getBoundingClientRect().width : 0 })
+  }, [store.leftOpen, studioReady])
+
   // 首次载入后自动适应画布
   const fitted = useRef(false)
   useEffect(() => {
@@ -221,6 +264,8 @@ export default function App() {
     fitted.current = true
     const studio = studioRef.current
     if (!studio) return
+    const panel = document.getElementById('library')
+    studio.setViewInset({ left: store.leftOpen && panel ? panel.getBoundingClientRect().width : 0 })
     studio.fitAll()
     if (store.selection.assetId) studio.select(store.selection, true)
     studio.play()
@@ -328,7 +373,7 @@ export default function App() {
                     选择 / 粘贴素材
                     <input
                       type="file"
-                      accept=".svg,.png,.jpg,.jpeg,.webp,.gif,.avif,image/svg+xml,image/*"
+                      accept=".svg,.json,.png,.jpg,.jpeg,.webp,.gif,.avif,image/svg+xml,application/json,image/*"
                       multiple
                       hidden
                       onChange={(e) => e.target.files && store.importFiles(e.target.files)}
@@ -349,7 +394,7 @@ export default function App() {
               </Suspense>
             )}
           </div>
-          {store.selectedAsset && store.selectedAsset.groups.length > 0 && <Timeline studio={studioRef.current} />}
+          {store.selectedAsset && isPlayable(store.selectedAsset) && <Timeline studio={studioRef.current} />}
         </div>
       </div>
     </div>

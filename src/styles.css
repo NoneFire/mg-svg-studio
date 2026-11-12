@@ -1015,6 +1015,13 @@ html[data-theme='light'] .anim-mark {
   flex: none;
   padding: 6px 12px 0;
 }
+.stat-type {
+  font-weight: 600;
+  letter-spacing: .04em;
+}
+.stat-type-svg { color: var(--text-dim); }
+.stat-type-lottie { color: #e9a13b; }
+.stat-type-gsap { color: #5ec8b0; }
 .inspector-tabs {
   display: flex;
   gap: 2px;
@@ -2584,6 +2591,20 @@ html[data-theme='light'] .timeline-voice {
   border-radius: 50%;
   background: #f5a524;
   margin-left: 2px;
+}
+/* 已和文件同步：一颗安静的小绿点，不抢橙色「有改动」的注意力 */
+.sync-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #34d399;
+  margin-left: 2px;
+}
+.project-pop > button.checked span {
+  color: var(--accent);
+}
+.project-pop > button.checked em {
+  color: var(--accent);
 }
 .project-pop {
   position: absolute;

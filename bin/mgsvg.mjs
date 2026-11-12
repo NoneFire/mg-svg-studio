@@ -376,6 +376,83 @@ var init_css = __esm({
   }
 });
 
+// src/lib/fonts.ts
+function parseFontFaces(css) {
+  const out = [];
+  const re4 = /@font-face\s*\{([^}]*)\}/gi;
+  let match;
+  while (match = re4.exec(css)) {
+    const decls = {};
+    for (const chunk of match[1].split(";")) {
+      const i2 = chunk.indexOf(":");
+      if (i2 < 0) continue;
+      const key = chunk.slice(0, i2).trim().toLowerCase();
+      if (key) decls[key] = chunk.slice(i2 + 1).trim();
+    }
+    const family = (decls["font-family"] || "").replace(/^["']|["']$/g, "").trim();
+    const src = decls["src"];
+    if (!family || !src) continue;
+    out.push({
+      family,
+      src,
+      weight: decls["font-weight"] || "normal",
+      style: decls["font-style"] || "normal"
+    });
+  }
+  return out;
+}
+function extractSvgCss(svg) {
+  let css = "";
+  const re4 = /<style[^>]*>([\s\S]*?)<\/style>/gi;
+  let match;
+  while (match = re4.exec(svg)) css += "\n" + match[1].replace(/<!\[CDATA\[|\]\]>/g, "");
+  return css;
+}
+function usableSrc(src) {
+  const parts = src.match(/local\([^)]*\)|url\([^)]*\)/gi) || [];
+  return parts.filter((part) => /^local\(/i.test(part) || /^url\(\s*["']?data:/i.test(part)).join(", ");
+}
+function registerFace(spec) {
+  const key = `${spec.family}|${spec.weight}|${spec.style}|${spec.src}`;
+  const cached = settled.get(key);
+  if (cached) return cached;
+  const src = usableSrc(spec.src);
+  if (!src) return Promise.resolve();
+  let face;
+  try {
+    face = new FontFace(spec.family, src, { weight: spec.weight, style: spec.style });
+  } catch {
+    return Promise.resolve();
+  }
+  document.fonts.add(face);
+  const task = face.load().then(() => void 0).catch(() => {
+    document.fonts.delete(face);
+    const note = `\u5B57\u4F53 ${spec.family}\uFF08${spec.weight}\uFF09\u6CA1\u88C5\u4E0A\uFF0C\u5DF2\u56DE\u9000\u5230\u4E0B\u4E00\u4E2A\u65CF\u540D`;
+    if (!warned.has(note)) {
+      warned.add(note);
+      console.warn(`[mgsvg] ${note}`);
+    }
+  }).finally(() => {
+    pending.delete(key);
+    settled.set(key, task);
+  });
+  pending.set(key, task);
+  return task;
+}
+function queueSvgFonts(svg) {
+  if (!hasDocumentFonts()) return Promise.resolve();
+  return Promise.all(parseFontFaces(extractSvgCss(svg)).map(registerFace)).then(() => void 0);
+}
+var settled, pending, warned, hasDocumentFonts;
+var init_fonts = __esm({
+  "src/lib/fonts.ts"() {
+    settled = /* @__PURE__ */ new Map();
+    pending = /* @__PURE__ */ new Map();
+    warned = /* @__PURE__ */ new Set();
+    hasDocumentFonts = () => typeof document !== "undefined" && typeof FontFace !== "undefined" && !!document.fonts;
+  }
+});
+
 // src/lib/svg-doc.ts
 function num(v2, fallback = 0) {
   if (v2 == null) return fallback;
@@ -580,6 +657,7 @@ function parseSvgDocument(svgText) {
       if (m2 && patternIds.has(m2[1])) warnings.push(`pattern \u586B\u5145 #${m2[1]} \u5DF2\u8DF3\u8FC7\uFF08\u7528\u7EAF\u8272/\u6E10\u53D8\u66FF\u4EE3\uFF09`);
     });
   }
+  void queueSvgFonts(svgText);
   return {
     width,
     height,
@@ -855,6 +933,7 @@ var SHAPE_TAGS, DRAW_TAGS, SKIP_TAGS, INHERITED, GEOMETRY, PRESENTATION, parserF
 var init_svg_doc = __esm({
   "src/lib/svg-doc.ts"() {
     init_css();
+    init_fonts();
     SHAPE_TAGS = /* @__PURE__ */ new Set(["rect", "circle", "ellipse", "line", "polyline", "polygon", "path"]);
     DRAW_TAGS = /* @__PURE__ */ new Set([...SHAPE_TAGS, "text"]);
     SKIP_TAGS = /* @__PURE__ */ new Set(["defs", "style", "title", "desc", "metadata", "clippath", "mask", "lineargradient", "radialgradient", "pattern", "filter", "symbol", "marker"]);
@@ -953,6 +1032,25 @@ var init_types = __esm({
   }
 });
 
+// src/lib/native/detect.ts
+function looksLikeLottie(text) {
+  const head = text.trim();
+  if (!head.startsWith("{")) return false;
+  try {
+    const doc = JSON.parse(head);
+    return Array.isArray(doc.layers) && (typeof doc.w === "number" || typeof doc.h === "number");
+  } catch {
+    return false;
+  }
+}
+function looksLikeGsapSvg(text) {
+  return /<script[\s>]/i.test(text) && /\bgsap\b/i.test(text) && /<\/svg>/i.test(text);
+}
+var init_detect = __esm({
+  "src/lib/native/detect.ts"() {
+  }
+});
+
 // src/lib/style-patch.ts
 function parseStylePatch(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("\u6837\u5F0F\u8865\u4E01\u5FC5\u987B\u662F\u5BF9\u8C61");
@@ -1033,7 +1131,7 @@ var init_project_schema = __esm({
       iterations: z.union([z.number().positive(), z.literal("infinite")]),
       direction: z.enum(["normal", "reverse", "alternate", "alternate-reverse"]),
       fillMode: z.enum(["none", "forwards", "backwards", "both"]),
-      origin: z.enum(["css", "smil", "manual"]),
+      origin: z.enum(["css", "smil", "manual", "lottie", "gsap"]),
       originPoint: z.strictObject({ x: z.number(), y: z.number() }),
       enabled: z.boolean().optional(),
       tracks: z.array(track).min(1)
@@ -1062,6 +1160,26 @@ function genId(prefix) {
   seed++;
   return `${prefix}_${Date.now().toString(36)}${seed.toString(36)}`;
 }
+function normalizeVersions(raw) {
+  if (!Array.isArray(raw)) return [];
+  const byIndex = /* @__PURE__ */ new Map();
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const entry = item;
+    const index = Math.round(Number(entry.index));
+    if (!Number.isFinite(index) || index < 1 || byIndex.has(index)) continue;
+    if (typeof entry.svg !== "string" || !entry.svg.trim()) continue;
+    byIndex.set(index, {
+      index,
+      createdAt: Number(entry.createdAt) || Date.now(),
+      label: typeof entry.label === "string" && entry.label ? entry.label : void 0,
+      svg: entry.svg,
+      width: Number(entry.width) || 1920,
+      height: Number(entry.height) || 1080
+    });
+  }
+  return Array.from(byIndex.values()).sort((a, b2) => a.index - b2.index);
+}
 function elementIndexOf(doc) {
   return doc.elements.map((el) => ({
     id: el.id,
@@ -1080,6 +1198,9 @@ function buildAssetFromSvg(svg, name, opts = {}) {
     id: id2,
     name,
     svg,
+    format: "svg",
+    payload: void 0,
+    duration: void 0,
     width: doc.width || 1920,
     height: doc.height || 1080,
     kind: groups.length ? "animated" : "static",
@@ -1095,12 +1216,53 @@ function buildAssetFromSvg(svg, name, opts = {}) {
     version: 1
   };
 }
+function buildNativeAsset(format, payload, name, opts = {}) {
+  let width = 1920;
+  let height = 1080;
+  let duration = 0;
+  if (format === "lottie") {
+    const data = JSON.parse(payload);
+    width = Math.max(1, Math.round(Number(data.w) || 512));
+    height = Math.max(1, Math.round(Number(data.h) || 512));
+    const fr2 = Number(data.fr) || 30;
+    const ip = Number(data.ip) || 0;
+    const op = Number(data.op) || ip + 1;
+    duration = Math.max(1e-3, (op - ip) / fr2);
+  } else {
+    const doc = parseSvgDocument(payload);
+    width = doc.width || 1920;
+    height = doc.height || 1080;
+  }
+  return {
+    id: opts.id || genId("a"),
+    name: name || (format === "lottie" ? "Lottie \u7D20\u6750" : "GSAP \u7D20\u6750"),
+    svg: "",
+    format,
+    payload,
+    duration,
+    width,
+    height,
+    kind: "animated",
+    groups: [],
+    elements: [],
+    overrides: {},
+    layouts: {},
+    warnings: [],
+    source: "import",
+    x: opts.x ?? 0,
+    y: opts.y ?? 0,
+    createdAt: Date.now(),
+    version: 1
+  };
+}
 function normalizeProject(raw) {
   if (!raw || typeof raw !== "object") throw new Error("\u9879\u76EE\u6587\u4EF6\u4E0D\u662F JSON \u5BF9\u8C61");
   if (raw.format !== PROJECT_FORMAT) {
     throw new Error(`\u4E0D\u662F MG SVG Studio \u9879\u76EE\u6587\u4EF6\uFF08format=${String(raw.format)}\uFF09`);
   }
-  if (raw.version !== void 0 && raw.version !== PROJECT_VERSION) throw new Error(`\u4E0D\u652F\u6301\u7684\u9879\u76EE\u7248\u672C\uFF1A${raw.version}`);
+  if (raw.version !== void 0 && raw.version !== PROJECT_VERSION && !LEGACY_PROJECT_VERSIONS.includes(raw.version)) {
+    throw new Error(`\u4E0D\u652F\u6301\u7684\u9879\u76EE\u7248\u672C\uFF1A${raw.version}`);
+  }
   if (!Array.isArray(raw.assets)) throw new Error("\u9879\u76EE\u7F3A\u5C11 assets \u6570\u7EC4");
   return {
     format: PROJECT_FORMAT,
@@ -1113,15 +1275,20 @@ function normalizeProject(raw) {
 function normalizeAsset(a) {
   if (!a || typeof a !== "object") throw new Error("assets \u91CC\u5B58\u5728\u975E\u5BF9\u8C61\u9879");
   if (typeof a.id !== "string") throw new Error("\u7D20\u6750\u7F3A\u5C11 id");
-  if (typeof a.svg !== "string") throw new Error(`\u7D20\u6750 ${a.id} \u7F3A\u5C11 svg`);
+  const format = a.format === "lottie" || a.format === "gsap" ? a.format : "svg";
+  if (format === "svg" && typeof a.svg !== "string") throw new Error(`\u7D20\u6750 ${a.id} \u7F3A\u5C11 svg`);
+  if (format !== "svg" && typeof a.payload !== "string") throw new Error(`\u539F\u751F\u7D20\u6750 ${a.id} \u7F3A\u5C11 payload`);
   const groups = Array.isArray(a.groups) ? a.groups : [];
   return {
     id: a.id,
     name: a.name || a.id,
-    svg: a.svg,
+    svg: typeof a.svg === "string" ? a.svg : "",
+    format,
+    payload: typeof a.payload === "string" ? a.payload : void 0,
+    duration: Number(a.duration) || void 0,
     width: Number(a.width) || 1920,
     height: Number(a.height) || 1080,
-    kind: groups.length ? "animated" : "static",
+    kind: format !== "svg" || groups.length ? "animated" : "static",
     groups,
     elements: Array.isArray(a.elements) ? a.elements : [],
     videoCopy: typeof a.videoCopy === "string" ? a.videoCopy : "",
@@ -1135,6 +1302,12 @@ function normalizeAsset(a) {
     createdAt: Number(a.createdAt) || Date.now(),
     review: a.review && typeof a.review === "object" ? a.review : void 0,
     agentReview: a.agentReview && typeof a.agentReview === "object" ? a.agentReview : void 0,
+    revision: a.revision && typeof a.revision === "object" ? {
+      index: Number(a.revision.index) || 0,
+      createdAt: Number(a.revision.createdAt) || 0,
+      label: typeof a.revision.label === "string" ? a.revision.label : void 0
+    } : void 0,
+    versions: normalizeVersions(a.versions),
     version: 1
   };
 }
@@ -1169,14 +1342,20 @@ function applyOps(project, ops) {
     const result = applyOne(next, op);
     log.push({ index, op: op.op, ok: true, detail: result });
   });
-  next.assets = next.assets.map((a) => ({ ...a, kind: a.groups.length ? "animated" : "static" }));
+  next.assets = next.assets.map((a) => ({ ...a, kind: a.format && a.format !== "svg" || a.groups.length ? "animated" : "static" }));
   next.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
   return { project: next, log };
 }
 function applyOne(project, op) {
   switch (op.op) {
     case "asset.add": {
-      if (!op.svg || typeof op.svg !== "string") throw new Error("asset.add \u9700\u8981 svg \u5B57\u7B26\u4E32");
+      if (op.format === "lottie" || op.format === "gsap") {
+        if (typeof op.payload !== "string" || !op.payload.trim()) throw new Error("asset.add \u7684\u539F\u751F\u7D20\u6750\u9700\u8981 payload");
+        const asset2 = buildNativeAsset(op.format, op.payload, op.name || "\u539F\u751F\u7D20\u6750", { id: op.id, x: op.x, y: op.y });
+        project.assets.push(asset2);
+        return `\u6DFB\u52A0${op.format === "lottie" ? " Lottie" : " GSAP"} \u7D20\u6750 ${asset2.id}\uFF08\u539F\u751F\u8FD0\u884C\u65F6\uFF0C${asset2.width}\xD7${asset2.height}\uFF09`;
+      }
+      if (!op.svg || typeof op.svg !== "string") throw new Error("asset.add \u9700\u8981 svg\uFF0C\u6216 format + payload");
       const asset = buildAssetFromSvg(op.svg, op.name || "\u65B0\u7D20\u6750", { id: op.id, x: op.x, y: op.y });
       if (op.width) asset.width = op.width;
       if (op.height) asset.height = op.height;
@@ -1193,6 +1372,27 @@ function applyOne(project, op) {
       const { svg, ...fields } = op.patch;
       if (svg !== void 0) {
         if (typeof svg !== "string" || !svg.trim()) throw new Error("asset.update \u7684 svg \u5FC5\u987B\u662F\u975E\u7A7A\u5B57\u7B26\u4E32");
+        if (asset.format === "lottie" || asset.format === "gsap") {
+          const keep = {
+            id: asset.id,
+            name: asset.name,
+            x: asset.x,
+            y: asset.y,
+            overrides: asset.overrides,
+            layouts: asset.layouts,
+            videoCopy: asset.videoCopy,
+            voiceoverAudio: asset.voiceoverAudio,
+            createdAt: asset.createdAt,
+            source: asset.source
+          };
+          const rebuilt = looksLikeLottie(svg) ? buildNativeAsset("lottie", svg, keep.name, keep) : looksLikeGsapSvg(svg) ? buildNativeAsset("gsap", svg, keep.name, keep) : buildAssetFromSvg(svg, keep.name, keep);
+          Object.assign(asset, rebuilt, keep);
+          asset.format = rebuilt.format ?? "svg";
+          asset.payload = rebuilt.payload;
+          asset.duration = rebuilt.duration;
+          Object.assign(asset, fields);
+          return `\u66F4\u65B0\u7D20\u6750 ${asset.id}\uFF1A\u5185\u5BB9\u4E0E\u683C\u5F0F\uFF08\u2192 ${asset.format}\uFF09`;
+        }
         const doc = parseSvgDocument(svg);
         asset.svg = svg;
         asset.width = doc.width || asset.width;
@@ -1249,12 +1449,18 @@ function applyOne(project, op) {
     }
     case "style.set": {
       const asset = findAsset(project, op.asset);
+      if (asset.format === "lottie" || asset.format === "gsap") {
+        throw new Error(`${asset.format} \u662F\u539F\u751F\u7D20\u6750\uFF0C\u52A8\u753B\u5728\u8FD0\u884C\u65F6\u91CC\uFF0C\u4E0D\u652F\u6301\u9010\u5143\u7D20\u7F16\u8F91\uFF1B\u6539\u6E90\u6587\u4EF6\u540E\u91CD\u65B0\u5BFC\u5165`);
+      }
       const el = findElement(asset, op.element);
       asset.overrides[el.id] = { ...asset.overrides[el.id] || {}, ...parseStylePatch(op.patch) };
       return `\u5143\u7D20 ${el.id}\uFF08${el.label}\uFF09\u6837\u5F0F\uFF1A${Object.entries(op.patch).map(([k2, v2]) => `${k2}=${v2}`).join(", ")}`;
     }
     case "style.clear": {
       const asset = findAsset(project, op.asset);
+      if (asset.format === "lottie" || asset.format === "gsap") {
+        throw new Error(`${asset.format} \u662F\u539F\u751F\u7D20\u6750\uFF0C\u52A8\u753B\u5728\u8FD0\u884C\u65F6\u91CC\uFF0C\u4E0D\u652F\u6301\u9010\u5143\u7D20\u7F16\u8F91\uFF1B\u6539\u6E90\u6587\u4EF6\u540E\u91CD\u65B0\u5BFC\u5165`);
+      }
       const el = findElement(asset, op.element);
       delete asset.overrides[el.id];
       return `\u6E05\u7A7A\u5143\u7D20 ${el.id}\uFF08${el.label}\uFF09\u7684\u6837\u5F0F\u8986\u76D6`;
@@ -1281,9 +1487,11 @@ function outline(project, opts = {}) {
   lines.push(`\u9879\u76EE\uFF1A${project.name} \xB7 ${project.assets.length} \u4E2A\u7D20\u6750${project.updatedAt ? ` \xB7 \u66F4\u65B0\u4E8E ${project.updatedAt}` : ""}`);
   const assets = opts.assetId ? [findAsset(project, opts.assetId)] : project.assets;
   for (const a of assets) {
-    const animated = a.groups.length;
+    const native = a.format === "lottie" || a.format === "gsap";
+    const animated = native || a.groups.length > 0;
+    const kindLabel = native ? `\u539F\u751F ${a.format}${a.duration ? ` \xB7 ${a.duration.toFixed(2)}s` : ""}` : animated ? `${a.groups.length} \u6761\u52A8\u753B` : "\u9759\u6001";
     lines.push("");
-    lines.push(`[${a.id}] ${a.name}  ${a.width}\xD7${a.height}  ${animated ? `${animated} \u6761\u52A8\u753B` : "\u9759\u6001"}  \u4F4D\u7F6E (${Math.round(a.x)}, ${Math.round(a.y)})`);
+    lines.push(`[${a.id}] ${a.name}  ${a.width}\xD7${a.height}  ${kindLabel}  \u4F4D\u7F6E (${Math.round(a.x)}, ${Math.round(a.y)})`);
     if (a.layouts && Object.keys(a.layouts).length) {
       lines.push(`  \u5E03\u5C40\uFF1A${Object.entries(a.layouts).map(([id2, s2]) => `${id2}=${s2.mode}${s2.mode === "grid" ? `/${s2.cols}\u5217` : ""}`).join("  ")}`);
     }
@@ -1319,7 +1527,12 @@ function validateProject(project) {
   project.assets.forEach((a) => {
     if (ids.has(a.id)) problems.push(`\u7D20\u6750 id \u91CD\u590D\uFF1A${a.id}`);
     ids.add(a.id);
-    if (!a.svg) problems.push(`\u7D20\u6750 ${a.id} \u6CA1\u6709 svg`);
+    const native = a.format === "lottie" || a.format === "gsap";
+    if (native) {
+      if (!a.payload) problems.push(`\u539F\u751F\u7D20\u6750 ${a.id} \u6CA1\u6709 payload`);
+    } else if (!a.svg) {
+      problems.push(`\u7D20\u6750 ${a.id} \u6CA1\u6709 svg`);
+    }
     const elementIds = new Set((a.elements || []).map((e2) => e2.id));
     a.groups.forEach((g2, index) => {
       const checked = animationSchema.safeParse(g2);
@@ -1346,15 +1559,17 @@ function validateProject(project) {
   });
   return { ok: problems.length === 0, problems };
 }
-var PROJECT_FORMAT, PROJECT_VERSION, seed;
+var PROJECT_FORMAT, PROJECT_VERSION, LEGACY_PROJECT_VERSIONS, seed;
 var init_project = __esm({
   "src/lib/project.ts"() {
     init_types();
     init_svg_doc();
+    init_detect();
     init_style_patch();
     init_project_schema();
     PROJECT_FORMAT = "mg-svg-studio/project";
-    PROJECT_VERSION = 1;
+    PROJECT_VERSION = 2;
+    LEGACY_PROJECT_VERSIONS = [1];
     seed = 0;
   }
 });
@@ -18994,8 +19209,8 @@ function countLevels(findings) {
 }
 function gateOf(counts, coverage) {
   if (counts.FAIL) return "BLOCKED";
-  const pending = (coverage.counts.unmeasured || 0) + (coverage.counts.not_run || 0) + (coverage.counts.not_implemented || 0);
-  if (counts.WARN || pending) return "REVIEW_NEEDED";
+  const pending2 = (coverage.counts.unmeasured || 0) + (coverage.counts.not_run || 0) + (coverage.counts.not_implemented || 0);
+  if (counts.WARN || pending2) return "REVIEW_NEEDED";
   return "DELIVERABLE";
 }
 function buildView(findings) {
@@ -19357,22 +19572,22 @@ async function reviewInBrowser(opts) {
       socket.addEventListener("error", () => reject(new CliError("CHROME_CONNECTION_FAILED", "\u65E0\u6CD5\u8FDE\u63A5 Chrome \u8C03\u8BD5\u7AEF\u53E3")), { once: true });
     }), 5e3, "\u8FDE\u63A5 Chrome \u8D85\u65F6");
     let seq = 0;
-    const pending = /* @__PURE__ */ new Map();
+    const pending2 = /* @__PURE__ */ new Map();
     socket.addEventListener("message", (event) => {
       const reply = JSON.parse(String(event.data));
-      pending.get(reply.id)?.(reply);
+      pending2.get(reply.id)?.(reply);
     });
     const send = async (method, params) => {
       const id2 = ++seq;
       try {
         const reply = await withTimeout(new Promise((resolve) => {
-          pending.set(id2, resolve);
+          pending2.set(id2, resolve);
           socket.send(JSON.stringify({ id: id2, method, params }));
         }), 5e3, "Chrome \u8C03\u8BD5\u8BF7\u6C42\u8D85\u65F6");
         if (reply.error) throw new CliError("CHROME_CONNECTION_FAILED", reply.error.message);
         return reply.result;
       } finally {
-        pending.delete(id2);
+        pending2.delete(id2);
       }
     };
     const navigation = await send("Page.navigate", { url: url.href });
@@ -19572,7 +19787,7 @@ async function readBody(request) {
 }
 async function startBridge(port = 7350) {
   const sessions = /* @__PURE__ */ new Map();
-  const pending = /* @__PURE__ */ new Map();
+  const pending2 = /* @__PURE__ */ new Map();
   const allowedOrigins = (process.env.MGSVG_STUDIO_ORIGIN || "").split(",").map((origin) => origin.trim());
   const getContext = (sessionId) => {
     const now = Date.now();
@@ -19621,7 +19836,7 @@ async function startBridge(port = 7350) {
     }
     if (type === "review" && payload.frame !== void 0 && (typeof payload.frame !== "number" || !Number.isFinite(payload.frame) || payload.frame < 0 || payload.frame > 1)) throw new Error("\u8BC4\u5BA1\u5E27\u5FC5\u987B\u5728 0 \u5230 1 \u4E4B\u95F4");
     const id2 = randomUUID();
-    pending.set(id2, {
+    pending2.set(id2, {
       command: { id: id2, sessionId: context3.sessionId, type, payload: { ...payload, asset, element } },
       expiresAt: Date.now() + bridgeCommandTimeout(type),
       delivered: false
@@ -19629,7 +19844,7 @@ async function startBridge(port = 7350) {
     return id2;
   };
   const getResult = (id2) => {
-    const item = pending.get(id2);
+    const item = pending2.get(id2);
     if (!item) return { ok: false, code: "COMMAND_NOT_FOUND", error: "\u547D\u4EE4\u4E0D\u5B58\u5728\u6216\u7ED3\u679C\u5DF2\u8FC7\u671F" };
     if (item.result) return item.result;
     if (Date.now() >= item.expiresAt) {
@@ -19671,7 +19886,7 @@ async function startBridge(port = 7350) {
     if (req.method === "OPTIONS") return send(204);
     const now = Date.now();
     for (const [id3, entry] of sessions) if (now - entry.seenAt >= SESSION_TTL) sessions.delete(id3);
-    for (const [id3, entry] of pending) if (now - entry.expiresAt >= RESULT_TTL) pending.delete(id3);
+    for (const [id3, entry] of pending2) if (now - entry.expiresAt >= RESULT_TTL) pending2.delete(id3);
     const sessionId = url.searchParams.get("session") || void 0;
     const id2 = url.searchParams.get("id") || "";
     try {
@@ -19701,7 +19916,7 @@ async function startBridge(port = 7350) {
         }
         if (pathname === "/command/result") {
           const body = await readBody(req);
-          const item = pending.get(body.id);
+          const item = pending2.get(body.id);
           if (!item?.delivered || item.command.sessionId !== body.sessionId) return send(404);
           item.result ??= body.ok ? { ok: true, result: body.result } : {
             ok: false,
@@ -19716,7 +19931,7 @@ async function startBridge(port = 7350) {
           const session = sessions.get(sessionId);
           if (!session) return send(409);
           session.seenAt = now;
-          for (const item of pending.values()) {
+          for (const item of pending2.values()) {
             if (item.command.sessionId === sessionId && !item.delivered && now < item.expiresAt) {
               item.delivered = true;
               return send(200, item.command);
@@ -20210,6 +20425,7 @@ init_project();
 init_bridge_protocol();
 init_style_patch();
 init_project_schema();
+init_detect();
 init_review();
 init_projectReview();
 init_args();
@@ -20560,6 +20776,11 @@ Studio \u9ED8\u8BA4\u8FDE\u63A5\u672C\u673A 7350 \u7AEF\u53E3\uFF1B\u5982\u679C\
       size: [a.width, a.height],
       position: [a.x, a.y],
       kind: a.kind,
+      // 原生素材（lottie / gsap）的动画在运行时里：没有元素索引，也没有轨道，
+      // 逐元素与轨道类命令都不适用。这里显式给出，免得 Agent 靠 kind 猜。
+      format: a.format || "svg",
+      duration: a.duration,
+      editable: (a.format || "svg") === "svg",
       groups: a.groups,
       layouts: a.layouts,
       overrides: a.overrides,
@@ -20663,10 +20884,13 @@ Studio \u9ED8\u8BA4\u8FDE\u63A5\u672C\u673A 7350 \u7AEF\u53E3\uFF1B\u5982\u679C\
       const width = num2(flags, "width");
       const height = num2(flags, "height");
       if ((width ?? 0) < 0 || (height ?? 0) < 0) usage("\u5BBD\u9AD8\u4E0D\u80FD\u5C0F\u4E8E 0");
+      const text = fs5.readFileSync(path5.resolve(svgFile), "utf8");
+      const base = path5.basename(svgFile).replace(/\.(svg|json)$/i, "");
+      const native = looksLikeLottie(text) ? "lottie" : looksLikeGsapSvg(text) ? "gsap" : void 0;
       ops = [{
         op: "asset.add",
-        svg: fs5.readFileSync(path5.resolve(svgFile), "utf8"),
-        name: str(flags, "name") || path5.basename(svgFile, ".svg"),
+        ...native ? { format: native, payload: text } : { svg: text },
+        name: str(flags, "name") || base,
         width,
         height,
         x: num2(flags, "x"),

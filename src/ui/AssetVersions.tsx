@@ -148,7 +148,7 @@ export default function AssetVersions({ asset, studio }: { asset: Asset; studio?
             <strong>版本历史</strong>
             <span>
               {versions.length
-                ? `${versions.length} 个版本 · 点这里并排对比，可恢复任意一版`
+                ? `${versions.length} 个版本 · 随项目文件保存，可并排对比`
                 : '还没有记录，点这里查看'}
             </span>
           </span>
@@ -179,6 +179,10 @@ export default function AssetVersions({ asset, studio }: { asset: Asset; studio?
           </div>
         ) : (
           <p className="qv-note">还没有版本记录。点下面的「存为新版本」开始记录。</p>
+        )}
+
+        {ordered.length > 0 && (
+          <p className="qv-note">版本随项目文件保存：换浏览器、换机器打开都还在；「存为新版本」会把当前内容再记一版。</p>
         )}
 
         <div className="asset-preview-actions">

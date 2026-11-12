@@ -30,7 +30,7 @@ export interface AnimGroup {
   fillMode: 'none' | 'forwards' | 'backwards' | 'both'
   tracks: PropTrack[]
   /** 提取来源：css | smil | manual */
-  origin: 'css' | 'smil' | 'manual'
+  origin: 'css' | 'smil' | 'manual' | 'lottie' | 'gsap'
   /** 动画变换的基准点，相对元素包围盒（0-1） */
   originPoint: { x: number; y: number }
   enabled: boolean
@@ -64,10 +64,32 @@ export interface ProjectElement {
   parentId?: string
 }
 
+/**
+ * 一个历史版本：素材内容的一次快照。
+ * 只存能重画这张图的字段，位置、名字、文案这些「当下」的东西不跟着复制。
+ */
+export interface AssetVersion {
+  index: number
+  createdAt: number
+  label?: string
+  svg: string
+  width: number
+  height: number
+}
+
+/** 素材的承载方式：svg 走 Studio 自己的解析，lottie / gsap 交给原生运行时 */
+export type AssetFormat = 'svg' | 'lottie' | 'gsap'
+
 export interface Asset {
   id: string
   name: string
+  /** svg 素材是 SVG 源码；原生素材为空，原文放 payload */
   svg: string
+  /** 原生素材的原始内容：Lottie 的 JSON 或自带 GSAP 的 SVG */
+  format?: AssetFormat
+  payload?: string
+  /** 原生素材自带的时长（秒），时间轴用 */
+  duration?: number
   width: number
   height: number
   kind: 'animated' | 'static'
@@ -86,8 +108,10 @@ export interface Asset {
   review?: import('./lib/review/types').ReviewSnapshot
   /** 最近一次 Agent 语义评审：与公式评审分开保存、分开过期 */
   agentReview?: import('./lib/review/types').AgentReviewSnapshot
-  /** 当前版本在时间轴上的位置；历史另存 IndexedDB，不进项目文件 */
+  /** 当前指到的历史版本（index 对应 versions 里的那一条） */
   revision?: { index: number; createdAt: number; label?: string }
+  /** 历史版本：每项一份完整的 SVG 快照，随项目文件保存，按 index 升序 */
+  versions?: AssetVersion[]
   source: 'sample' | 'import'
   x: number
   y: number

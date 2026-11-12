@@ -12,7 +12,10 @@
     "mcp": "node bin/mgsvg.mjs mcp",
     "mgsvg": "node bin/mgsvg.mjs",
     "build:bestory": "node scripts/sync-bestory.mjs",
-    "deploy:unicloud": "node scripts/deploy-unicloud.mjs"
+    "deploy:unicloud": "node scripts/deploy-unicloud.mjs",
+    "vendor:gsap": "node -e \"require('fs').copyFileSync('node_modules/gsap/dist/gsap.min.js','public/vendor/gsap.min.js')\"",
+    "vendor:lottie": "node -e \"require('fs').copyFileSync('node_modules/lottie-web/build/player/lottie.min.js','public/vendor/lottie.min.js')\"",
+    "vendor": "npm run vendor:gsap && npm run vendor:lottie"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",

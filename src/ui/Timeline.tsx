@@ -45,7 +45,8 @@ export default function Timeline({ studio }: { studio: Studio | null }) {
   const groups = asset?.groups ?? []
   const voiceSrc = asset?.voiceoverAudio
   const playing = player?.playing ?? false
-  const canPlay = !!player && groups.some((group) => group.enabled !== false)
+  const native = asset?.format === 'lottie' || asset?.format === 'gsap'
+  const canPlay = !!player && (native || groups.some((group) => group.enabled !== false))
   // 为画布留出可操作空间，同时扣除时间轴标题、把手和边距。
   const maxHeight = Math.max(MIN_TRACK_HEIGHT, workspaceHeight - 220)
   const rowCount = groups.length + (voiceSrc ? 1 : 0)
@@ -214,7 +215,7 @@ export default function Timeline({ studio }: { studio: Studio | null }) {
           <h2>时间轴</h2>
           <span className="timeline-asset" title={asset.name}>{asset.name}</span>
         </div>
-        <span className="timeline-count">{groups.length} 条轨道{voiceSrc ? ' · 语音' : ''}</span>
+        <span className="timeline-count">{native ? `原生 ${asset?.format}` : `${groups.length} 条轨道`}{voiceSrc ? ' · 语音' : ''}</span>
         <button
           className="row-icon"
           title={collapsed ? '展开时间轴' : '收起时间轴'}

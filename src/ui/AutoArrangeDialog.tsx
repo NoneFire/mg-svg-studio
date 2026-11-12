@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { store, type ArrangeSettings } from '../store'
-import { Field, NumberInput, Select } from './controls'
+import { Field, NumberInput, Select, Toggle } from './controls'
 import { Icon } from './Icon'
 import {
   Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter,
@@ -37,16 +37,21 @@ export default function AutoArrangeDialog() {
       <DialogContent className="asset-preview-dialog auto-arrange-dialog">
         <DialogHeader className="history-header">
           <DialogTitle>自动排列</DialogTitle>
-          <DialogDescription>按素材当前位置排序，再按所选样式放入画布。</DialogDescription>
+          <DialogDescription>格子模式：素材按格子摆放，拖动可以在格子之间换位。</DialogDescription>
         </DialogHeader>
         <div className="group-layout-controls">
+          <Field label="拖拽换位">
+            <Toggle checked={draft.snap} onChange={(snap) => update({ snap })} label={draft.snap ? '用格子' : '自由摆放'} />
+          </Field>
           <Field label="排序顺序">
             <Select value={draft.order} onChange={(order) => update({ order: order as ArrangeSettings['order'] })} options={orderOptions} />
           </Field>
-          <Field label="排列样式">
-            <Select value={draft.mode} onChange={(mode) => update({ mode: mode as ArrangeSettings['mode'] })} options={modeOptions} />
-          </Field>
-          {draft.mode === 'grid' && (
+          {!draft.snap && (
+            <Field label="排列样式">
+              <Select value={draft.mode} onChange={(mode) => update({ mode: mode as ArrangeSettings['mode'] })} options={modeOptions} />
+            </Field>
+          )}
+          {(draft.snap || draft.mode === 'grid') && (
             <Field label="列数">
               <NumberInput value={draft.cols} min={1} max={12} step={1} onChange={(cols) => update({ cols: Math.round(cols) })} />
             </Field>

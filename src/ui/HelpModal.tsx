@@ -46,6 +46,14 @@ export default function HelpModal({ onClose }: { onClose: () => void }) {
           <p>
             素材有录音时，时间轴顶部多一条语音轨：波形按时长铺开，标签上标时长，左侧可静音。按时间轴的播放键，语音会和动画一起播放；打开项目时的自动播放不出声。
           </p>
+          <p>
+            链接本地 <code>.mgsvg</code> 后默认开着实时同步：文件被 Agent 或编辑器改过会自动合并进来，界面上的改动也会自动写回文件；
+            同一处两边都改过时按文件版本，项目菜单里会标出条数。开关在「项目」菜单里。
+          </p>
+          <p>
+            素材的「版本历史」写在项目文件的 <code>versions</code> 里，换浏览器、换机器打开都还在；
+            画布撤销历史只在当前浏览器，不跟着文件走。
+          </p>
 
           <h3>布局与分层</h3>
           <div className="help-table">
@@ -53,6 +61,13 @@ export default function HelpModal({ onClose }: { onClose: () => void }) {
               <span className="tag good">布局内核</span>
               <span>
                 选中一个容器 <code>&lt;g&gt;</code>，在右侧「元素」页点「重排子元素」，预览横排、竖排或网格后再应用。
+              </span>
+            </div>
+            <div className="help-row">
+              <span className="tag good">画布格子</span>
+              <span>
+                素材按「几行几列」摆进格子：把素材拖到别的格子，其余素材依次让位，松手自动落格，⌘Z 可撤销。
+                列数、间距和是否用格子，在左下角「自动排列」里调；关掉「拖拽换位」就回到自由摆放。
               </span>
             </div>
             <div className="help-row">
@@ -80,8 +95,8 @@ export default function HelpModal({ onClose }: { onClose: () => void }) {
             <em>平移画布</em>
             <span>双击素材</span>
             <em>聚焦到该素材</em>
-            <span>拖标题</span>
-            <em>移动整块素材</em>
+            <span>拖标题 / 拖素材</span>
+            <em>移动整块素材 / 在格子之间换位</em>
             <span>F / ⌘0</span>
             <em>适应画布</em>
             <span>⌘1</span>
@@ -97,7 +112,7 @@ export default function HelpModal({ onClose }: { onClose: () => void }) {
             <span>右上角 ☀ / ☾</span>
             <em>切换深色 / 浅色背景</em>
             <span>⌘S / ⌘O</span>
-            <em>保存 / 打开项目文件</em>
+            <em>保存 / 打开项目文件（链接后自动实时保存）</em>
             <span>顶部「素材」/检查器图标</span>
             <em>切换左栏或右栏</em>
           </div>

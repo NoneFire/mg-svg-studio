@@ -5,6 +5,7 @@ import { applyOps, findAsset, findElement, outline, validateProject, type Projec
 import { bridgeCommandTimeout, type BridgeCommand, type BridgeResult, type StudioContext } from '../lib/bridge-protocol'
 import { NUMERIC_STYLE, parseStylePatch } from '../lib/style-patch'
 import { parseAnimationPatch, parseLayoutPatch } from '../lib/project-schema'
+import { looksLikeGsapSvg, looksLikeLottie } from '../lib/native/detect'
 import { reviewInputHash } from '../lib/review/review'
 import { agentPromptForProject, reviewProjectFile, saveAgentReviewResult } from './projectReview'
 import { CliError, num, parseArgv, portOf, str, usage, type Flags } from './args'
@@ -404,6 +405,11 @@ Studio 默认连接本机 7350 端口；如果刚启动桥，请刷新 Studio �
     const assets = assetId ? [findAsset(project, assetId)] : project.assets
     const rows = assets.map((a) => ({
       id: a.id, name: a.name, size: [a.width, a.height], position: [a.x, a.y], kind: a.kind,
+      // 原生素材（lottie / gsap）的动画在运行时里：没有元素索引，也没有轨道，
+      // 逐元素与轨道类命令都不适用。这里显式给出，免得 Agent 靠 kind 猜。
+      format: a.format || 'svg',
+      duration: a.duration,
+      editable: (a.format || 'svg') === 'svg',
       groups: a.groups, layouts: a.layouts, overrides: a.overrides, elements: flags.elements ? a.elements : undefined,
       warnings: a.warnings,
     }))
@@ -497,8 +503,11 @@ Studio 默认连接本机 7350 端口；如果刚启动桥，请刷新 Studio �
       const width = num(flags, 'width')
       const height = num(flags, 'height')
       if ((width ?? 0) < 0 || (height ?? 0) < 0) usage('宽高不能小于 0')
-      ops = [{ op: 'asset.add', svg: fs.readFileSync(path.resolve(svgFile), 'utf8'),
-        name: str(flags, 'name') || path.basename(svgFile, '.svg'), width, height, x: num(flags, 'x'), y: num(flags, 'y') }]
+      const text = fs.readFileSync(path.resolve(svgFile), 'utf8')
+      const base = path.basename(svgFile).replace(/\.(svg|json)$/i, '')
+      const native = looksLikeLottie(text) ? 'lottie' : looksLikeGsapSvg(text) ? 'gsap' : undefined
+      ops = [{ op: 'asset.add', ...(native ? { format: native, payload: text } : { svg: text }),
+        name: str(flags, 'name') || base, width, height, x: num(flags, 'x'), y: num(flags, 'y') }]
       break
     }
     case 'replace': {

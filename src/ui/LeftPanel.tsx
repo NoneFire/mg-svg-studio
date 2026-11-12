@@ -8,10 +8,13 @@ import { SearchField } from './controls'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './kit/dropdown-menu'
 import LayersPanel from './LayersPanel'
 import AutoArrangeDialog from './AutoArrangeDialog'
+import { ensureNativeThumb, isNativeAsset, nativeThumb, onThumbReady } from '../lib/native/thumbs'
 
 const thumbs = new WeakMap<Asset, { svg: string; groups: Asset['groups']; url: string }>()
 
 function thumbUrl(asset: Asset) {
+  // 原生素材的画面在运行时里，用提前抓好的定格帧
+  if (isNativeAsset(asset)) return nativeThumb(asset.id) ?? ''
   const cached = thumbs.get(asset)
   if (cached?.svg === asset.svg && cached.groups === asset.groups) return cached.url
 
@@ -40,8 +43,15 @@ export default function LeftPanel({ studio }: { studio: Studio | null }) {
   const [query, setQuery] = useState('')
   const [tab, setTab] = useState('assets')
   const importRef = useRef<HTMLInputElement>(null)
+  const [, bumpThumbs] = useState(0)
   const selectedRef = useRef<HTMLButtonElement>(null)
   const assets = store.assets
+
+  // 原生素材的缩略图是异步抓的：抓好一张就重渲染一次
+  useEffect(() => onThumbReady(() => bumpThumbs((n) => n + 1)), [])
+  useEffect(() => {
+    assets.filter(isNativeAsset).forEach(ensureNativeThumb)
+  }, [assets])
   const q = query.trim().toLowerCase()
   const filtered = q ? assets.filter((asset) => asset.name.toLowerCase().includes(q)) : assets
   const activeId = store.selection.assetId
@@ -75,7 +85,7 @@ export default function LeftPanel({ studio }: { studio: Studio | null }) {
               <input
                 ref={importRef}
                 type="file"
-                accept=".svg,.png,.jpg,.jpeg,.webp,.gif,.avif,image/svg+xml,image/*"
+                accept=".svg,.json,.png,.jpg,.jpeg,.webp,.gif,.avif,image/svg+xml,application/json,image/*"
                 multiple
                 hidden
                 onChange={(event) => {
@@ -141,7 +151,7 @@ export default function LeftPanel({ studio }: { studio: Studio | null }) {
               <div className="library-empty">
                 <Icon name={q ? 'search' : 'shape'} size={19} />
                 <strong>{q ? '没有匹配的素材' : '素材库为空'}</strong>
-                <p>{q ? '换个关键词试试。' : '导入、拖入或粘贴 SVG 和图片。'}</p>
+                <p>{q ? '换个关键词试试。' : '导入、拖入或粘贴 SVG、Lottie JSON 和图片。'}</p>
                 <button className="btn ghost small" onClick={q ? () => setQuery('') : chooseFiles}>
                   {q ? '清除搜索' : '导入素材'}
                 </button>

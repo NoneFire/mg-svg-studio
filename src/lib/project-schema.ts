@@ -18,7 +18,7 @@ export const animationSchema = z.strictObject({
   iterations: z.union([z.number().positive(), z.literal('infinite')]),
   direction: z.enum(['normal', 'reverse', 'alternate', 'alternate-reverse']),
   fillMode: z.enum(['none', 'forwards', 'backwards', 'both']),
-  origin: z.enum(['css', 'smil', 'manual']),
+  origin: z.enum(['css', 'smil', 'manual', 'lottie', 'gsap']),
   originPoint: z.strictObject({ x: z.number(), y: z.number() }),
   enabled: z.boolean().optional(),
   tracks: z.array(track).min(1),

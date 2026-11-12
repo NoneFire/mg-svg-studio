@@ -2,6 +2,8 @@ import gsap from 'gsap'
 import { Box, DragEvent, Group, Leafer, Rect, Text } from 'leafer-ui'
 import type { Asset, StylePatch } from '../types'
 import { convertSvg, applyPatch, type ConvertedAsset, type ConvertedElement } from './convert'
+import { NativePlayer, createGsapRuntime, createLottieRuntime } from './native/runtime'
+import { isPlayable } from './project'
 import { applyAssetLayouts } from './layout/apply'
 import { parseSvgDocument } from './svg-doc'
 import { AssetPlayer } from './runtime'
@@ -12,6 +14,10 @@ import {
 } from './asset-card'
 import { fitText } from './text-fit'
 import { fontsSettled, hasPendingFonts } from './fonts'
+import {
+  BOARD_MAX_H, BOARD_MAX_W, LABEL_H,
+  canvasGrid, layoutByOrder, moveInOrder, nearestSlot, type CanvasGrid, type CellRect, type GridSettings,
+} from './canvas-grid'
 
 export interface StudioSelection {
   assetId?: string
@@ -31,6 +37,8 @@ export interface ReviewMarker {
 export interface StudioEvents {
   onSelectionChange?: (sel: StudioSelection, focusInspector?: boolean) => void
   onBoardMove?: (assetId: string, x: number, y: number) => void
+  /** 格子模式：拖到第 index 个格子上松手了 */
+  onBoardDrop?: (assetId: string, index: number) => void
   onZoom?: (zoom: number) => void
   onTime?: (assetId: string, time: number, duration: number) => void
   onPlaybackChange?: () => void
@@ -52,7 +60,10 @@ interface Board {
   copyCount: Text
   copyText: Text
   content: ConvertedAsset
-  player: AssetPlayer
+  player: AssetPlayer | NativePlayer
+  /** 原生素材的 DOM 载体，叠在 Leafer 画布上方 */
+  nativeEl?: HTMLDivElement
+  nativeTx?: string
   fit: number
   svgHeight: number
   cell: { x: number; y: number; w: number; h: number }
@@ -69,10 +80,6 @@ function measureVideoCopyText() {
   context.font = '13px Inter, "PingFang SC", sans-serif'
   return (value: string) => context.measureText(value).width
 }
-
-const BOARD_MAX_W = 560
-const BOARD_MAX_H = 380
-const LABEL_H = 26
 
 export type StudioTheme = 'dark' | 'light'
 
@@ -102,6 +109,8 @@ const THEMES = {
     gridMinor: 'rgba(255,255,255,0.035)',
     gridMajor: 'rgba(255,255,255,0.058)',
     gridDot: 'rgba(255,255,255,0.11)',
+    cellFill: 'rgba(255,255,255,0.045)',
+    cellStroke: 'rgba(255,255,255,0.10)',
     warn: '#ff6b6b',
   },
   light: {
@@ -119,6 +128,8 @@ const THEMES = {
     gridMinor: 'rgba(15,23,42,0.055)',
     gridMajor: 'rgba(15,23,42,0.09)',
     gridDot: 'rgba(15,23,42,0.16)',
+    cellFill: 'rgba(15,23,42,0.045)',
+    cellStroke: 'rgba(15,23,42,0.12)',
     warn: '#dc2626',
   },
 } as const
@@ -126,6 +137,7 @@ const THEMES = {
 export class Studio {
   leafer: Leafer
   camera: Group
+  private nativeLayer!: HTMLDivElement
   boardsLayer: Group
   overlay: Group
   labelsLayer: Group
@@ -142,6 +154,14 @@ export class Studio {
   ) = null
   private spaceDown = false
   private moved = false
+  /** 画布格子：开着的时候，拖动只在格子之间换位，松手自动落格 */
+  canvasGridSettings: GridSettings & { snap: boolean } = { snap: true, cols: 3, gap: 90 }
+  private dropHint!: Rect
+  private dropIndex: number | null = null
+  private dragGrid: CanvasGrid | null = null
+  /** 背景格子：铺在画板底下的衬底矩形，一个格子一个节点 */
+  private cellsLayer!: Group
+  private cellNodes: Rect[] = []
   private zoom = 1
   gridVisible = true
   events: StudioEvents = {}
@@ -150,6 +170,8 @@ export class Studio {
   private lastTick = 0
   private lastOverlaySync = 0
   private lastSize = { w: 0, h: 0 }
+  /** 悬浮在画布上的面板会盖住边缘：适应画布时让开它们，内容不会被挡 */
+  private viewInset = { left: 0, top: 0, right: 0, bottom: 0 }
   private loopEnabled = true
   private zoomGesture: null | { s: number; s0: number; x0: number; y0: number; s1: number; anchor: { x: number; y: number }; lastAt: number } = null
   private gestureActive = false
@@ -192,11 +214,19 @@ export class Studio {
 
     this.leafer = new Leafer({ view: container, width: container.clientWidth, height: container.clientHeight, fill: '#16161a' })
     this.camera = new Group({ name: 'camera' })
+    this.cellsLayer = new Group({ name: 'cells' })
     this.boardsLayer = new Group({ name: 'boards' })
     this.overlay = new Group({ name: 'overlay' })
+    this.camera.add(this.cellsLayer)
     this.camera.add(this.boardsLayer)
     this.labelsLayer = new Group({ name: 'labels' })
     this.leafer.add(this.camera)
+
+    // 原生素材不能进 Leafer 场景，单独一层 DOM 叠在上面，跟着相机变换同步位置
+    if (getComputedStyle(this.container).position === 'static') this.container.style.position = 'relative'
+    this.nativeLayer = document.createElement('div')
+    this.nativeLayer.style.cssText = 'position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:1'
+    this.container.appendChild(this.nativeLayer)
     this.leafer.add(this.overlay)
     this.overlay.add(this.labelsLayer)
     this.reviewRasterLayer = new Group({ name: 'review-raster', visible: false })
@@ -222,6 +252,18 @@ export class Studio {
     } as any)
     this.overlay.add(this.selectionBox)
     this.overlay.add(this.elementBox)
+
+    // 格子落点提示：跟着相机换算到根空间，缩放时和格子对齐
+    this.dropHint = new Rect({
+      stroke: '#2f81f7',
+      strokeWidth: 1.5,
+      dashPattern: [6, 4],
+      fill: 'rgba(47,129,247,0.10)',
+      cornerRadius: 8,
+      visible: false,
+      hittable: false,
+    } as any)
+    this.overlay.add(this.dropHint)
 
     this.bindEvents()
     this.startTicker()
@@ -269,6 +311,7 @@ export class Studio {
     const dt = this.lastTick ? Math.min(0.1, (now - this.lastTick) / 1000) : 0
     this.lastTick = now
     if (!dt) return
+    this.syncNative()
     const zoomed = this.stepZoom(dt)
     const viewport = this.viewportWorld()
     let advanced = false
@@ -381,7 +424,8 @@ export class Studio {
     const previous = board.asset
     if (previous.x !== asset.x || previous.y !== asset.y) {
       if (this.dragging?.mode === 'move' && this.dragging.board === board) this.cancelPointer()
-      board.frame.set({ x: asset.x, y: asset.y })
+      // 换位/整理都是挪到新格子：给一段短动画，落格看得见
+      this.moveBoard(board, asset.x, asset.y)
     }
     board.asset = asset
     if (previous.width !== asset.width || previous.height !== asset.height) {
@@ -406,7 +450,7 @@ export class Studio {
     const rebuild = previous.svg !== asset.svg || previous.width !== asset.width || previous.height !== asset.height ||
       removedStyle || layoutGeometryChanged || !sameValue(previous.layouts ?? {}, asset.layouts ?? {})
     if (rebuild || !sameValue(previous.groups, asset.groups)) this.refreshAsset(board, rebuild)
-    else if (board.player) board.player.asset = asset
+    else if (board.player instanceof AssetPlayer) board.player.asset = asset
     if (!rebuild) changedStyles.forEach(([id, patch]) => this.applyStyle(asset.id, id, patch))
     if (previous.kind !== asset.kind) {
       board.frame.stroke = asset.kind === 'animated' ? THEMES[this.theme].boardStrokeActive : THEMES[this.theme].boardStroke
@@ -609,6 +653,15 @@ export class Studio {
 
   private buildBoardContent(board: Board) {
     const asset = board.asset
+
+    // 原生格式：Leafer 里只留卡片底板，画面交给浏览器里的 lottie / gsap
+    if (asset.format === 'lottie' || asset.format === 'gsap') {
+      this.buildNativeBoard(board)
+      this.drawGrid()
+      this.syncSelectionOverlay()
+      return
+    }
+
     try {
       const doc = parseSvgDocument(asset.svg)
       const converted = convertSvg(doc, asset)
@@ -637,7 +690,67 @@ export class Studio {
     this.syncSelectionOverlay()
   }
 
+  private buildNativeBoard(board: Board) {
+    const asset = board.asset
+    const el = document.createElement('div')
+    el.style.cssText = 'position:absolute;left:0;top:0;transform-origin:0 0;pointer-events:none'
+    el.style.width = asset.width + 'px'
+    el.style.height = asset.height + 'px'
+    this.nativeLayer.appendChild(el)
+    board.nativeEl = el
+
+    const player = new NativePlayer()
+    player.loop = this.loopEnabled
+    player.onTime = (t, d) => this.events.onTime?.(asset.id, t, d)
+    board.player = player
+    board.ready = true
+
+    const payload = asset.payload || ''
+    const size = { width: asset.width, height: asset.height }
+    const loading = asset.format === 'lottie'
+      ? createLottieRuntime(el, payload)
+      : createGsapRuntime(el, payload, size)
+
+    loading
+      .then((runtime) => {
+        if (this.boards.get(asset.id) !== board) {
+          runtime.destroy()
+          return
+        }
+        player.attach(runtime)
+        if (asset.duration !== runtime.duration) asset.duration = runtime.duration
+        this.syncNative()
+        this.events.onTime?.(asset.id, 0, runtime.duration)
+      })
+      .catch((err) => {
+        console.error('原生素材载入失败', asset.name, err)
+        el.innerHTML = ''
+        const note = document.createElement('div')
+        note.textContent = `原生素材载入失败：${(err as Error).message}`
+        note.style.cssText = 'font:12px/1.5 -apple-system,sans-serif;color:#ff6b6b;padding:10px'
+        el.appendChild(note)
+      })
+
+    this.syncNative()
+  }
+
+  /** 把每块原生素材的屏幕位置和相机对齐 */
+  private syncNative() {
+    if (!this.nativeLayer) return
+    const s = this.camera.scaleX || 1
+    this.boards.forEach((b) => {
+      if (!b.nativeEl) return
+      const x = this.camera.x + b.frame.x * s
+      const y = this.camera.y + b.frame.y * s
+      const tx = `translate(${x.toFixed(2)}px,${y.toFixed(2)}px) scale(${(s * b.fit).toFixed(4)})`
+      if (tx === b.nativeTx) return
+      b.nativeTx = tx
+      b.nativeEl.style.transform = tx
+    })
+  }
+
   private removeBoard(id: string) {
+    this.boards.get(id)?.nativeEl?.remove()
     const board = this.boards.get(id)
     if (!board) return
     if (this.dragging?.mode === 'move' && this.dragging.board === board) this.cancelPointer()
@@ -702,7 +815,7 @@ export class Studio {
   }
 
   private refreshAsset(board: Board, rebuildContent: boolean) {
-    if (!board.asset.groups.some((group) => group.enabled !== false)) board.player?.pause()
+    if (!isPlayable(board.asset)) board.player?.pause()
     if (rebuildContent || !board.ready) {
       const { time = 0, playing = false } = board.player ?? {}
       board.contentHolder.removeAll(true)
@@ -712,7 +825,7 @@ export class Studio {
         board.player.seek(time)
         if (playing) board.player.play()
       }
-    } else {
+    } else if (board.player instanceof AssetPlayer) {
       board.player.asset = board.asset
       board.player.rebuild()
       board.player.seek(board.player.time)
@@ -735,7 +848,7 @@ export class Studio {
   play(assetId?: string, { restart = false } = {}) {
     const boards = assetId ? [this.boards.get(assetId)] : this.boards.values()
     for (const board of boards) {
-      if (!board?.ready || !board.asset.groups.some((group) => group.enabled !== false)) continue
+      if (!board?.ready || !isPlayable(board.asset)) continue
       if (restart) board.player.seek(0)
       board.player.play()
     }
@@ -761,7 +874,7 @@ export class Studio {
 
   showLastFrames() {
     this.boards.forEach((board) => {
-      if (!board.ready || !board.asset.groups.some((group) => group.enabled !== false)) return
+      if (!board.ready || !isPlayable(board.asset)) return
       board.player.pause()
       board.player.seek(board.player.lastFrameTime)
     })
@@ -1058,16 +1171,34 @@ export class Studio {
     this.syncLabels()
   }
 
+  /** 左栏这类浮层盖住画布边缘时，把可见区域告诉画布，适应画布时让开 */
+  setViewInset(inset: Partial<{ left: number; top: number; right: number; bottom: number }>) {
+    this.viewInset = { ...this.viewInset, ...inset }
+  }
+
   fitAll() {
     this.zoomGesture = null
-    const bounds = this.contentBounds()
-    if (!bounds) return
-    const w = this.container.clientWidth
-    const h = this.container.clientHeight
-    const pad = 56
+    const content = this.contentBounds()
+    if (!content) return
+    // 格子比卡片多出半格留白：适应画布时一起算进去，最外圈格子不会被边缘切掉
+    const half = this.canvasGridSettings.snap ? Math.max(0, this.canvasGridSettings.gap) / 2 : 0
+    const bounds = {
+      x: content.x - half,
+      y: content.y - half,
+      width: content.width + half * 2,
+      height: content.height + half * 2,
+    }
+    const { left, top, right, bottom } = this.viewInset
+    const w = Math.max(120, this.container.clientWidth - left - right)
+    const h = Math.max(120, this.container.clientHeight - top - bottom)
+    const pad = Math.min(56, w / 6, h / 6)
     const scale = Math.min((w - pad * 2) / bounds.width, (h - pad * 2) / bounds.height, 1.4)
     const s = this.clampZoom(scale)
-    this.camera.setTransform({ a: s, b: 0, c: 0, d: s, e: w / 2 - (bounds.x + bounds.width / 2) * s, f: h / 2 - (bounds.y + bounds.height / 2) * s } as any, false)
+    this.camera.setTransform({
+      a: s, b: 0, c: 0, d: s,
+      e: left + w / 2 - (bounds.x + bounds.width / 2) * s,
+      f: top + h / 2 - (bounds.y + bounds.height / 2) * s,
+    } as any, false)
     this.zoom = s
     this.afterCameraChange()
     this.events.onZoom?.(s)
@@ -1145,6 +1276,86 @@ export class Studio {
     this.drawGrid()
   }
 
+  /* ---------------------------- 画布格子 ---------------------------- */
+
+  /** 格子设置来自「自动排列」面板；关掉吸附就回到自由摆放 */
+  setCanvasGrid(settings: GridSettings & { snap: boolean }) {
+    this.canvasGridSettings = {
+      snap: !!settings.snap,
+      cols: Math.max(1, Math.round(settings.cols || 1)),
+      gap: Math.max(0, Number.isFinite(settings.gap) ? settings.gap : 90),
+    }
+    this.drawGrid()
+  }
+
+  /** 当前画布的格子：顺序即从左到右、从上到下 */
+  gridState(): CanvasGrid {
+    return canvasGrid([...this.boards.values()].map((board) => board.asset), this.canvasGridSettings)
+  }
+
+  /** 挪画板：落格、换位、整理都是短动画，看得见去向 */
+  private moveBoard(board: Board, x: number, y: number) {
+    gsap.killTweensOf(board.frame)
+    gsap.to(board.frame, {
+      x,
+      y,
+      duration: 0.24,
+      ease: 'power2.out',
+      overwrite: true,
+      onUpdate: () => this.syncLabels(),
+    })
+  }
+
+  /** 拖动中：算落点格子，先让其它素材让位，再把落点框画出来 */
+  private syncDropTarget(board: Board) {
+    // 拖动过程中素材坐标不变，格子算一次就够
+    const grid = this.dragGrid ?? (this.dragGrid = this.gridState())
+    const assets = [...this.boards.values()].map((item) => item.asset)
+    const center = { x: board.frame.x + board.frame.width / 2, y: board.frame.y + board.frame.height / 2 }
+    const targetId = nearestSlot(grid, center)
+    if (!targetId) return
+    const index = grid.order.indexOf(targetId)
+    if (this.dropIndex === index) return
+    const cell = grid.cells.get(targetId)
+    if (!cell) return
+    this.dropIndex = index
+    this.showDropHint(cell)
+    const slots = layoutByOrder(assets, moveInOrder(grid.order, board.asset.id, index), this.canvasGridSettings).slots
+    this.boards.forEach((other) => {
+      if (other === board) return
+      const slot = slots.get(other.asset.id)
+      if (slot) this.moveBoard(other, slot.x, slot.y)
+    })
+  }
+
+  private showDropHint(cell: CellRect) {
+    const scale = this.zoomValue
+    this.dropHint.set({
+      x: this.camera.x + cell.x * scale,
+      y: this.camera.y + cell.y * scale,
+      width: Math.max(4, cell.width * scale),
+      height: Math.max(4, cell.height * scale),
+      visible: true,
+    } as any)
+  }
+
+  private hideDropHint() {
+    this.dropHint.visible = false
+  }
+
+  /** 拖拽取消 / 换位落定之前：把所有画板收回格子里的原位置 */
+  private resetLayoutPreview() {
+    this.dropIndex = null
+    this.dragGrid = null
+    this.hideDropHint()
+    this.boards.forEach((board) => {
+      gsap.killTweensOf(board.frame)
+      board.frame.set({ x: board.asset.x, y: board.asset.y })
+    })
+    this.syncLabels()
+    this.syncSelectionOverlay()
+  }
+
   /* ------------------------------- grid -------------------------------- */
 
   toggleGrid(visible: boolean) {
@@ -1164,6 +1375,8 @@ export class Studio {
     const dpr = Math.min(window.devicePixelRatio || 1, 2)
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     ctx.clearRect(0, 0, w, h)
+    // 格子跟着画布缩放/开关变化
+    this.syncCells()
     if (!this.gridVisible) return
 
     const scale = this.zoomValue
@@ -1219,6 +1432,42 @@ export class Studio {
         }
       }
     }
+  }
+
+  /** 背景格子：铺在画板底下，卡片自己盖住自己的格子，空出来的地方就是网格 */
+  private syncCells() {
+    // 格子属于「网格」这一层显示：按下 G 隐藏网格时，格子一起让开
+    const show = this.canvasGridSettings.snap && this.gridVisible
+    this.cellsLayer.visible = show
+    if (!show) return
+    const assets = [...this.boards.values()].map((board) => board.asset)
+    const grid = canvasGrid(assets, this.canvasGridSettings)
+    const cells = [...grid.cells.values()]
+    const colors = THEMES[this.theme]
+    // 描边换算成屏幕 1px：缩放时格子线不会跟着变粗或消失
+    const strokeWidth = 1 / Math.max(0.05, this.zoomValue)
+    while (this.cellNodes.length < cells.length) {
+      const node = new Rect({ fill: colors.cellFill, cornerRadius: 8, hittable: false } as any)
+      this.cellsLayer.add(node)
+      this.cellNodes.push(node)
+    }
+    this.cellNodes.forEach((node, index) => {
+      const cell = cells[index]
+      if (!cell) {
+        node.visible = false
+        return
+      }
+      node.set({
+        x: cell.x,
+        y: cell.y,
+        width: cell.width,
+        height: cell.height,
+        fill: colors.cellFill,
+        stroke: colors.cellStroke,
+        strokeWidth,
+        visible: true,
+      } as any)
+    })
   }
 
   /* ------------------------------- events ------------------------------ */
@@ -1324,6 +1573,7 @@ export class Studio {
     this.moved = false
     if (board) {
       this.dragging = { pointerId: e.pointerId, mode: 'move', board }
+      this.dragGrid = this.canvasGridSettings.snap ? this.gridState() : null
       this.select({ assetId: board.asset.id }, true, true)
     } else {
       this.dragging = { pointerId: e.pointerId, mode: 'pan', startX: p.x, startY: p.y, camX: this.camera.x, camY: this.camera.y }
@@ -1340,6 +1590,7 @@ export class Studio {
     drag.board.frame.set({ x: drag.board.asset.x + x, y: drag.board.asset.y + y })
     this.syncSelectionOverlay()
     this.syncLabels()
+    if (this.canvasGridSettings.snap) this.syncDropTarget(drag.board)
   }
 
   private onBoardDragEnd = (event: DragEvent & { isCancel?: boolean }) => {
@@ -1353,7 +1604,22 @@ export class Studio {
     const { board } = drag
     this.dragging = null
     this.container.style.cursor = this.spaceDown ? 'grab' : 'default'
-    this.events.onBoardMove?.(board.asset.id, board.frame.x, board.frame.y)
+    if (!this.canvasGridSettings.snap) {
+      this.events.onBoardMove?.(board.asset.id, board.frame.x, board.frame.y)
+      return
+    }
+    const target = this.dropIndex
+    const order = this.dragGrid?.order ?? this.gridState().order
+    this.dropIndex = null
+    this.dragGrid = null
+    this.hideDropHint()
+    const index = order.indexOf(board.asset.id)
+    if (target === null || target === index) {
+      // 没换格子：滑回自己那一格
+      this.moveBoard(board, board.asset.x, board.asset.y)
+      return
+    }
+    this.events.onBoardDrop?.(board.asset.id, target)
   }
 
   private onPointerMove = (e: PointerEvent) => {
@@ -1393,10 +1659,14 @@ export class Studio {
     const drag = this.dragging
     this.dragging = null
     if (drag?.mode === 'move' && this.moved) {
-      const { asset, frame } = drag.board
-      frame.set({ x: asset.x, y: asset.y })
-      this.syncSelectionOverlay()
-      this.syncLabels()
+      if (this.canvasGridSettings.snap) {
+        this.resetLayoutPreview()
+      } else {
+        const { asset, frame } = drag.board
+        frame.set({ x: asset.x, y: asset.y })
+        this.syncSelectionOverlay()
+        this.syncLabels()
+      }
     }
     this.container.style.cursor = this.spaceDown ? 'grab' : 'default'
   }

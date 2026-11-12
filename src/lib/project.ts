@@ -1,11 +1,15 @@
-import type { AnimGroup, Asset, ProjectElement, StylePatch } from '../types'
+import type { AnimGroup, Asset, AssetVersion, ProjectElement, StylePatch } from '../types'
 import { DEFAULT_LAYOUT, type LayoutSpec } from './layout/types'
 import { parseSvgDocument } from './svg-doc'
+import { looksLikeGsapSvg, looksLikeLottie } from './native/detect'
 import { parseStylePatch } from './style-patch'
 import { animationSchema, parseAnimationPatch, parseKeyframes, parseLayoutPatch, schemaProblems } from './project-schema'
 
 export const PROJECT_FORMAT = 'mg-svg-studio/project'
-export const PROJECT_VERSION = 1
+/** 2：历史版本从浏览器搬到 assets[].versions，随项目文件走 */
+export const PROJECT_VERSION = 2
+/** 仍然能读的旧版本号（读进来后会升级成本版） */
+const LEGACY_PROJECT_VERSIONS = [1]
 
 export interface ProjectFile {
   format: string
@@ -24,7 +28,7 @@ export interface OpResult {
 }
 
 export type ProjectOp =
-  | { op: 'asset.add'; name: string; svg: string; width?: number; height?: number; x?: number; y?: number; id?: string }
+  | { op: 'asset.add'; name: string; svg?: string; format?: 'lottie' | 'gsap'; payload?: string; width?: number; height?: number; x?: number; y?: number; id?: string }
   | { op: 'asset.remove'; asset: string }
   | { op: 'asset.update'; asset: string; patch: Partial<Pick<Asset, 'name' | 'x' | 'y' | 'width' | 'height' | 'svg'>> }
   | { op: 'board.move'; asset: string; x: number; y: number }
@@ -42,6 +46,28 @@ let seed = 0
 function genId(prefix: string) {
   seed++
   return `${prefix}_${Date.now().toString(36)}${seed.toString(36)}`
+}
+
+/** 历史版本：按 index 升序、同一个 index 只留一份，坏数据直接丢掉而不是整份文件失败 */
+export function normalizeVersions(raw: unknown): AssetVersion[] {
+  if (!Array.isArray(raw)) return []
+  const byIndex = new Map<number, AssetVersion>()
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue
+    const entry = item as any
+    const index = Math.round(Number(entry.index))
+    if (!Number.isFinite(index) || index < 1 || byIndex.has(index)) continue
+    if (typeof entry.svg !== 'string' || !entry.svg.trim()) continue
+    byIndex.set(index, {
+      index,
+      createdAt: Number(entry.createdAt) || Date.now(),
+      label: typeof entry.label === 'string' && entry.label ? entry.label : undefined,
+      svg: entry.svg,
+      width: Number(entry.width) || 1920,
+      height: Number(entry.height) || 1080,
+    })
+  }
+  return Array.from(byIndex.values()).sort((a, b) => a.index - b.index)
 }
 
 export function elementIndexOf(doc: ReturnType<typeof parseSvgDocument>): ProjectElement[] {
@@ -63,6 +89,9 @@ export function buildAssetFromSvg(svg: string, name: string, opts: { id?: string
     id,
     name,
     svg,
+    format: 'svg',
+    payload: undefined,
+    duration: undefined,
     width: doc.width || 1920,
     height: doc.height || 1080,
     kind: groups.length ? 'animated' : 'static',
@@ -77,6 +106,64 @@ export function buildAssetFromSvg(svg: string, name: string, opts: { id?: string
     createdAt: Date.now(),
     version: 1,
   }
+}
+
+/** 原生素材：原文照着存，交给浏览器里的运行时去画，不做任何转换 */
+export function buildNativeAsset(
+  format: 'lottie' | 'gsap',
+  payload: string,
+  name: string,
+  opts: { id?: string; x?: number; y?: number } = {}
+): Asset {
+  let width = 1920
+  let height = 1080
+  let duration = 0
+
+  if (format === 'lottie') {
+    const data = JSON.parse(payload) as Record<string, number>
+    width = Math.max(1, Math.round(Number(data.w) || 512))
+    height = Math.max(1, Math.round(Number(data.h) || 512))
+    const fr = Number(data.fr) || 30
+    const ip = Number(data.ip) || 0
+    const op = Number(data.op) || ip + 1
+    duration = Math.max(0.001, (op - ip) / fr)
+  } else {
+    // 自带 GSAP 的 SVG：尺寸从 viewBox 拿，时长要等运行时建出时间轴才知道
+    const doc = parseSvgDocument(payload)
+    width = doc.width || 1920
+    height = doc.height || 1080
+  }
+
+  return {
+    id: opts.id || genId('a'),
+    name: name || (format === 'lottie' ? 'Lottie 素材' : 'GSAP 素材'),
+    svg: '',
+    format,
+    payload,
+    duration,
+    width,
+    height,
+    kind: 'animated',
+    groups: [],
+    elements: [],
+    overrides: {},
+    layouts: {},
+    warnings: [],
+    source: 'import',
+    x: opts.x ?? 0,
+    y: opts.y ?? 0,
+    createdAt: Date.now(),
+    version: 1,
+  }
+}
+
+/**
+ * 素材能不能播。
+ * 原生素材没有轨道（动画在运行时里），所以不能按 groups 判空。
+ */
+export function isPlayable(asset: Asset): boolean {
+  if (asset.format === 'lottie' || asset.format === 'gsap') return true
+  return asset.groups.some((group) => group.enabled !== false)
 }
 
 export function createProject(assets: Asset[], name = '未命名素材库'): ProjectFile {
@@ -94,10 +181,14 @@ export function stripRuntime(asset: Asset): Asset {
   const { ...rest } = asset as any
   delete rest.player
   delete rest.doc
+  const versions = normalizeVersions(rest.versions)
   return {
     id: rest.id,
     name: rest.name,
-    svg: rest.svg,
+    svg: rest.svg ?? '',
+    format: rest.format || 'svg',
+    payload: rest.payload,
+    duration: rest.duration,
     width: rest.width,
     height: rest.height,
     kind: rest.kind,
@@ -114,6 +205,9 @@ export function stripRuntime(asset: Asset): Asset {
     createdAt: rest.createdAt || Date.now(),
     review: rest.review,
     agentReview: rest.agentReview,
+    revision: rest.revision,
+    // 没有历史版本就不写这个字段，文件保持干净
+    ...(versions.length ? { versions } : {}),
     version: 1,
   }
 }
@@ -123,7 +217,9 @@ export function normalizeProject(raw: any): ProjectFile {
   if (raw.format !== PROJECT_FORMAT) {
     throw new Error(`不是 MG SVG Studio 项目文件（format=${String(raw.format)}）`)
   }
-  if (raw.version !== undefined && raw.version !== PROJECT_VERSION) throw new Error(`不支持的项目版本：${raw.version}`)
+  if (raw.version !== undefined && raw.version !== PROJECT_VERSION && !LEGACY_PROJECT_VERSIONS.includes(raw.version)) {
+    throw new Error(`不支持的项目版本：${raw.version}`)
+  }
   if (!Array.isArray(raw.assets)) throw new Error('项目缺少 assets 数组')
   return {
     format: PROJECT_FORMAT,
@@ -137,15 +233,20 @@ export function normalizeProject(raw: any): ProjectFile {
 export function normalizeAsset(a: any): Asset {
   if (!a || typeof a !== 'object') throw new Error('assets 里存在非对象项')
   if (typeof a.id !== 'string') throw new Error('素材缺少 id')
-  if (typeof a.svg !== 'string') throw new Error(`素材 ${a.id} 缺少 svg`)
+  const format = a.format === 'lottie' || a.format === 'gsap' ? a.format : 'svg'
+  if (format === 'svg' && typeof a.svg !== 'string') throw new Error(`素材 ${a.id} 缺少 svg`)
+  if (format !== 'svg' && typeof a.payload !== 'string') throw new Error(`原生素材 ${a.id} 缺少 payload`)
   const groups = Array.isArray(a.groups) ? a.groups : []
   return {
     id: a.id,
     name: a.name || a.id,
-    svg: a.svg,
+    svg: typeof a.svg === 'string' ? a.svg : '',
+    format,
+    payload: typeof a.payload === 'string' ? a.payload : undefined,
+    duration: Number(a.duration) || undefined,
     width: Number(a.width) || 1920,
     height: Number(a.height) || 1080,
-    kind: groups.length ? 'animated' : 'static',
+    kind: format !== 'svg' || groups.length ? 'animated' : 'static',
     groups,
     elements: Array.isArray(a.elements) ? a.elements : [],
     videoCopy: typeof a.videoCopy === 'string' ? a.videoCopy : '',
@@ -159,6 +260,14 @@ export function normalizeAsset(a: any): Asset {
     createdAt: Number(a.createdAt) || Date.now(),
     review: a.review && typeof a.review === 'object' ? a.review : undefined,
     agentReview: a.agentReview && typeof a.agentReview === 'object' ? a.agentReview : undefined,
+    revision: a.revision && typeof a.revision === 'object'
+      ? {
+        index: Number(a.revision.index) || 0,
+        createdAt: Number(a.revision.createdAt) || 0,
+        label: typeof a.revision.label === 'string' ? a.revision.label : undefined,
+      }
+      : undefined,
+    versions: normalizeVersions(a.versions),
     version: 1,
   }
 }
@@ -200,7 +309,7 @@ export function applyOps(project: ProjectFile, ops: ProjectOp[]): { project: Pro
     log.push({ index, op: op.op, ok: true, detail: result })
   })
 
-  next.assets = next.assets.map((a) => ({ ...a, kind: a.groups.length ? 'animated' : 'static' }))
+  next.assets = next.assets.map((a) => ({ ...a, kind: (a.format && a.format !== 'svg') || a.groups.length ? 'animated' : 'static' }))
   next.updatedAt = new Date().toISOString()
   return { project: next, log }
 }
@@ -208,7 +317,14 @@ export function applyOps(project: ProjectFile, ops: ProjectOp[]): { project: Pro
 function applyOne(project: ProjectFile, op: ProjectOp): string {
   switch (op.op) {
     case 'asset.add': {
-      if (!op.svg || typeof op.svg !== 'string') throw new Error('asset.add 需要 svg 字符串')
+      // 原生格式：原文照存，不做转换
+      if (op.format === 'lottie' || op.format === 'gsap') {
+        if (typeof op.payload !== 'string' || !op.payload.trim()) throw new Error('asset.add 的原生素材需要 payload')
+        const asset = buildNativeAsset(op.format, op.payload, op.name || '原生素材', { id: op.id, x: op.x, y: op.y })
+        project.assets.push(asset)
+        return `添加${op.format === 'lottie' ? ' Lottie' : ' GSAP'} 素材 ${asset.id}（原生运行时，${asset.width}×${asset.height}）`
+      }
+      if (!op.svg || typeof op.svg !== 'string') throw new Error('asset.add 需要 svg，或 format + payload')
       const asset = buildAssetFromSvg(op.svg, op.name || '新素材', { id: op.id, x: op.x, y: op.y })
       if (op.width) asset.width = op.width
       if (op.height) asset.height = op.height
@@ -225,6 +341,29 @@ function applyOne(project: ProjectFile, op: ProjectOp): string {
       const { svg, ...fields } = op.patch
       if (svg !== undefined) {
         if (typeof svg !== 'string' || !svg.trim()) throw new Error('asset.update 的 svg 必须是非空字符串')
+
+        // 原生素材的内容在 payload 里，直接写 svg 会留下两份互相矛盾的正文，
+        // 而且运行时读 payload，替换等于没生效。这里按新正文的格式重建。
+        if (asset.format === 'lottie' || asset.format === 'gsap') {
+          const keep = {
+            id: asset.id, name: asset.name, x: asset.x, y: asset.y,
+            overrides: asset.overrides, layouts: asset.layouts,
+            videoCopy: asset.videoCopy, voiceoverAudio: asset.voiceoverAudio,
+            createdAt: asset.createdAt, source: asset.source,
+          }
+          const rebuilt = looksLikeLottie(svg)
+            ? buildNativeAsset('lottie', svg, keep.name, keep)
+            : looksLikeGsapSvg(svg)
+              ? buildNativeAsset('gsap', svg, keep.name, keep)
+              : buildAssetFromSvg(svg, keep.name, keep)
+          Object.assign(asset, rebuilt, keep)
+          asset.format = rebuilt.format ?? 'svg'
+          asset.payload = rebuilt.payload
+          asset.duration = rebuilt.duration
+          Object.assign(asset, fields)
+          return `更新素材 ${asset.id}：内容与格式（→ ${asset.format}）`
+        }
+
         const doc = parseSvgDocument(svg)
         asset.svg = svg
         asset.width = doc.width || asset.width
@@ -281,12 +420,18 @@ function applyOne(project: ProjectFile, op: ProjectOp): string {
     }
     case 'style.set': {
       const asset = findAsset(project, op.asset)
+      if (asset.format === 'lottie' || asset.format === 'gsap') {
+        throw new Error(`${asset.format} 是原生素材，动画在运行时里，不支持逐元素编辑；改源文件后重新导入`)
+      }
       const el = findElement(asset, op.element)
       asset.overrides[el.id] = { ...(asset.overrides[el.id] || {}), ...parseStylePatch(op.patch) }
       return `元素 ${el.id}（${el.label}）样式：${Object.entries(op.patch).map(([k, v]) => `${k}=${v}`).join(', ')}`
     }
     case 'style.clear': {
       const asset = findAsset(project, op.asset)
+      if (asset.format === 'lottie' || asset.format === 'gsap') {
+        throw new Error(`${asset.format} 是原生素材，动画在运行时里，不支持逐元素编辑；改源文件后重新导入`)
+      }
       const el = findElement(asset, op.element)
       delete asset.overrides[el.id]
       return `清空元素 ${el.id}（${el.label}）的样式覆盖`
@@ -316,9 +461,11 @@ export function outline(project: ProjectFile, opts: { assetId?: string; elements
   lines.push(`项目：${project.name} · ${project.assets.length} 个素材${project.updatedAt ? ` · 更新于 ${project.updatedAt}` : ''}`)
   const assets = opts.assetId ? [findAsset(project, opts.assetId)] : project.assets
   for (const a of assets) {
-    const animated = a.groups.length
+    const native = a.format === 'lottie' || a.format === 'gsap'
+    const animated = native || a.groups.length > 0
+    const kindLabel = native ? `原生 ${a.format}${a.duration ? ` · ${a.duration.toFixed(2)}s` : ''}` : animated ? `${a.groups.length} 条动画` : '静态'
     lines.push('')
-    lines.push(`[${a.id}] ${a.name}  ${a.width}×${a.height}  ${animated ? `${animated} 条动画` : '静态'}  位置 (${Math.round(a.x)}, ${Math.round(a.y)})`)
+    lines.push(`[${a.id}] ${a.name}  ${a.width}×${a.height}  ${kindLabel}  位置 (${Math.round(a.x)}, ${Math.round(a.y)})`)
     if (a.layouts && Object.keys(a.layouts).length) {
       lines.push(`  布局：${Object.entries(a.layouts).map(([id, s]) => `${id}=${s.mode}${s.mode === 'grid' ? `/${s.cols}列` : ''}`).join('  ')}`)
     }
@@ -356,7 +503,12 @@ export function validateProject(project: ProjectFile): { ok: boolean; problems: 
   project.assets.forEach((a) => {
     if (ids.has(a.id)) problems.push(`素材 id 重复：${a.id}`)
     ids.add(a.id)
-    if (!a.svg) problems.push(`素材 ${a.id} 没有 svg`)
+    const native = a.format === 'lottie' || a.format === 'gsap'
+    if (native) {
+      if (!a.payload) problems.push(`原生素材 ${a.id} 没有 payload`)
+    } else if (!a.svg) {
+      problems.push(`素材 ${a.id} 没有 svg`)
+    }
     const elementIds = new Set((a.elements || []).map((e) => e.id))
     a.groups.forEach((g, index) => {
       const checked = animationSchema.safeParse(g)

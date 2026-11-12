@@ -1,16 +1,17 @@
-import type { Asset } from '../types'
+import type { Asset, AssetVersion as ProjectVersion } from '../types'
 
 export const HISTORY_LIMIT = 100
 
-export interface AssetVersion {
+/** 历史里的一帧：某个位置上素材当时的快照（和项目文件里的「历史版本」不是一回事） */
+export interface HistorySnapshot {
   asset: Asset
   index: number
 }
 
 export interface AssetChange {
   id: string
-  before?: AssetVersion
-  after?: AssetVersion
+  before?: HistorySnapshot
+  after?: HistorySnapshot
 }
 
 export interface HistoryEntry {
@@ -28,6 +29,22 @@ export interface ProjectHistory {
 
 export function emptyHistory(): ProjectHistory {
   return { entries: [], undo: [], redo: [] }
+}
+
+/** 版本数组通常被整份共用，先比引用；真的换了再逐条比字段，避免每次都序列化大段 SVG */
+export function sameVersions(a?: ProjectVersion[], b?: ProjectVersion[]) {
+  if (a === b) return true
+  const left = a ?? []
+  const right = b ?? []
+  if (left.length !== right.length) return false
+  for (let i = 0; i < left.length; i++) {
+    const one = left[i]
+    const other = right[i]
+    if (one === other) continue
+    if (one.index !== other.index || one.createdAt !== other.createdAt ||
+      one.svg !== other.svg || one.width !== other.width || one.height !== other.height) return false
+  }
+  return true
 }
 
 export function sameAsset(a: Asset, b: Asset, includeReview = false) {
@@ -81,7 +98,7 @@ export function applyAssetChanges(assets: Asset[], changes: AssetChange[], side:
 }
 
 type StoredAsset = Omit<Asset, 'svg' | 'voiceoverAudio'> & { svg: number; voiceoverAudio?: number }
-type StoredVersion = Omit<AssetVersion, 'asset'> & { asset: StoredAsset }
+type StoredVersion = Omit<HistorySnapshot, 'asset'> & { asset: StoredAsset }
 type StoredHistory = Omit<ProjectHistory, 'entries'> & {
   entries: (Omit<HistoryEntry, 'changes'> & {
     changes: { id: string; before?: StoredVersion; after?: StoredVersion }[]

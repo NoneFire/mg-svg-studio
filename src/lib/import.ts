@@ -10,12 +10,16 @@ export function isSvgFile(file: File): boolean {
   return file.type === 'image/svg+xml' || /\.svg$/i.test(file.name)
 }
 
+export function isJsonFile(file: File): boolean {
+  return file.type === 'application/json' || /\.json$/i.test(file.name)
+}
+
 export function isBitmapFile(file: File): boolean {
   return file.type.startsWith('image/') || /\.(png|jpe?g|webp|gif|avif|bmp)$/i.test(file.name)
 }
 
 function cleanName(name: string): string {
-  return name.replace(/\.(svg|png|jpe?g|webp|gif|avif|bmp)$/i, '').trim() || '素材'
+  return name.replace(/\.(svg|json|png|jpe?g|webp|gif|avif|bmp)$/i, '').trim() || '素材'
 }
 
 export function fileToDataUrl(file: Blob): Promise<string> {

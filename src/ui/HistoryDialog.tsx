@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { store } from '../store'
-import { HISTORY_LIMIT, sameAsset, sameValue, type AssetChange, type AssetVersion } from '../lib/history'
+import { HISTORY_LIMIT, sameAsset, sameValue, type AssetChange, type HistorySnapshot } from '../lib/history'
 import { Button } from './kit/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './kit/dialog'
 import { Icon } from './Icon'
@@ -59,7 +59,7 @@ export default function HistoryDialog() {
   const applied = new Set(store.undoEntries)
   const redo = new Set(store.redoEntries)
 
-  const versionAction = (version: AssetVersion | undefined, label: string) => {
+  const versionAction = (version: HistorySnapshot | undefined, label: string) => {
     if (!version) return null
     const current = asset && sameAsset(version.asset, asset)
     const restore = current ? undefined : () => store.restoreAssetVersion(version)
